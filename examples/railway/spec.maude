@@ -5,5 +5,13 @@ fmod RAILWAY-SPEC is
   op box : Ts -> T [ctor] .
   op specialize : T -> T .
   var X : T .
-  eq specialize(X) = X .
+  eq specialize(X) = box(seq
+    box(set 0 0) box(set 1 0) box(set 2 0)
+    box(while box(lt box(var 2) box(len))
+      box(seq
+        box(set 3 box(mod box(at box(var 2)) 4))
+        box(set 4 box(add box(div box(at box(var 2)) 4) 1))
+        box(set 5 0)
+        box(emit box(var 5))
+        box(set 2 box(add box(var 2) 1))))) .
 endfm
