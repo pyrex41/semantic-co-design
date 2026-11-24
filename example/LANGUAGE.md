@@ -14,3 +14,15 @@ App Shen is an application language with first-order Shen definition and clause 
 ## Independent evidence
 
 `python3 example/check_language.py` extracts the actual approval decision and inventory-direction definitions from the two products and loads their text unchanged into the pinned Shen JIT. It checks six results against literal expectations and runs the same definitions through the reference evaluator and a freshly built native module. The remaining conformance probes exercise dialect-specific floor arithmetic, signed limits, nested value equality, short-circuiting and errors against independent expectations. The test also checks Shen JIT's fractional result to pin the division boundary. Full application semantics additionally require the product-specific external oracles, protocol peers and recovery histories.
+
+## Product property checks
+
+[Executable laws](properties.shen) take the generated input and the observed outputs as separate arguments. The [gate](check_language.py) runs the same finite domains through production definitions and through those law predicates in both App Shen execution modes. It reports the input and observation on failure. Three deliberately incorrect observations must fail. These are bounded checks of pure functions.
+
+| Domain | Requirement projection | Additional property checked |
+|---|---|---|
+| Approvals | At a fixed quorum the approval status agrees with the vote count, and rejection takes precedence. | Raising quorum by one cannot turn a pending approval into an approved one. Counts 0–12, initial quorums 1–9. |
+| Trading | Bid/ask rounding helpers return prices on the tick grid. | The two grid points enclose the input; each adjustment is strictly less than one tick. Integer prices 0–128 and ticks 1–16. |
+| Router | A recovered NAT deadline covers the saved idle and reservation deadlines. | Recovery chooses an existing deadline, preserves all other fields and row order, and a second recovery leaves the result unchanged. The gate generates empty and two-flow lists, including legacy rows without reservations. |
+
+The browser, exchange-process and packet-port suites separately exercise persistence and real driver boundaries. Their fixed histories establish concrete outcomes. A general state-machine invariant also needs an initial-state condition and preservation across reachable transitions. Comparing generated behavior with its interpreter alone cannot establish that both satisfy an independent requirement.
