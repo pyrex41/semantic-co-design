@@ -99,3 +99,34 @@ int64_t node_step(const int64_t *in, int64_t count, int64_t *out, int64_t capaci
 | `out` | new state leaves, effect count `n`, then for each effect its tag code and its fields |
 
 The return value is the number of integers written, or `-1` when the specification has no result (trap), `-2` for a read outside the input, `-3` when `capacity` is too small. `capacity` never needs to exceed `state + 1 + max_effects * (1 + widest effect)`. The function keeps nothing between calls, so any number of node instances share one library. `tool.compile.build` writes `node.ir.json`, `node.c`, the shared library and `node`, a line-oriented executable with the protocol of `specializer/driver.c.in` (one vector per line; a trap prints `trap <code>`).
+
+## 3. Generated schedules (Hegel)
+
+[sim/hegel.py](sim/hegel.py) puts [Hegel](https://hegel.dev) where the seed was. The simulator already takes every nondeterministic decision from outside: the next action, and the integers an action draws through a `Draw`. A Hegel test case answers both, plus one question the seeded schedule never asks (go on or stop here), so Hegel generates the schedule, the faults and the workload, and its shrinker minimizes a failing run. The result is an ordinary `sim-trace/1` record that `sim.replay` reproduces byte for byte with no Hegel involved.
+
+```python
+from tool.sim import hegel
+found = hegel.falsify(native, workload, profile, inits, invariants=["inv.ok-is-durable"],
+                      cases=200, seed=0)
+found["trace"]      # None, or the shrunk failing trace
+```
+
+* **Where it comes from.** The official Python frontend, `hegeltest` 0.5.2 on PyPI, which bundles the libhegel 0.53.2 engine. [nix/hegel.nix](../nix/hegel.nix) fetches the published cp314 wheel by hash for each of the flake's systems; nothing is compiled. The core simulator does not import it.
+* **Questions.** `pick` asks what `sim.pick` asks, at the same profile rates: a fault, a restart, the workload, otherwise whatever is due first. It adds a small chance that any queued item overtakes the one that is due, as it may in a scripted trace. `HegelDraw` answers `choose` and `delay`. Each step is one Hegel span that starts with the decision to go on, so the shrinker can delete a step whole.
+* **Simplest answers.** Every question is put so that false, 0 or the lowest value is the quiet answer: stop, no fault, no crash inside the step, nothing persisted, the shortest delay. Shrinking moves a failure toward a short fault-free schedule in time order.
+* **Failures.** A case fails when a named Shen invariant is violated or the run ends in a `SimError` (reported as `sim.error`). Invariants see neither times nor draws, so verdicts are cached by step sequence: thousands of shrinking runs cost a few hundred shen-jit calls.
+* **Reproducible.** With a fixed `seed` and the example database off (the default) the same arguments give the same shrunk trace. The step under test may be the shared library or, with `NODE_TARGET=wasm`, the wasm module; both give the same traces.
+
+`check accepted_job` ends with this section: 200 generated schedules of the specification hold every invariant, and each of the three mutants is found, shrunk, replayed and found again identically. Seed 0, 200 cases:
+
+| Mutant | Found at case | Hegel shrinks to | Hand shrinker, same failure | Hand shrinker, retained seed |
+|---|---|---|---|---|
+| `reply-before-ack` | 2 (28 steps) | 5 steps, 1164 runs | 5 | 5 |
+| `insert-without-key-check` | 2 (31 steps) | 11 steps, 2153 runs | 10 | 10 |
+| `reload-ignores-durable-row` | 4 (27 steps) | 12 steps, 4192 runs | 17 | 14 |
+
+Neither shrinker dominates. `check.shrink` only deletes steps and stops at a 1-minimal trace; Hegel also changes choices, and stops where its passes find nothing smaller. Over seeds 0 to 5 Hegel's result is 5 steps every time for the first mutant, 10 to 17 for the second and 12 to 20 for the third.
+
+A fourth mutant, used here only, deletes the conflict clause of `job.decide`, so a second digest for a stored key has no result. Hegel finds the trap and shrinks the schedule that reaches it. A trace that ends in an error stops before the step that trapped, so replay confirms the steps that led there and the trace's `end` names the state and event.
+
+Flake checks: `hegel-step` runs `check accepted_job` on the host target and `wasm-step` runs it on the wasm module.
