@@ -97,6 +97,17 @@ python example/webapp/check_restore.py \
   --database 'host=127.0.0.1 user=test_runner dbname=postgres'
 ```
 
+Run the reachable-state check in reference mode and again with `--release` for the generated package.
+
+```sh
+python example/webapp/check_invariants.py \
+  --database 'host=127.0.0.1 user=test_runner dbname=postgres'
+```
+
+The [SQL law](terminal_delivery.sql) reads committed PostgreSQL state. Each approved, rejected, or expired submission must have one close audit event and one terminal delivery intent for its tenant and submission ID. Pending submissions must have zero terminal effects. The audit event must describe the same status, revision, and workflow, and the delivery must target the corresponding document.
+
+The generator covers all eight prefixes and terminal outcomes under one- and two-reviewer quorums across two tenants. It also covers resubmission of a rejected document, stale votes, exact and changed command replays, and retry after a lost SMTP acknowledgement. It checks PostgreSQL after every generated transition and kills the serving process immediately before and after the terminal vote commits. On restart it checks the visible review and replays the committed request. Negative controls move an intent to another submission while keeping tenant totals unchanged, move an intent to another tenant, swap a delivery target, and corrupt intent and audit counts or metadata. Each negative control runs inside a rolled-back fixture transaction. The bound covers sequential vote and expiry histories and these specific faults.
+
 The local gate ran on Darwin arm64, CPython 3.9, and PostgreSQL 18.6. The reference and generated services agreed on the revision-7 approval, role revocation, retry, and restore outcomes. The frozen-source check changed the browser amount field and moved the quorums from one on both sides of the threshold to one at the threshold and two above it. Two build directories matched across all 19 release files. A temporary signing key verified the release and detected a modified stylesheet.
 
 Production qualification still needs the intended OIDC, SMTP, proxy and storage setup, signer and distribution policy, defined workload and platform targets, systematic faults at all persistence and transport boundaries, and a canary upgrade and rollback at those targets. See the [product plan](PLAN.md).

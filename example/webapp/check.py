@@ -222,7 +222,7 @@ class Local:
             process = subprocess.Popen([*self.commands("serve"), "--port", str(self.port)],
                                        env={**self.env, **(overrides or {})}, stdout=log, stderr=log)
             try:
-                for _ in range(100):
+                for _ in range(300):
                     try:
                         with urlopen(self.origin + "/health", timeout=.5) as result:
                             assert json.load(result)["schema"] == 2
@@ -233,7 +233,7 @@ class Local:
                         time.sleep(.05)
                 else:
                     raise RuntimeError(f"server did not start: {(self.root / 'server.log').read_text()}")
-                yield
+                yield process
             finally:
                 process.terminate()
                 process.wait(timeout=10)
