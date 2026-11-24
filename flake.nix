@@ -34,6 +34,7 @@
           for example in vm decoder railway query; do
             python3 -m examples."$example".check
           done
+          python3 -m experiments.branching_vm.check
           touch "$out"
         '';
         native-replay = nixpkgs.legacyPackages.${system}.runCommand "native-replay" (environment system) ''
