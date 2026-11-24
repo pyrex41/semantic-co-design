@@ -45,6 +45,14 @@
           NODE_TARGET=wasm python3 -m tool check kernel accepted_job
           touch "$out"
         '';
+        # Real processes on loopback, killed and restarted; needs no network beyond localhost.
+        real-host = nixpkgs.legacyPackages.${system}.runCommand "real-host"
+          (environment system // { __darwinAllowLocalNetworking = true; }) ''
+          cd ${self}
+          export HOME=$TMPDIR
+          python3 -m tool real heartbeat accepted_job
+          touch "$out"
+        '';
         native-replay = nixpkgs.legacyPackages.${system}.runCommand "native-replay" (environment system) ''
           python3 ${self}/logic/check.py
           python3 ${self}/native/check_accepted_job.py

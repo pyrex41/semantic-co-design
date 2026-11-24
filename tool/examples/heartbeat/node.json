@@ -1,0 +1,25 @@
+{
+  "name": "heartbeat",
+  "spec": "spec.shen",
+  "step": "hb.step",
+  "init": "hb.init",
+  "symbols": [],
+  "state": ["num", "num", "num", "num"],
+  "events": {
+    "restart": {"role": "restart"},
+    "tick": {"role": "timer", "fields": ["num"]},
+    "pinged": {"role": "recv", "fields": ["num", "num"]},
+    "clocked": {"role": "clock", "fields": ["num", "num"]},
+    "status": {"role": "request", "fields": ["num"]},
+    "stop": {"role": "request", "fields": ["num"]}
+  },
+  "effects": {
+    "arm": {"role": "timer-set", "fields": ["num", "num"]},
+    "disarm": {"role": "timer-cancel", "fields": ["num"]},
+    "ping": {"role": "send", "deliver": "pinged", "fields": ["num", "num"]},
+    "now": {"role": "clock-read", "fields": ["num"]},
+    "report": {"role": "output", "fields": ["num", "num", "num", "num"]}
+  },
+  "max_effects": 3,
+  "invariants": {"file": "invariants.shen", "state": [], "trace": ["hb.no-ping-from-nowhere"]}
+}

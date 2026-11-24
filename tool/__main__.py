@@ -1,5 +1,6 @@
 """python3 -m tool check <kernel | example>     run the retained checks
 python3 -m tool record <example>             regenerate an example's retained evidence
+python3 -m tool real <example>               run an example as OS processes and check their logs
 python3 -m tool compile <example> <dir>      write IR, C, shared library and executable"""
 import importlib
 import sys
@@ -15,6 +16,10 @@ def main(argv):
             else:
                 module = importlib.import_module(f".examples.{name}.check", __package__)
                 module.main(record=argv[0] == "record")
+        return 0
+    if len(argv) >= 2 and argv[0] == "real":
+        for name in argv[1:]:
+            importlib.import_module(f".examples.{name}.real", __package__).main()
         return 0
     if len(argv) == 3 and argv[0] == "compile":
         from .compile import build
