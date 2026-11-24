@@ -1,5 +1,6 @@
 """Infrastructure capabilities. These drivers store records, objects and delivery outcomes."""
 import base64
+import fcntl
 import hashlib
 import json
 import logging
@@ -9,6 +10,7 @@ import secrets
 import shutil
 import smtplib
 import ssl
+import stat
 import subprocess
 import tempfile
 import time
@@ -20,6 +22,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 import jwt
 import psycopg
+from psycopg import sql
 from psycopg.conninfo import conninfo_to_dict
 from psycopg.rows import dict_row
 
@@ -29,6 +32,54 @@ from values import Problem, canonical, digest
 LOG = logging.getLogger("application")
 KEY = re.compile(r"[a-zA-Z0-9_-]{1,128}\Z")
 BACKUP_LOCK = 4268310419
+
+RESTORE_SCHEMA = "sc_storage_restore"
+RESTORE_MARKER = ".restore.json"
+DATABASE_CONTENTS = """
+    SELECT EXISTS (
+        SELECT FROM pg_namespace
+        WHERE nspname NOT IN ('public', 'information_schema', 'sc_storage_restore')
+          AND left(nspname, 3) <> 'pg_'
+        UNION ALL
+        SELECT FROM pg_depend
+        WHERE refclassid = 'pg_namespace'::regclass
+          AND refobjid = to_regnamespace('public')
+        UNION ALL
+        SELECT FROM pg_extension WHERE extname <> 'plpgsql'
+        UNION ALL
+        SELECT FROM pg_largeobject_metadata
+    )
+"""
+
+
+def file_digest(path, copy_to=None):
+    hashed = hashlib.sha256()
+    with path.open("rb") as source:
+        for block in iter(lambda: source.read(1024 * 1024), b""):
+            hashed.update(block)
+            if copy_to is not None:
+                copy_to.write(block)
+    return hashed.hexdigest()
+
+
+def sync_directory(path):
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def destination_conflict():
+    return Problem(409, "restore-destination", "Restore requires an empty or matching restore destination.")
+
+
+def invalid_backup():
+    return Problem(422, "invalid-backup", "The backup checksums do not match.")
+
+
+def incomplete_restore():
+    return Problem(503, "restore-incomplete", "Restore is incomplete. Rerun it with the same backup.")
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -186,11 +237,110 @@ class BlobStore:
 
     def sync(self):
         if self.root.is_dir():
-            fd = os.open(self.root, os.O_RDONLY)
+            sync_directory(self.root)
+
+
+class RestoreObjects:
+    """Own a durable staging directory without writing into a live object store."""
+    def __init__(self, root):
+        location = root.absolute()
+        if not location.name:
+            raise destination_conflict()
+        self.root = location.parent.resolve() / location.name
+        self.identity = digest(str(self.root))
+        name = ".sc-restore-" + digest(self.root.name)
+        self.stage = self.root.parent / name
+        self.lock_path = self.root.parent / (name + ".lock")
+
+    @contextmanager
+    def lock(self):
+        directory = self.root.parent
+        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        fd = os.open(self.lock_path, os.O_CREAT | os.O_NOFOLLOW | os.O_RDWR | os.O_NONBLOCK, 0o600)
+        try:
+            if not stat.S_ISREG(os.fstat(fd).st_mode):
+                raise destination_conflict()
             try:
-                os.fsync(fd)
-            finally:
-                os.close(fd)
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError as exc:
+                raise Problem(409, "restore-busy", "Another restore owns the object destination.") from exc
+            yield
+        finally:
+            os.close(fd)
+
+    @staticmethod
+    def entries(path):
+        if path.is_symlink() or (path.exists() and not path.is_dir()):
+            raise destination_conflict()
+        return {entry.name: entry for entry in path.iterdir()} if path.exists() else {}
+
+    def require_empty(self):
+        if self.entries(self.root) or self.stage.exists() or self.stage.is_symlink():
+            raise destination_conflict()
+
+    @staticmethod
+    def require_owner(entries, ownership):
+        marker = entries.get(RESTORE_MARKER)
+        if marker is None or marker.is_symlink() or not marker.is_file():
+            raise destination_conflict()
+        try:
+            if marker.stat().st_size > 1024 or json.loads(marker.read_text()) != ownership:
+                raise destination_conflict()
+        except (ValueError, OSError) as exc:
+            raise destination_conflict() from exc
+
+    def new_stage(self, ownership):
+        scratch = Path(tempfile.mkdtemp(dir=self.stage.parent, prefix=self.stage.name + "-"))
+        try:
+            with (scratch / RESTORE_MARKER).open("x") as marker:
+                marker.write(canonical(ownership))
+                marker.flush()
+                os.fsync(marker.fileno())
+            sync_directory(scratch)
+            os.rename(scratch, self.stage)
+            sync_directory(self.stage.parent)
+        finally:
+            if scratch.exists():
+                shutil.rmtree(scratch)
+
+    @staticmethod
+    def verify(entries, expected, complete):
+        names = entries.keys() - {RESTORE_MARKER}
+        if names - expected.keys() or (complete and names != expected.keys()):
+            raise destination_conflict()
+        for name in names:
+            item = entries[name]
+            if item.is_symlink() or not item.is_file() or file_digest(item) != expected[name]:
+                raise destination_conflict()
+
+    def publish(self, objects, expected, ownership):
+        visible = self.entries(self.root)
+        if visible:
+            self.require_owner(visible, ownership)
+            self.verify(visible, expected, complete=True)
+            sync_directory(self.root.parent)
+            return
+
+        if not self.stage.exists() and not self.stage.is_symlink():
+            self.new_stage(ownership)
+        staged = self.entries(self.stage)
+        self.require_owner(staged, ownership)
+        for name, item in list(staged.items()):
+            # BlobStore creates this temporary link inside the owned staging directory.
+            if name.startswith(".blob-") and item.is_file() and not item.is_symlink():
+                item.unlink()
+                del staged[name]
+        self.verify(staged, expected, complete=False)
+        store = BlobStore(self.stage)
+        for name, source in objects.items():
+            if name not in staged:
+                data = source.read_bytes()
+                if digest(data) != expected[name]:
+                    raise invalid_backup()
+                store.put(name, data)
+        sync_directory(self.stage)
+        os.replace(self.stage, self.root)
+        sync_directory(self.root.parent)
 
 
 def send_mail(settings, envelope):
@@ -259,7 +409,17 @@ class Context:
             raise RuntimeError("nested transaction")
         self.transaction = self.connect().transaction()
         self.transaction.__enter__()
-        self.sql("SELECT pg_advisory_xact_lock_shared(%s)", [BACKUP_LOCK])
+        # Use a new PostgreSQL statement snapshot after acquiring the shared lock.
+        statements = self.connect().execute(f"""
+            SELECT pg_advisory_xact_lock_shared({BACKUP_LOCK});
+            SELECT EXISTS (
+                SELECT FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = 'sc_storage_restore' AND c.relname = 'pending'
+            ) AS restoring
+        """)
+        statements.nextset()
+        if statements.fetchone()["restoring"]:
+            raise incomplete_restore()
 
     def commit(self):
         if self.transaction is None:
@@ -330,7 +490,7 @@ class Context:
             raise RuntimeError("snapshot must run outside a request transaction")
         connection.execute("SELECT pg_advisory_lock(%s)", [BACKUP_LOCK])
         try:
-            yield
+            yield connection
         finally:
             connection.execute("SELECT pg_advisory_unlock(%s)", [BACKUP_LOCK])
 
@@ -338,10 +498,14 @@ class Context:
         target = Path(path)
         if target.exists():
             raise Problem(409, "backup-exists", "The backup path already exists.")
-        with self.exclusive_snapshot(), tempfile.TemporaryDirectory(dir=target.parent) as stage:
+        with self.exclusive_snapshot() as connection, tempfile.TemporaryDirectory(dir=target.parent) as stage:
+            receipt = self.restore_receipt(connection)
+            if receipt and not receipt["completed"]:
+                raise incomplete_restore()
             staged = Path(stage) / "snapshot"
             staged.mkdir()
-            subprocess.run(["pg_dump", "--format=custom", "--file", str(staged / "postgres.dump")],
+            subprocess.run(["pg_dump", "--format=custom", f"--exclude-schema={RESTORE_SCHEMA}",
+                            "--file", str(staged / "postgres.dump")],
                            env=self.database_environment(), check=True, timeout=120)
             objects = staged / "objects"
             objects.mkdir()
@@ -350,36 +514,129 @@ class Context:
                     shutil.copyfile(source, objects / source.name)
             files = [staged / "postgres.dump", *sorted(objects.iterdir())]
             (staged / "checksums.json").write_text(canonical({
-                str(item.relative_to(staged)): digest(item.read_bytes()) for item in files
+                str(item.relative_to(staged)): file_digest(item) for item in files
             }))
             staged.rename(target)
         return {"status": "backed-up", "path": str(target)}
 
+    @staticmethod
+    def read_backup(source):
+        try:
+            checksums = json.loads((source / "checksums.json").read_text())
+            objects = {item.name: item for item in sorted((source / "objects").iterdir())}
+            files = [source / "postgres.dump", *objects.values()]
+            if (
+                any(not KEY.fullmatch(name) for name in objects)
+                or any(item.is_symlink() or not item.is_file() for item in files)
+                or checksums != {str(item.relative_to(source)): file_digest(item) for item in files}
+            ):
+                raise invalid_backup()
+        except (ValueError, OSError) as exc:
+            raise invalid_backup() from exc
+        return checksums, objects
+
+    @staticmethod
+    def restore_receipt(connection):
+        row = connection.execute("""
+            SELECT to_regclass('sc_storage_restore.pending') AS pending,
+                   to_regclass('sc_storage_restore.receipt') AS receipt
+        """).fetchone()
+        if row["pending"] and row["receipt"]:
+            raise destination_conflict()
+        relation = "pending" if row["pending"] else "receipt"
+        if row[relation] is None:
+            return None
+        values = connection.execute(sql.SQL(
+            "SELECT operation, snapshot, object_store FROM sc_storage_restore.{} WHERE singleton"
+        ).format(sql.Identifier(relation))).fetchone()
+        if values is None:
+            raise destination_conflict()
+        return {**values, "completed": relation == "receipt"}
+
+    @staticmethod
+    def reserve_restore(connection, snapshot, object_store):
+        if connection.execute(
+            "SELECT to_regnamespace('sc_storage_restore') AS namespace"
+        ).fetchone()["namespace"] is not None:
+            raise destination_conflict()
+        receipt = {"operation": secrets.token_hex(16), "snapshot": snapshot,
+                   "object_store": object_store, "completed": False}
+        with connection.transaction():
+            connection.execute("""
+                CREATE SCHEMA sc_storage_restore;
+                CREATE TABLE sc_storage_restore.pending (
+                    singleton boolean PRIMARY KEY DEFAULT true CHECK(singleton),
+                    operation text NOT NULL,
+                    snapshot text NOT NULL,
+                    object_store text NOT NULL
+                )
+            """)
+            connection.execute(
+                "INSERT INTO sc_storage_restore.pending (operation, snapshot, object_store) VALUES (%s, %s, %s)",
+                [receipt["operation"], snapshot, object_store],
+            )
+        return receipt
+
+    def install_dump(self, archive, expected, receipt):
+        env = {**self.database_environment(), "PGCONNECT_TIMEOUT": "5"}
+        match = sql.SQL("singleton AND operation={} AND snapshot={} AND object_store={}").format(
+            sql.Literal(receipt["operation"]), sql.Literal(receipt["snapshot"]), sql.Literal(receipt["object_store"]),
+        )
+        # Escape the complete PL/pgSQL body as a SQL literal, including journal values.
+        guard = sql.SQL("DO {}").format(sql.Literal(sql.SQL("""
+            BEGIN
+                IF ({contents}) OR NOT EXISTS (SELECT FROM sc_storage_restore.pending WHERE {match}) THEN
+                    RAISE EXCEPTION 'restore destination changed';
+                END IF;
+            END
+        """).format(contents=sql.SQL(DATABASE_CONTENTS), match=match).as_string())).as_string()
+        with tempfile.TemporaryFile() as dump, tempfile.TemporaryFile() as statements:
+            if file_digest(archive, dump) != expected:
+                raise invalid_backup()
+            dump.seek(0)
+            subprocess.run(["pg_restore", "--exit-on-error", "--file=-"], stdin=dump, stdout=statements,
+                           env=env, check=True, timeout=120)
+            statements.seek(0)
+            subprocess.run([
+                "psql", "--no-psqlrc", "--single-transaction", "--set=ON_ERROR_STOP=1",
+                "-c", f"SET LOCAL lock_timeout='5s'; SELECT pg_advisory_xact_lock({BACKUP_LOCK});",
+                "-c", guard, "-f", "-", "-c", "ALTER TABLE sc_storage_restore.pending RENAME TO receipt",
+            ], stdin=statements, stdout=subprocess.DEVNULL, env=env, check=True, timeout=120)
+
     def restore(self, path):
         source = Path(path)
-        checksums = json.loads((source / "checksums.json").read_text())
-        objects = sorted((source / "objects").iterdir())
-        files = [source / "postgres.dump", *objects]
-        if (
-            any(not KEY.fullmatch(obj.name) for obj in objects)
-            or checksums != {str(item.relative_to(source)): digest(item.read_bytes()) for item in files}
-        ):
-            raise Problem(422, "invalid-backup", "The backup checksums do not match.")
-        with self.exclusive_snapshot():
-            populated = self.connect().execute(
-                "SELECT 1 FROM pg_tables WHERE schemaname='public' LIMIT 1"
-            ).fetchone()
-            if populated or (self.blob.root.exists() and any(self.blob.root.iterdir())):
-                raise Problem(409, "restore-destination", "Restore requires an empty database and object directory.")
-            self.blob.root.mkdir(mode=0o700, parents=True, exist_ok=True)
-            for obj in objects:
-                self.blob.put(obj.name, obj.read_bytes())
+        checksums, objects = self.read_backup(source)
+        snapshot = digest(checksums)
+        destination = RestoreObjects(self.blob.root)
+        if source.resolve() in (destination.root.resolve(), *destination.root.resolve().parents):
+            raise destination_conflict()
+        with destination.lock():
+            with self.exclusive_snapshot() as connection:
+                receipt = self.restore_receipt(connection)
+                if receipt and (receipt["snapshot"] != snapshot or receipt["object_store"] != destination.identity):
+                    raise destination_conflict()
+                if receipt and receipt["completed"]:
+                    destination.require_owner(destination.entries(destination.root),
+                                              {"operation": receipt["operation"], "snapshot": snapshot})
+                    return {"status": "restored", "path": str(source)}
+                if connection.execute(DATABASE_CONTENTS + " AS populated").fetchone()["populated"]:
+                    raise destination_conflict()
+                if receipt is None:
+                    destination.require_empty()
+                    receipt = self.reserve_restore(connection, snapshot, destination.identity)
+                ownership = {"operation": receipt["operation"], "snapshot": snapshot}
+                expected = {name: checksums["objects/" + name] for name in objects}
+                try:
+                    destination.publish(objects, expected, ownership)
+                except OSError as exc:
+                    raise incomplete_restore() from exc
+            # The installer acquires the database lock in its own transaction, which can
+            # finish safely even if this parent exits. The object lock covers the handoff.
             try:
-                subprocess.run(["pg_restore", "--single-transaction", "--exit-on-error", "-d",
-                                self.database_environment()["PGDATABASE"], str(source / "postgres.dump")],
-                               env=self.database_environment(), check=True, timeout=120)
-            except (subprocess.SubprocessError, OSError):
-                for obj in objects:
-                    self.blob.delete(obj.name)
-                raise
+                self.install_dump(source / "postgres.dump", checksums["postgres.dump"], receipt)
+            except (OSError, subprocess.SubprocessError) as exc:
+                with self.exclusive_snapshot() as connection:
+                    observed = self.restore_receipt(connection)
+                    if observed != {**receipt, "completed": True}:
+                        raise incomplete_restore() from exc
         return {"status": "restored", "path": str(source)}

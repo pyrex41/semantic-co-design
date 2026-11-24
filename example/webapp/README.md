@@ -1,6 +1,6 @@
 # Document Desk
 
-Document Desk is a server-rendered document approval service backed by PostgreSQL. The seven Shen modules define identity mapping, permissions, forms and views, schema migrations, commands, queries, workflows, the delivery worker, and operator operations. The [application manifest](manifest.json) supplies typed HTTP contracts and maps browser, API, and process entry points to the same definitions.
+Document Desk is a server-rendered document approval service backed by PostgreSQL. The seven [App Shen](../LANGUAGE.md) modules define identity mapping, permissions, forms and views, schema migrations, commands, queries, workflows, the delivery worker, and operator operations. The [application manifest](manifest.json) supplies typed HTTP contracts and maps browser, API, and process entry points to the same definitions.
 
 ## Build and install
 
@@ -54,7 +54,7 @@ The JSON interface is under `/api/v1`. Its OpenAPI contract is at `/api/v1/opena
 ## Operate and recover
 
 - `./admin doctor` and `GET /health` report the installed schema. `GET /metrics` reports per-route counts and elapsed time sums. Request logs use route names and status codes.
-- `./admin backup '{"path":"/backups/snapshot-1"}'` takes a PostgreSQL dump and copies the corresponding objects while application transactions are blocked. Restore the bundle into an empty database and object directory with `./admin restore '{"path":"/backups/snapshot-1"}'`. Verify the restored service and pending jobs before switching traffic.
+- `./admin backup '{"path":"/backups/snapshot-1"}'` takes a PostgreSQL dump and copies the corresponding objects while application transactions are blocked. Restore the bundle into a dedicated empty database and object directory with `./admin restore '{"path":"/backups/snapshot-1"}'`. If restore is interrupted, rerun the same command with the same bundle, database, and object directory. PostgreSQL records the reservation and blocks application transactions and backups until the dump and its completion receipt commit together. The object storage driver publishes the verified objects before that transaction commits. A repeat after completion preserves later writes. Keep the destination out of traffic until you have verified the restored service and pending jobs.
 - Run `./admin migrate` before starting upgraded processes. The v2 migration adds indexes while retaining v1 schemas and existing workflow, submission, and delivery state.
 - Tenant administrators can inspect deliveries and redrive failed or unknown sends. Each retry uses the same SMTP message ID. An expired worker lease becomes unknown and is eligible for retry after a delay. A lost transport acknowledgement can result in duplicate delivery.
 - Install the policy launcher separately and restrict its environment and privileges. The server passes the compiler a restricted environment and at most 8 KiB of input. The worker has a two-second CPU budget and a ten-second wall-clock limit. The regular server continues servicing old workflow revisions while the policy compiler is offline. A failed publication leaves the current revision active.
@@ -88,6 +88,13 @@ Run the recovery check against a built release to exercise delegation, expiry, s
 python example/webapp/check_recovery.py \
   --database 'host=127.0.0.1 user=test_runner dbname=postgres' \
   --release /tmp/document-desk-release
+```
+
+Run the restore fault check to exercise a failed second object write, process death during object staging, and database rollback, and process death before, during, and after the database install. The check reruns each restore and verifies ownership against both PostgreSQL and the object directory. Pass `--release` for the generated package.
+
+```sh
+python example/webapp/check_restore.py \
+  --database 'host=127.0.0.1 user=test_runner dbname=postgres'
 ```
 
 The local gate ran on Darwin arm64, CPython 3.9, and PostgreSQL 18.6. The reference and generated services agreed on the revision-7 approval, role revocation, retry, and restore outcomes. The frozen-source check changed the browser amount field and moved the quorums from one on both sides of the threshold to one at the threshold and two above it. Two build directories matched across all 19 release files. A temporary signing key verified the release and detected a modified stylesheet.
