@@ -1,6 +1,6 @@
 # Specializing an interpreter whose programs branch on runtime data
 
-The [Shen interpreter](interpreter.shen) is an ordinary stack machine with locals, `jz` and `jmp` to any instruction index. It has no staging primitives. The [partial evaluator](pe.py) knows nothing about it: no function names, clause shapes or loop forms.
+The [Shen interpreter](interpreter.shen) is an ordinary stack machine with locals, `jz` and `jmp` to any instruction index. It has no staging primitives. The partial evaluator knows nothing about it: no function names, clause shapes or loop forms. It now lives in [tool/pe.py](../../tool/pe.py), generalized; [pe.py](pe.py) here is a front for it and this check runs unchanged against it.
 
 ```sh
 nix develop -c python3 -m experiments.branching_vm.check
@@ -24,6 +24,8 @@ Generalization is a heuristic. An argument holding no runtime value stays static
 Each program runs in Shen JIT, is specialized and compiled, and both answers are compared with an independent Python oracle on fixed and seeded random rows. One interpreter rule is then edited and the same evaluator must follow it. The retained [gcd residual](gcd.ir.json) is regenerated and compared.
 
 ## Limits
+
+These are the limits of the default division this check uses. [tool/README.md](../../tool/README.md) lists what the generalized evaluator lifted (runtime pattern matching, sharing, binding-time annotations and widening) and what remains.
 
 - **Unbounded static variation fails.** A counter kept only on the operand stack stays static while a runtime test controls the loop, so each iteration is a new block. The check asserts that this stops at the block budget. Fixing it needs binding-time analysis or widening.
 - **Numbers only.** Residual values are integers. A clause pattern that inspects a runtime value is rejected, so runtime data structures, closures and strings are out.

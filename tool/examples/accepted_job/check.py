@@ -114,6 +114,20 @@ def specification(work, schema, report):
             kinds[name] = kinds.get(name, 0) + 1
     report(f"simulation: {SEEDS} seeds, {steps} steps, all quiescent; {dict(sorted(kinds.items()))}")
 
+    # The three crash points of the commit path must each occur in the seeded runs.
+    stepped = [s for t in traces for s in t["steps"] if s.get("crashed")]
+    points = {
+        "before the write": sum(s.get("event", [""])[0] == "submit" and s["applied"] == 0
+                                and any(e[0] == "write" for e in s["effects"]) for s in stepped),
+        "write pending, lost": sum(s["lost_writes"] > 0 for s in stepped),
+        "write pending, durable unacknowledged": sum(s["persisted"] > 0 for s in stepped),
+        "between ack and reply": sum(s.get("event", [""])[0] == "written" and s["applied"] == 0
+                                     and any(e[0] == "reply" for e in s["effects"])
+                                     for s in stepped),
+    }
+    require(all(points.values()), f"simulation: a crash point never occurred: {points}")
+    report(f"crash points reached: {points}")
+
     # Same seed, same bytes; and a recorded trace replays without its seed.
     again = seeded(native, inits, range(SEEDS))
     require([sim.dumps(t) for t in again] == [sim.dumps(t) for t in traces],

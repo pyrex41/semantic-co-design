@@ -37,6 +37,11 @@
           python3 -m experiments.branching_vm.check
           touch "$out"
         '';
+        sim-tool = nixpkgs.legacyPackages.${system}.runCommand "sim-tool" (environment system) ''
+          cd ${self}
+          python3 -m tool check kernel accepted_job gossip
+          touch "$out"
+        '';
         native-replay = nixpkgs.legacyPackages.${system}.runCommand "native-replay" (environment system) ''
           python3 ${self}/logic/check.py
           python3 ${self}/native/check_accepted_job.py

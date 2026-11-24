@@ -1,26 +1,26 @@
 {
   "insert-without-key-check": {
     "invariant": "inv.one-row-per-key",
-    "minimal_sha256": "ba7437fae7f10d8c0ec0b04971ddc348e9312b4b603af5ea6e29d990f13a215a",
+    "minimal_sha256": "9b021269d6d84a31c222ee6b54f60ba3827cf46163eaea49e2b11ec22f417c71",
     "minimal_steps": 10,
     "seed": 0,
-    "sha256": "0057420e2bea41da413972fc982f4d90891325296afb77a8405efd4e902b7b34",
+    "sha256": "e329a8336c407a77c8896979613e8452df9ea9e35208ca7d6016aeda303dcae0",
     "steps": 27
   },
   "reload-ignores-durable-row": {
     "invariant": "inv.rows-are-immutable",
-    "minimal_sha256": "c5e3907e5b82647fb3cbdf0d776f254df78c7ab7c49b744a1b39d189af7f7313",
+    "minimal_sha256": "7ffd5802b33a8a1e7649ecda78e59390df81e0ace576639139c2b659adb8431a",
     "minimal_steps": 14,
     "seed": 1,
-    "sha256": "86f711643c38daf4e591bafa1e080f0c6b53c452499e493701bff7f70db3d288",
+    "sha256": "acc962f52f1dddb29b69e1adf41e3ff6ccedf10c9cb9952d68fb0d683985b65f",
     "steps": 28
   },
   "reply-before-ack": {
     "invariant": "inv.ok-is-durable",
-    "minimal_sha256": "592fbfd03e7141592e6ea07a4b632e391e0b9d2acfed029c46a5df9cf9d8b032",
+    "minimal_sha256": "19dbc06e3c4ea36c22d7c308de821cae9f9187e9722eb5ac1395fc48800e16a7",
     "minimal_steps": 5,
     "seed": 0,
-    "sha256": "a434a1828e35e400fa654cf12258a403fa0b8098b078665f3cbcbf727bc8b2f0",
+    "sha256": "261b1413f529c208cf382fbcbf2a9c42fa8e2de4d739f4fa4b9d2c70e0488feb",
     "steps": 24
   }
 }
