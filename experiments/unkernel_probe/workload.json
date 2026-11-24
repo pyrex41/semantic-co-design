@@ -1,0 +1,7 @@
+[[3000, "echo boot-ok; uname -sm\n"],
+ [4000, "i=0; while [ $i -lt 200 ]; do i=$((i+1)); done; echo loop $i\n"],
+ [6000, "for f in a b c; do echo $f > /tmp/$f; done; ls /tmp | wc -l; sha256sum /bin/busybox\n"],
+ [9000, "date -u; cat /proc/uptime; head -c 16 /dev/urandom | od -An -x\n"],
+ [11000, "sleep 1; ps | wc -l; cat /proc/loadavg\n"],
+ [13000, "(sleep 0.2; echo bg1) & (sleep 0.1; echo bg2) & wait; dd if=/dev/zero bs=1k count=256 2>/dev/null | sha256sum\n"],
+ [16000, "i=0; while [ $i -lt 20000 ]; do i=$((i+1)); done; echo busy $i; cat /proc/uptime\n"]]
