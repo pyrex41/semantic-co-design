@@ -12,7 +12,7 @@ cd semantic-co-design
 nix develop
 ```
 
-The locked shell supplies Python, Clang, SQLite, shen-go and Maude. Build the same job from each executable definition and run them against a fresh database:
+The locked shell supplies Python, Clang, SQLite, [tizoc/shen-jit v0.11](https://github.com/tizoc/shen-jit/releases/tag/v0.11) and Maude. Build the same job from each executable definition and run them against a fresh database:
 
 ```sh
 demo=$(mktemp -d)

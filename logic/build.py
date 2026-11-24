@@ -26,7 +26,7 @@ def evaluate(path, policy):
     queries = list(itertools.product(STATES, EVENTS))
     shen = path.suffix == ".shen"
     if shen:
-        cmd = [os.environ.get("SHEN_GO", "shen-go"), "eval", "-l", str(path)]
+        cmd = [os.environ.get("SHEN_JIT", "shen-jit"), "eval", "-l", str(path)]
         for state, event in queries:
             cmd.extend(["-e", f"(job.step {policy} {term(state, True)} {term(event, True)})"])
         request = ""
