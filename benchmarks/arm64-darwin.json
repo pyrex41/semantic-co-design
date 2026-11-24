@@ -1,0 +1,86 @@
+{
+  "host": "macOS-27.2.1-arm64-arm-64bit-Mach-O",
+  "iterations": 500,
+  "results": [
+    {
+      "example": "vm",
+      "fixture": "checksum",
+      "source": "shen",
+      "generation_ms": 696.825,
+      "binary_bytes": 34168,
+      "native_roundtrip_us": 6.292,
+      "python_direct_us": 8.334,
+      "source_cpu_us": 8.222
+    },
+    {
+      "example": "vm",
+      "fixture": "checksum",
+      "source": "maude",
+      "generation_ms": 163.17,
+      "binary_bytes": 34168,
+      "native_roundtrip_us": 6.458,
+      "python_direct_us": 8.334,
+      "source_cpu_us": 486.0
+    },
+    {
+      "example": "decoder",
+      "fixture": "grammar",
+      "source": "shen",
+      "generation_ms": 215.217,
+      "binary_bytes": 34296,
+      "native_roundtrip_us": 7.688,
+      "python_direct_us": 2.042,
+      "source_cpu_us": 6.608
+    },
+    {
+      "example": "decoder",
+      "fixture": "grammar",
+      "source": "maude",
+      "generation_ms": 221.381,
+      "binary_bytes": 34296,
+      "native_roundtrip_us": 7.417,
+      "python_direct_us": 2.042,
+      "source_cpu_us": 366.0
+    },
+    {
+      "example": "railway",
+      "fixture": "layout",
+      "source": "shen",
+      "generation_ms": 158.244,
+      "binary_bytes": 34232,
+      "native_roundtrip_us": 5.792,
+      "python_direct_us": 0.792,
+      "source_cpu_us": 2.328
+    },
+    {
+      "example": "railway",
+      "fixture": "layout",
+      "source": "maude",
+      "generation_ms": 213.397,
+      "binary_bytes": 34232,
+      "native_roundtrip_us": 6.5,
+      "python_direct_us": 0.792,
+      "source_cpu_us": 116.0
+    },
+    {
+      "example": "query",
+      "fixture": "join",
+      "source": "shen",
+      "generation_ms": 201.023,
+      "binary_bytes": 34232,
+      "native_roundtrip_us": 7.875,
+      "python_direct_us": 1.083,
+      "source_cpu_us": 2.128
+    },
+    {
+      "example": "query",
+      "fixture": "join",
+      "source": "maude",
+      "generation_ms": 216.171,
+      "binary_bytes": 34232,
+      "native_roundtrip_us": 6.625,
+      "python_direct_us": 1.083,
+      "source_cpu_us": 112.0
+    }
+  ]
+}

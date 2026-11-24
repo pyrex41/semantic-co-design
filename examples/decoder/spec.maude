@@ -1,0 +1,83 @@
+fmod SPEC is
+  protecting STAGE .
+  op accepted : T -> T .
+  var Kind : Int . var More : Ts .
+  eq accepted(box(nil)) = 0 .
+  eq accepted(box(Kind More)) = box(or box(eq box(var 9) Kind) accepted(box(More))) .
+  op takeKind : T T -> T .
+  vars Kinds Seed : T .
+  eq takeKind(Kinds, Seed) =
+    box(if accepted(Kinds)
+    box(seq box(set 5 box(var 9))
+      box(set 7 box(add Seed box(var 9)))
+      box(set 2 2))
+    box(set 4 box(var 3))) .
+  op takeLength : T T T -> T .
+  vars Max Next Weight : T .
+  eq takeLength(Weight, Max, Next) =
+    box(seq box(set 6 box(add box(var 6) box(mul box(var 9) Weight)))
+    box(if box(lt Max box(var 6))
+      box(set 4 box(var 3))
+      box(seq box(set 7 box(add box(var 7) box(var 9))) box(set 2 Next)))) .
+  op finishFrame : T -> T .
+  vars Byte : T .
+  eq finishFrame(Byte) =
+    box(if box(eq box(mod box(var 7) 256) Byte)
+    box(seq box(emit -1)
+      box(emit box(var 5))
+      box(emit box(var 6))
+      box(set 10 0)
+      box(while box(lt box(var 10) box(var 6))
+        box(seq box(emit box(get 0 box(var 10)))
+          box(set 10 box(add box(var 10) 1))))
+      box(set 2 0)
+      box(set 8 0))
+    box(set 4 box(var 3))) .
+  op takeByte : T T T T T T -> T .
+  vars First Magic Second : T .
+  eq takeByte(Magic, Kinds, First, Second, Max, Seed) =
+    box(if box(eq box(var 2) 0)
+    box(if box(eq box(var 9) Magic)
+      box(seq box(set 6 0) box(set 2 1))
+      box(set 4 box(var 3)))
+    box(if box(eq box(var 2) 1)
+      takeKind(Kinds, Seed)
+      box(if box(eq box(var 2) 2)
+        takeLength(First, Max, 3)
+        box(if box(eq box(var 2) 3)
+          box(seq takeLength(Second, Max, 4)
+            box(if box(and box(eq box(var 4) -1) box(eq box(var 6) 0))
+              box(set 2 5)
+              box(seq)))
+          box(if box(eq box(var 2) 4)
+            box(seq box(put 0 box(var 8) box(var 9))
+              box(set 8 box(add box(var 8) 1))
+              box(set 7 box(add box(var 7) box(var 9)))
+              box(if box(eq box(var 8) box(var 6)) box(set 2 5) box(seq)))
+            finishFrame(box(var 9))))))) .
+  op stream : T -> T .
+  vars ByteRule : T .
+  eq stream(ByteRule) =
+    box(seq box(set 4 -1)
+    box(while box(lt box(var 0) box(len))
+      box(seq box(set 1 box(add box(add box(var 0) 1) box(at box(var 0))))
+        box(set 0 box(add box(var 0) 1))
+        box(while box(lt box(var 0) box(var 1))
+          box(seq box(if box(eq box(var 4) -1)
+              box(seq box(set 9 box(at box(var 0)))
+                ByteRule
+                box(set 3 box(add box(var 3) 1)))
+              box(seq))
+            box(set 0 box(add box(var 0) 1))))
+        box(emit -2)
+        box(emit box(var 3))
+        box(emit box(var 4))
+        box(emit box(var 2))
+        box(if box(eq box(var 2) 4)
+          box(emit box(sub box(var 6) box(var 8)))
+          box(emit 0))))) .
+  op specialize : T -> T .
+  vars M Ks Limit Salt : T .
+  eq specialize(box(M Ks 0 Limit Salt)) = stream(takeByte(M,Ks,256,1,Limit,Salt)) .
+  eq specialize(box(M Ks 1 Limit Salt)) = stream(takeByte(M,Ks,1,256,Limit,Salt)) .
+endfm

@@ -1,29 +1,30 @@
-"""Independent oracle for staged relational query vectors."""
-from collections import defaultdict
-
-
-def unpack(static, dynamic):
-    lw, rw, ast = static
-    cutoff, nl, nr = dynamic[:3]
-    pos = 3
-    left = [dynamic[pos+i*lw:pos+(i+1)*lw] for i in range(nl)]
-    pos += nl * lw
-    right = [dynamic[pos+i*rw:pos+(i+1)*rw] for i in range(nr)]
-    return lw, rw, ast, cutoff, left, right
-
-
+"""Direct relational evaluator used for the benchmark baseline."""
 def oracle(static, dynamic):
-    lw, rw, ast, cutoff, left, right = unpack(static, dynamic)
-    if ast[0] == 0:
-        return [v for row in left if row[ast[1]] >= cutoff for v in row]
-    if ast[0] == 1:
-        return [v for lrow in left for rrow in right if lrow[ast[1]] == rrow[ast[2]] for v in (*lrow, *rrow)]
-    if ast[0] == 2:
-        sums = defaultdict(int)
-        for row in left: sums[row[ast[1]]] += row[ast[2]]
-        return [v for k in sorted(sums) for v in (k, sums[k])]
-    raise ValueError(ast)
+    left_width, right_width, ast = static
+    cutoff, nleft, nright = dynamic[:3]
+    boundary = 3 + left_width*nleft
+    assert len(dynamic) == boundary + right_width*nright
+    tables = [
+        [dynamic[i:i+left_width] for i in range(3,boundary,left_width)],
+        [dynamic[i:i+right_width] for i in range(boundary,len(dynamic),right_width)],
+    ]
 
-
-def fixture(static=(3, 3, [0, 2])):
-    return static, [5, 3, 3, 1, 2, 7, 9, 2, 4, 8, 1, 6, 4, 2, 3, 10, 2, 5]
+    def evaluate(node):
+        operation,*args = node
+        if operation == 0:
+            return tables[args[0]]
+        if operation == 1:
+            column,child = args
+            return [row for row in evaluate(child) if row[column] >= cutoff]
+        if operation == 2:
+            k,j,left,right = args
+            right_rows = evaluate(right)
+            return [a+b for a in evaluate(left) for b in right_rows if a[k] == b[j]]
+        if operation == 3:
+            key,value,child = args
+            groups = {}
+            for row in evaluate(child):
+                groups[row[key]] = groups.get(row[key],0) + row[value]
+            return list(groups.items())
+        raise ValueError(operation)
+    return [v for row in evaluate(ast) for v in row]

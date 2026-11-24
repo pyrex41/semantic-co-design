@@ -1,0 +1,60 @@
+fmod STAGE is
+  protecting INT .
+  sorts T Ts Memory .
+  subsorts Int < T < Ts .
+  op nil : -> Ts [ctor] .
+  op __ : Ts Ts -> Ts [ctor assoc id: nil] .
+  op box : Ts -> T [ctor] .
+  ops var len at get add sub mul div mod eq lt le and or u32 seq set put emit if while : -> T [ctor] .
+
+  op emptyMem : -> Memory [ctor] .
+  op cell : Int Int Int Memory -> Memory [ctor] .
+  op lookup : Int Int Memory -> Int .
+  op store : Int Int Int Memory -> Memory .
+  vars B I V C J W : Int .
+  var M : Memory .
+  eq lookup(B,I,emptyMem) = 0 .
+  eq lookup(B,I,cell(B,I,V,M)) = V .
+  eq lookup(B,I,cell(C,J,W,M)) = lookup(B,I,M) [owise] .
+  eq store(B,I,V,emptyMem) = cell(B,I,V,emptyMem) .
+  eq store(B,I,V,cell(B,I,W,M)) = cell(B,I,V,M) .
+  eq store(B,I,V,cell(C,J,W,M)) = cell(C,J,W,store(B,I,V,M)) [owise] .
+
+  op sizeOf : Ts -> Int .
+  op item : Int Ts -> Int .
+  vars D P O L : Ts .
+  vars A E F G : T .
+  eq sizeOf(nil) = 0 .
+  eq sizeOf(V D) = 1 + sizeOf(D) .
+  eq item(0,V D) = V .
+  ceq item(I,V D) = item(_-_(I,1),D) if I > 0 .
+  op ev : T Ts Memory -> Int .
+  eq ev(V,D,M) = V .
+  eq ev(box(var I),D,M) = lookup(-1,I,M) .
+  eq ev(box(len),D,M) = sizeOf(D) .
+  eq ev(box(at E),D,M) = item(ev(E,D,M),D) .
+  eq ev(box(get B E),D,M) = lookup(B,ev(E,D,M),M) .
+  eq ev(box(u32 E),D,M) = (ev(E,D,M) rem 4294967296 + 4294967296) rem 4294967296 .
+  eq ev(box(add E F),D,M) = (ev(E,D,M) + ev(F,D,M)) .
+  eq ev(box(sub E F),D,M) = _-_(ev(E,D,M),ev(F,D,M)) .
+  eq ev(box(mul E F),D,M) = (ev(E,D,M) * ev(F,D,M)) .
+  eq ev(box(div E F),D,M) = (ev(E,D,M) quo ev(F,D,M)) .
+  eq ev(box(mod E F),D,M) = (ev(E,D,M) rem ev(F,D,M)) .
+  eq ev(box(lt E F),D,M) = if (ev(E,D,M) < ev(F,D,M)) then 1 else 0 fi .
+  eq ev(box(le E F),D,M) = if (ev(E,D,M) <= ev(F,D,M)) then 1 else 0 fi .
+  eq ev(box(eq E F),D,M) = if (ev(E,D,M) == ev(F,D,M)) then 1 else 0 fi .
+  eq ev(box(and E F),D,M) = if ((ev(E,D,M) =/= 0) and (ev(F,D,M) =/= 0)) then 1 else 0 fi .
+  eq ev(box(or E F),D,M) = if ((ev(E,D,M) =/= 0) or (ev(F,D,M) =/= 0)) then 1 else 0 fi .
+  op run : T T -> T .
+  op exec : Ts Ts Memory Ts -> T .
+  eq run(A,box(D)) = exec(A,D,emptyMem,nil) .
+  eq exec(nil,D,M,O) = box(O) .
+  eq exec(box(seq L) P,D,M,O) = exec(L P,D,M,O) .
+  eq exec(box(set I E) P,D,M,O) = exec(P,D,store(-1,I,ev(E,D,M),M),O) .
+  eq exec(box(put B E F) P,D,M,O) = exec(P,D,store(B,ev(E,D,M),ev(F,D,M),M),O) .
+  eq exec(box(emit E) P,D,M,O) = exec(P,D,M,O ev(E,D,M)) .
+  eq exec(box(if E F G) P,D,M,O) =
+    if ev(E,D,M) == 0 then exec(G P,D,M,O) else exec(F P,D,M,O) fi .
+  eq exec(box(while E F) P,D,M,O) =
+    if ev(E,D,M) == 0 then exec(P,D,M,O) else exec(F box(while E F) P,D,M,O) fi .
+endfm

@@ -26,6 +26,16 @@
         });
       });
       checks = eachSystem (system: {
+        staged-examples = nixpkgs.legacyPackages.${system}.runCommand "staged-examples" (environment system) ''
+          cd ${self}
+          python3 -m unittest specializer.test_backend
+          python3 -m specializer.check_backend_contract
+          python3 -m examples.check_artifacts
+          for example in vm decoder railway query; do
+            python3 -m examples."$example".check
+          done
+          touch "$out"
+        '';
         native-replay = nixpkgs.legacyPackages.${system}.runCommand "native-replay" (environment system) ''
           python3 ${self}/logic/check.py
           python3 ${self}/native/check_accepted_job.py

@@ -1,42 +1,19 @@
-#!/usr/bin/env python3
-"""Small deterministic railway interlocking oracle and native-style runner."""
-import json, sys
-
-ROUTES = ("R1", "R2")
-
-def step(state, event):
-    route, occupied = state
-    kind, name = event
-    if name not in ROUTES:
-        return state, "reject"
-    if kind == "request":
-        if route is None:
-            return (name, occupied), "grant"
-        return state, "reject"
-    if kind == "entry":
-        return (route, True), "entry" if route == name and not occupied else "reject"
-    if kind == "cancel":
-        if route == name and not occupied:
-            return (None, False), "cancel"
-        return state, "reject"
-    if kind == "clear":
-        if route == name and occupied:
-            return (None, False), "clear"
-        return state, "reject"
-    return state, "reject"
-
-def run(events):
-    state = (None, False)
+"""Independent serialized interlocking model. The train retains its route identity."""
+def replay(events, *, faulty=False, layout=(1,2)):
+    reservation = train = switch = 0
     observations = []
     for event in events:
-        state, verdict = step(state, event)
-        observations.append({"event": list(event), "verdict": verdict,
-                             "route": state[0], "occupied": state[1]})
+        index, kind = divmod(event,4)
+        route = index + 1
+        verdict = 0
+        if index in (0,1):
+            if kind == 0 and reservation == 0:
+                reservation, switch, verdict = route, layout[index], 1
+            elif kind == 1 and reservation == route and (not train or faulty):
+                reservation, verdict = 0, 2
+            elif kind == 2 and reservation == route and not train:
+                train, verdict = route, 3
+            elif kind == 3 and train == route:
+                reservation, train, verdict = 0, 0, 4
+        observations.extend([verdict,reservation,train,switch])
     return observations
-
-def main(path):
-    data = json.load(open(path))
-    print(json.dumps(run([tuple(x) for x in data["events"]]), sort_keys=True))
-
-if __name__ == "__main__":
-    main(sys.argv[1])

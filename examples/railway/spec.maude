@@ -1,17 +1,36 @@
-fmod RAILWAY-SPEC is
-  sorts T Ts Int .
-  subsort Int < T .
-  op nil : -> Ts [ctor] .
-  op box : Ts -> T [ctor] .
+fmod SPEC is
+  protecting STAGE .
+  op railEvent : T T T -> T .
+  vars Base Position Route : T .
+  eq railEvent(Route, Position, Base) =
+    box(if box(eq box(var 4) Base)
+    box(if box(eq box(var 0) 0)
+      box(seq box(set 0 Route) box(set 2 Position) box(set 3 1))
+      box(seq))
+    box(if box(eq box(var 4) box(add Base 1))
+      box(if box(and box(eq box(var 0) Route) box(eq box(var 1) 0))
+        box(seq box(set 0 0) box(set 3 2))
+        box(seq))
+      box(if box(eq box(var 4) box(add Base 2))
+        box(if box(and box(eq box(var 0) Route) box(eq box(var 1) 0))
+          box(seq box(set 1 Route) box(set 3 3))
+          box(seq))
+        box(if box(eq box(var 4) box(add Base 3))
+          box(if box(eq box(var 1) Route)
+            box(seq box(set 1 0) box(set 0 0) box(set 3 4))
+            box(seq))
+          box(seq))))) .
   op specialize : T -> T .
-  var X : T .
-  eq specialize(X) = box(seq
-    box(set 0 0) box(set 1 0) box(set 2 0)
-    box(while box(lt box(var 2) box(len))
-      box(seq
-        box(set 3 box(mod box(at box(var 2)) 4))
-        box(set 4 box(add box(div box(at box(var 2)) 4) 1))
-        box(set 5 0)
-        box(emit box(var 5))
-        box(set 2 box(add box(var 2) 1))))) .
+  vars First Second : T .
+  eq specialize(box(First Second)) =
+    box(seq box(while box(lt box(var 5) box(len))
+      box(seq box(set 4 box(at box(var 5)))
+        box(set 3 0)
+        railEvent(1, First, 0)
+        railEvent(2, Second, 4)
+        box(emit box(var 3))
+        box(emit box(var 0))
+        box(emit box(var 1))
+        box(emit box(var 2))
+        box(set 5 box(add box(var 5) 1))))) .
 endfm

@@ -1,6 +1,49 @@
-fmod QUERY-SPEC is
-  protecting NAT .
+fmod SPEC is
+  protecting STAGE .
+  op emitRow : T T -> T .
+  var N : Nat . var P : T .
+  eq emitRow(0,P) = box(seq) .
+  ceq emitRow(N,P) = box(seq emitRow(_-_(N,1),P) box(emit box(at box(add P _-_(N,1))))) if N > 0 .
+  op fieldAt : T T -> T .
+  vars Base Col : T .
+  eq fieldAt(Base, Col) =
+    box(at box(add Base Col)) .
+  op eachRow : T T T T T -> T .
+  vars Body Count Slot Start Width : T .
+  eq eachRow(Slot, Count, Width, Start, Body) =
+    box(seq box(set Slot Start)
+    box(while box(lt box(var Slot) box(add Start box(mul Count Width)))
+      box(seq Body box(set Slot box(add box(var Slot) Width))))) .
+  op relationWidth : T T T -> T .
+  op scanRows : T T T T T -> T .
+  vars W V Child L R K J : T .
+  eq relationWidth(box(0 0),W,V) = W .
+  eq relationWidth(box(0 1),W,V) = V .
+  eq relationWidth(box(1 Col Child),W,V) = relationWidth(Child,W,V) .
+  eq scanRows(box(0 0),W,V,Slot,Body) = eachRow(Slot,box(at 1),W,3,Body) .
+  eq scanRows(box(0 1),W,V,Slot,Body) =
+    eachRow(Slot,box(at 2),V,box(add 3 box(mul box(at 1) W)),Body) .
+  eq scanRows(box(1 Col Child),W,V,Slot,Body) = scanRows(Child,W,V,Slot,
+    box(if box(le box(at 0) fieldAt(box(var Slot),Col)) Body box(seq))) .
+  op joinRows : T T T T T T -> T .
+  eq joinRows(W, V, K, J, L, R) =
+    scanRows(L,W,V,0, scanRows(R,W,V,1, box(if box(eq fieldAt(box(var 0), K) fieldAt(box(var 1), J))
+        box(seq emitRow(relationWidth(L,W,V), box(var 0)) emitRow(relationWidth(R,W,V), box(var 1)))
+        box(seq)))) .
+  op groupRows : T T T T T -> T .
+  eq groupRows(W, V, K, Col, Child) =
+    scanRows(Child,W,V,0, box(seq box(set 3 0)
+      box(set 4 0)
+      scanRows(Child,W,V,1, box(if box(eq fieldAt(box(var 0), K) fieldAt(box(var 1), K))
+          box(seq box(set 3 box(add box(var 3) fieldAt(box(var 1), Col)))
+            box(if box(lt box(var 1) box(var 0)) box(set 4 1) box(seq)))
+          box(seq)))
+      box(if box(eq box(var 4) 0)
+        box(seq box(emit fieldAt(box(var 0), K)) box(emit box(var 3)))
+        box(seq)))) .
   op specialize : T -> T .
-  var Q : T .
-  eq specialize(Q) = Q .
+  eq specialize(box(W V box(2 K J L R))) = joinRows(W,V,K,J,L,R) .
+  eq specialize(box(W V box(3 K Col Child))) = groupRows(W,V,K,Col,Child) .
+  eq specialize(box(W V Child)) =
+    scanRows(Child,W,V,0,emitRow(relationWidth(Child,W,V),box(var 0))) [owise] .
 endfm

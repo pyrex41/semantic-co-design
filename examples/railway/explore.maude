@@ -1,0 +1,21 @@
+mod EXPLORE is
+  protecting SPEC .
+  sort Config .
+  op cfg : T T T -> Config [ctor] .
+  op observe : T -> Config .
+  op advance : T T T Int -> Config .
+  vars R Occ Sw : T . var E : Int .
+  eq observe(box(R Occ Sw)) = cfg(R,Occ,Sw) .
+  eq advance(R,Occ,Sw,E) = observe(run(box(seq
+    box(set 0 R) box(set 1 Occ) box(set 2 Sw) box(set 4 E)
+    railEvent(1,1,0) railEvent(2,2,4)
+    box(emit box(var 0)) box(emit box(var 1)) box(emit box(var 2))),box(nil))) .
+  rl [event-0] : cfg(R,Occ,Sw) => advance(R,Occ,Sw,0) .
+  rl [event-1] : cfg(R,Occ,Sw) => advance(R,Occ,Sw,1) .
+  rl [event-2] : cfg(R,Occ,Sw) => advance(R,Occ,Sw,2) .
+  rl [event-3] : cfg(R,Occ,Sw) => advance(R,Occ,Sw,3) .
+  rl [event-4] : cfg(R,Occ,Sw) => advance(R,Occ,Sw,4) .
+  rl [event-5] : cfg(R,Occ,Sw) => advance(R,Occ,Sw,5) .
+  rl [event-6] : cfg(R,Occ,Sw) => advance(R,Occ,Sw,6) .
+  rl [event-7] : cfg(R,Occ,Sw) => advance(R,Occ,Sw,7) .
+endm

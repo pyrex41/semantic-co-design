@@ -1,31 +1,7 @@
 # Railway interlocking
 
-This fixture models two routes, `R1` and `R2`, sharing switch `S` and protected
-block `B`. A controller grants a request only when the switch and block are
-free. Events are serialized. `cancel` before train entry releases the route,
-while cancellation after entry leaves the reservation until `clear`.
+Two routes share one switch and one protected block. The layout fixes the switch position required by each route. The controller tracks the reservation, the route of the physical train, and the switch position separately. Cancelling before entry releases the reservation. After entry the train must clear the block. The switch stays in its last position until the next grant.
 
-The executable source is [railway.py](railway.py), with equivalent Shen and
-Maude specifications. Run the bounded oracle and the depth-six explorer with:
+Each input line contains serialized events. Codes 0–3 mean request, cancel, enter and clear for route 1. Add four for route 2. Each event emits four integers: verdict (0 rejected, 1 granted, 2 cancelled, 3 entered, 4 cleared), reservation, occupying route, and switch position. Zero denotes an empty reservation or block, or the initial switch position.
 
-```sh
-python3 examples/railway/railway.py examples/railway/fixtures/basic.json
-python3 examples/railway/explore.py
-```
-
-The acceptance gate builds Shen and Maude residual programs through the shared
-API, replays the same event-code stream through both native binaries, and
-compares verdict, reservation, train occupancy, and switch position after each
-event:
-
-```sh
-nix develop -c python3 examples/railway/check.py
-nix develop -c python3 examples/railway/maude_explore.py
-```
-
-`maude_explore.py` runs a bounded search over serialized schedules and a
-mutated rule that releases a reservation while its train is still occupying
-the block. The mutant search supplies a shortest unsafe witness.
-
-The static topology and transition rules are specialization inputs. Requests,
-cancellations, entries, and clearances remain runtime events.
+Run `python3 -m examples.railway.check` in the Nix shell. The Maude search module applies the event equations from the actual build source. Breadth-first search through depth six reaches seven controller states and the check replays all 56 state/event edges. Removing the occupancy test from cancellation reaches 13 states. The shortest conflicting grant is request 1, enter 1, cancel 1, request 2. Both rebuilt mutants report route 1 still in the block with the switch set for route 2.

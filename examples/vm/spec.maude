@@ -1,0 +1,25 @@
+fmod SPEC is
+  protecting STAGE .
+  op specialize : T -> T .
+  op stack : Ts Ts -> T .
+  op product32 : T T -> T .
+  op loopOver : T T T -> T .
+  vars A B N Seed Start Body : T .
+  vars Rest Stack Ops : Ts .
+  eq stack(nil,A) = A .
+  eq stack(box(0) Rest,Stack) = stack(Rest,box(u32 box(at box(var 1))) Stack) .
+  eq stack(box(1 N) Rest,Stack) = stack(Rest,box(u32 N) Stack) .
+  eq stack(box(2) Rest,B A Stack) = stack(Rest,box(u32 box(add A B)) Stack) .
+  eq stack(box(3) Rest,B A Stack) = stack(Rest,product32(A,B) Stack) .
+  eq stack(box(4) Rest,B A Stack) = stack(Rest,box(add A box(mul box(lt A B) box(sub B A))) Stack) .
+  eq product32(A,B) = box(u32 box(add box(mul box(mod A 65536) B)
+                         box(mul 65536 box(mul box(div A 65536) box(mod B 65536))))) .
+  eq loopOver(Seed,Start,Body) =
+    box(seq box(set 0 box(u32 Seed)) box(set 1 Start)
+      box(while box(lt box(var 1) box(len))
+        box(seq box(set 0 Body) box(set 1 box(add box(var 1) 1))))
+      box(emit box(var 0))) .
+  eq specialize(box(Seed 0 box(Ops))) = loopOver(Seed,0,stack(Ops,box(var 0))) .
+  eq specialize(box(Seed 1 box(Ops))) = box(if box(lt 0 box(len))
+                          loopOver(box(at 0),1,stack(Ops,box(var 0))) box(seq)) .
+endfm
