@@ -1,0 +1,6 @@
+fmod QUERY-SPEC is
+  protecting NAT .
+  op specialize : T -> T .
+  var Q : T .
+  eq specialize(Q) = Q .
+endfm

@@ -1,0 +1,11 @@
+{
+  "cutoff": 12,
+  "filter": [{"id": 11, "customer_id": 1, "amount": 9}],
+  "join": [
+    {"id": 1, "name": "Ada", "right_id": 10, "customer_id": 1, "amount": 7},
+    {"id": 1, "name": "Ada", "right_id": 11, "customer_id": 1, "amount": 9},
+    {"id": 2, "name": "Lin", "right_id": 12, "customer_id": 2, "amount": 4},
+    {"id": 2, "name": "Lin duplicate", "right_id": 12, "customer_id": 2, "amount": 4}
+  ],
+  "group_sum": [{"customer_id": 1, "amount": 16}, {"customer_id": 2, "amount": 4}]
+}
