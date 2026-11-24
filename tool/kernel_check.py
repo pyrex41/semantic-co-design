@@ -100,6 +100,34 @@ def clause_selection(work, report):
            f"({traps} traps), {native.stats}; swapped-clause mutant differs on {wrong} rows")
 
 
+LOOP = """
+(define loop.init _ _ -> [0])
+
+(define loop.step
+  [Total] [gcd A B] -> (loop.gcd A B Total)
+  State _ -> [State []])
+
+(define loop.gcd
+  A 0 Total -> [[(+ Total A)] [[answer A]]]
+  A B Total -> (loop.gcd B (shen.mod A B) Total))
+"""
+
+
+def residual_loop(work, report):
+    """A step whose recursion is controlled by runtime data becomes a loop behind the ABI."""
+    (work / "loop.shen").write_text(LOOP)
+    schema = Schema({"name": "loop", "spec": "loop.shen", "step": "loop.step",
+                     "init": "loop.init", "state": ["num"], "max_effects": 1,
+                     "events": {"gcd": {"role": "request", "fields": ["num", "num"]}},
+                     "effects": {"answer": {"role": "output", "fields": ["num"]}}}, work)
+    native = build(schema, work / "loop")
+    pairs = [((total,), ("gcd", a, b)) for total in (0, 5) for a in range(40) for b in range(40)]
+    assert observed(schema, native, pairs) == reference(schema, work / "loop.shen", pairs)
+    assert native.stats["blocks"] >= 1
+    report(f"residual loop: gcd inside a step agrees with shen-jit on {len(pairs)} rows, "
+           f"{native.stats}")
+
+
 def compile_vm(work, name, code, arity, **limits):
     tree, blocks = derive(vm.SHEN, "vm.run", [code, 0, [], [{"input": n} for n in range(arity)]],
                           **limits)
@@ -153,6 +181,7 @@ def main(report=print):
     with TemporaryDirectory() as tmp:
         work = Path(tmp)
         clause_selection(work, report)
+        residual_loop(work, report)
         binding_times(work, report)
         sharing(work, report)
     report("kernel: ok")

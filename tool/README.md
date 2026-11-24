@@ -202,7 +202,7 @@ A new application is a directory `tool/examples/<name>/` with `node.json`, `spec
 | Command | Establishes |
 |---|---|
 | `python3 -m experiments.branching_vm.check` | The four VM programs still specialize to the same block counts and answers through the generalized evaluator. Its retained gcd residual was regenerated because the modulus is now computed once. |
-| `python3 -m tool check kernel` | Native equals shen-jit on 9,600 rows of [kernel/spec.shen](kernel/spec.shen), including traps; a swapped-clause mutant is detected; an undeclared symbol is refused; a stack-only counter compiles with widening and with an annotated division and not without; 40 doublings stay linear and 14 doublings without sharing do not. |
+| `python3 -m tool check kernel` | Native equals shen-jit on 9,600 rows of [kernel/spec.shen](kernel/spec.shen), including traps; a step whose recursion is controlled by runtime data becomes a residual loop behind the ABI and agrees on 3,200 rows; a swapped-clause mutant is detected; an undeclared symbol is refused; a stack-only counter compiles with widening and with an annotated division and not without; 40 doublings stay linear and 14 doublings without sharing do not. |
 | `python3 -m tool check accepted_job` | See [examples/accepted_job](examples/accepted_job/README.md). |
 | `python3 -m tool check gossip` | Three instances of one compiled step with sends, timers, crashes, drops, duplicates and partitions: deterministic, replayable, refining shen-jit; Maude agrees on a two-node bound; two mutants are caught. |
 
