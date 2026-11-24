@@ -24,7 +24,7 @@ def run(*command, timeout=360, **kwargs):
 def database(work):
     # Unix sockets in a private directory avoid TCP port collisions with a live server.
     data = work / "pg"
-    run("initdb", "-D", data, "-A", "trust", "--no-locale", "-U", "appcheck")
+    run("initdb", "-D", data, "-A", "trust", "--no-locale", "--encoding=UTF8", "-U", "appcheck")
     run("pg_ctl", "-D", data, "-l", work / "pg.log", "-w", "-o",
         f"-k {work} -c listen_addresses=''", "start")
     try:
