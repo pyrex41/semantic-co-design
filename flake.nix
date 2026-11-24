@@ -11,9 +11,11 @@
         let pkgs = nixpkgs.legacyPackages.${system};
             shenJit = pkgs.callPackage ./nix/shen-jit.nix { };
         in {
-          nativeBuildInputs = [ pkgs.clang pkgs.python3 pkgs.maude shenJit ];
+          nativeBuildInputs = [ pkgs.clang (pkgs.python3.withPackages (p: [ p.wasmtime ])) pkgs.maude shenJit pkgs.lld ];
           buildInputs = [ pkgs.sqlite ];
           SHEN_JIT = "${shenJit}/bin/shen-jit";
+          # The wrapped compiler targets the host; wasm32 needs the bare driver and wasm-ld.
+          WASM_CLANG = "${pkgs.llvmPackages.clang-unwrapped}/bin/clang";
           PYTHONDONTWRITEBYTECODE = "1";
         };
     in {
@@ -35,6 +37,12 @@
             python3 -m examples."$example".check
           done
           python3 -m experiments.branching_vm.check
+          touch "$out"
+        '';
+        wasm-step = nixpkgs.legacyPackages.${system}.runCommand "wasm-step" (environment system) ''
+          cd ${self}
+          export HOME=$TMPDIR
+          NODE_TARGET=wasm python3 -m tool check kernel accepted_job
           touch "$out"
         '';
         native-replay = nixpkgs.legacyPackages.${system}.runCommand "native-replay" (environment system) ''

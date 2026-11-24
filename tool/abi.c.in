@@ -8,21 +8,30 @@
    specification has no result for this state and event, -2 a read outside the
    input, -3 more output than `capacity`. The function keeps no state between
    calls. Built with -DNODE_MAIN the same code is a line-oriented executable. */
-#define _POSIX_C_SOURCE 200809L
-#include <ctype.h>
-#include <errno.h>
-#include <inttypes.h>
-#include <setjmp.h>
 #include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 enum { LIMIT = 65536, SLOTS = /* SLOTS */ };
 static const int64_t *input;
 static int64_t *output;
 static int64_t emitted, capacity;
+
+#ifdef __wasm__
+/* Freestanding WebAssembly: no libc and no imports. A failure records its code
+   and executes `unreachable`; the embedder reads node_failure() and discards
+   the instance. See tool/wasm.py for the exported memory protocol. */
+static int32_t failed;
+#define longjmp(target, code) (failed = (code), __builtin_trap())
+#else
+#define _POSIX_C_SOURCE 200809L
+#include <ctype.h>
+#include <errno.h>
+#include <inttypes.h>
+#include <setjmp.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 static jmp_buf failure;
+#endif
 /* BANKS */
 
 #define TRAP() longjmp(failure, 1)
@@ -53,11 +62,25 @@ int64_t node_step(const int64_t *in, int64_t count, int64_t *out, int64_t limit)
     output = out;
     emitted = 0;
     capacity = limit;
+#ifndef __wasm__
     int code = setjmp(failure);
     if (code) return -code;
+#endif
     evaluate(count);
     return emitted;
 }
+
+#ifdef __wasm__
+static int64_t wasm_in[LIMIT], wasm_out[LIMIT];
+__attribute__((export_name("node_in"))) int64_t *node_in(void) { return wasm_in; }
+__attribute__((export_name("node_out"))) int64_t *node_out(void) { return wasm_out; }
+__attribute__((export_name("node_failure"))) int32_t node_failure(void) { return failed; }
+__attribute__((export_name("node_call"))) int64_t node_call(int64_t count) {
+    failed = 0;
+    if (count < 0 || count > LIMIT) return -2;
+    return node_step(wasm_in, count, wasm_out, LIMIT);
+}
+#endif
 
 #ifdef NODE_MAIN
 static int64_t row[LIMIT], result[LIMIT];

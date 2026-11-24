@@ -185,6 +185,11 @@ def build(schema, directory, source=None, *, name="node", **limits):
     subprocess.run([*clang, "-DNODE_MAIN", "-o", str(executable)], check=True, timeout=300)
     stats = {"ir_nodes": size(tree), "slots": slots, "blocks": blocks,
              "c_lines": code.count("\n")}
+    if os.environ.get("NODE_TARGET") == "wasm":
+        from .wasm import Wasm, link
+        module = link(directory / f"{name}.c", directory / f"{name}.wasm", 2 * DEPTH)
+        stats["wasm_bytes"] = module.stat().st_size
+        return Wasm(schema, module, executable, stats)
     return Native(schema, library, executable, stats)
 
 
