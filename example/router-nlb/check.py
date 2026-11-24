@@ -10,6 +10,7 @@ import json
 import os
 import signal
 import socket
+import sqlite3
 import struct
 import subprocess
 import sys
@@ -339,6 +340,51 @@ def availability(reference, native, directory):
         standby.close()
 
 
+def durable_reservations(command, path):
+    living = path / "before-crash.sqlite"
+    disk_at_crash = path / "after-crash.sqlite"
+    original = Mode(command, living)
+    reverse = tcp(BLUE4, SNAT4, 8443, 40000, 0x12)
+    incoming = frame4(BLUE, ROUTER_BACK, BLUE4, SNAT4, 6, reverse, back=True)
+    request = {"port": "back", "frame": list(incoming)}
+    translated = tcp(VIP4, PC4, 443, 52301, 0x12)
+    expected = [rows(("front", frame4(ROUTER_FRONT, CLIENT, VIP4, PC4, 6, translated, ttl=63)))]
+    try:
+        assert original.call("boot", {"config": TOPOLOGY})["reason"] == "configured"
+        creation = original.call("stage-frame", {"port": "front", "frame": list(tcp_syn(52301))}, now=100)
+        assert creation["durable"] is True and creation["tx"] == []
+        assert original.call("resume", creation["resume"], now=100)["tx"] == [rows(("back", tcp_backend(40000, BLUE4, BLUE)))]
+        # Copy the durable cut preceding a refresh. Later steps represent packets
+        # received while an actual server's coalesced checkpoint is stalled.
+        with sqlite3.connect(living) as source, sqlite3.connect(disk_at_crash) as destination:
+            source.backup(destination)
+            flow = json.loads(destination.execute("SELECT payload FROM application_state").fetchone()[0])["flows"][0]
+            assert (flow["until"], flow["reserved-until"]) == (400, 430)
+        refreshed = original.call("stage-frame", request, now=125)
+        assert "durable" not in refreshed and refreshed["tx"] == expected
+        extension = original.call("stage-frame", request, now=131)
+        assert extension["durable"] is True and extension["tx"] == []
+        assert original.call("resume", extension["resume"], now=131)["tx"] == expected
+        with sqlite3.connect(living) as source:
+            flow = json.loads(source.execute("SELECT payload FROM application_state").fetchone()[0])["flows"][0]
+            assert (flow["until"], flow["reserved-until"]) == (431, 461)
+    finally:
+        original.close()
+    recovered = Mode(command, disk_at_crash)
+    try:
+        # t=412 is after the saved idle expiry and before the refresh's real
+        # idle expiry t=425. The original tuple must still own its port.
+        assert recovered.call("recover", now=412)["reason"] == "recovered"
+        competing = recovered.call("stage-frame", {"port": "front", "frame": list(tcp_syn(52302))}, now=412)
+        assert competing["durable"] is True and competing["tx"] == []
+        assert recovered.call("resume", competing["resume"], now=412)["tx"] == [rows(("back", tcp_backend(40001, GREEN4, GREEN)))]
+        continued = recovered.call("stage-frame", request, now=413)
+        assert continued["durable"] is True and continued["tx"] == []
+        assert recovered.call("resume", continued["resume"], now=413)["tx"] == expected
+    finally:
+        recovered.close()
+
+
 def race(command, directory):
     database = directory / "race.sqlite"
     first = Mode(command, database)
@@ -412,7 +458,7 @@ def admin_call(path, entry, arg=None):
 
 
 @contextmanager
-def replica_node(command, path, replica=None):
+def replica_node(command, path, replica=None, *, mode="standby", config=None):
     path.mkdir()
     with ExitStack() as resources:
         front = resources.enter_context(socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM))
@@ -432,7 +478,7 @@ def replica_node(command, path, replica=None):
                     break
                 assert child.poll() is None
                 time.sleep(0.05)
-            assert admin_call(path, "boot", {"config": TOPOLOGY, "mode": "standby"})["reason"] == "configured"
+            assert admin_call(path, "boot", {"config": config or TOPOLOGY, "mode": mode})["reason"] == "configured"
             yield child, front, back
         finally:
             if child.poll() is None:
@@ -458,17 +504,120 @@ def replica_sockets(command, path):
         assert standby_front.recv(2048) == frame4(ROUTER_FRONT, CLIENT, VIP4, PC4, 6, client, ttl=63)
 
 
+def stalled_management_and_storage(command, directory):
+    path = directory / "hot"
+    with replica_node(command, path, mode="single") as (_, front, back):
+        first = tcp_syn(51002)
+        front.sendto(first, str(path / "f-rx"))
+        assert back.recv(2048) == tcp_backend(40000, BLUE4, BLUE)
+        with sqlite3.connect(path / "state", isolation_level=None) as storage:
+            storage.execute("BEGIN IMMEDIATE")
+            saved = storage.execute("SELECT payload FROM application_state").fetchone()[0]
+            assert json.loads(saved)["flows"][0]["allocated"] == 40000
+            changed = deepcopy(TOPOLOGY)
+            changed["routes"].append({"prefix": list(packed(NET4)), "bits": 32, "out": "back",
+                                      "via": list(packed(GREEN4)), "metric": 1})
+            try:
+                with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as limited:
+                    limited.connect(str(path / "admin"))
+                    # An incomplete management request remains open throughout forwarding.
+                    limited.sendall(b'{"entry":"status"')
+                    with ThreadPoolExecutor(max_workers=1) as control:
+                        candidate = control.submit(admin_call, path, "candidate", {"generation": 1, "config": changed})
+                        try:
+                            front.settimeout(1)
+                            back.settimeout(1)
+                            returning = tcp(BLUE4, SNAT4, 8443, 40000, 0x12)
+                            reply = frame4(BLUE, ROUTER_BACK, BLUE4, SNAT4, 6, returning, back=True)
+                            expected = tcp(VIP4, PC4, 443, 51002, 0x12)
+                            back.sendto(reply, str(path / "b-rx"))
+                            assert front.recv(2048) == frame4(ROUTER_FRONT, CLIENT, VIP4, PC4, 6, expected, ttl=63)
+                            ordinary = udp(PC4, NET4, 1234, 4321)
+                            front.sendto(frame4(CLIENT, ROUTER_FRONT, PC4, NET4, 17, ordinary), str(path / "f-rx"))
+                            assert back.recv(2048) == frame4(ROUTER_BACK, BLUE, PC4, NET4, 17, ordinary, back=True, ttl=63)
+                            live = admin_call(path, "status")
+                            assert live["generation"] == 1 and live["counters"]["forwarded"] == 3
+                            assert storage.execute("SELECT payload FROM application_state").fetchone()[0] == saved
+                            assert not candidate.done()
+                        finally:
+                            storage.rollback()
+                        assert candidate.result(timeout=5)["reason"] == "candidate-validated"
+                assert admin_call(path, "commit") == {"reason": "committed", "generation": 2}
+                front.sendto(frame4(CLIENT, ROUTER_FRONT, PC4, NET4, 17, ordinary), str(path / "f-rx"))
+                assert back.recv(2048) == frame4(ROUTER_BACK, GREEN, PC4, NET4, 17, ordinary, back=True, ttl=63)
+                assert admin_call(path, "status")["counters"]["forwarded"] == 4
+            finally:
+                if storage.in_transaction:
+                    storage.rollback()
+        rejected = subprocess.run([*command, "--db", str(path / "state"), "call", "status"],
+                                  capture_output=True, text=True, timeout=5)
+        assert rejected.returncode != 0 and "management socket" in rejected.stderr
+
+
+def stalled_replica(command, directory):
+    active, standby, proxy = (directory / name for name in ("active", "standby", "proxy"))
+    proxy.mkdir()
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as gate:
+        gate.bind(str(proxy / "admin"))
+        gate.listen(2)
+        gate.settimeout(3)
+        with replica_node(command, standby), replica_node(command, active, proxy) as (_, front, back):
+            assert admin_call(active, "lease", {"epoch": 1, "until": int(time.time()) + 20})["reason"] == "lease-active"
+
+            def offer():
+                conn, _ = gate.accept()
+                conn.settimeout(2)
+                with conn.makefile("rb") as request:
+                    record = json.loads(request.readline())
+                assert record["entry"] == "replica"
+                return conn, record["arg"]
+
+            def reply(conn, arg):
+                response = admin_call(standby, "replica", arg)
+                assert response["reason"] == "replica-committed"
+                conn.sendall(json.dumps(response).encode() + b"\n")
+
+            front.sendto(tcp_syn(51101), str(active / "f-rx"))
+            conn, payload = offer()
+            with conn:
+                reply(conn, payload)
+            assert back.recv(2048) == tcp_backend(40000, BLUE4, BLUE)
+
+            front.sendto(tcp_syn(51102), str(active / "f-rx"))
+            conn, payload = offer()
+            with conn:
+                # The second acknowledgment is gated by the successful established frame.
+                front.settimeout(1)
+                returning = tcp(BLUE4, SNAT4, 8443, 40000, 0x12)
+                back.sendto(frame4(BLUE, ROUTER_BACK, BLUE4, SNAT4, 6, returning, back=True), str(active / "b-rx"))
+                expected = tcp(VIP4, PC4, 443, 51101, 0x12)
+                assert front.recv(2048) == frame4(ROUTER_FRONT, CLIENT, VIP4, PC4, 6, expected, ttl=63)
+                assert admin_call(active, "status")["flows"] == 1
+                assert admin_call(standby, "status")["flows"] == 1
+                back.setblocking(False)
+                try:
+                    back.recv(2048)
+                except BlockingIOError:
+                    pass
+                else:
+                    raise AssertionError("first packet escaped before the standby acknowledgment")
+                finally:
+                    back.settimeout(5)
+                reply(conn, payload)
+            assert back.recv(2048) == tcp_backend(40001, GREEN4, GREEN)
+            assert admin_call(active, "status")["flows"] == 2
+            assert admin_call(standby, "status")["flows"] == 2
+
+
 def peer_socket(command, directory):
-    database = directory / "peer.sqlite"
-    mode = Mode(command, database)
-    try:
-        mode.call("boot", {"config": TOPOLOGY})
+    path = directory / "peer"
+    with replica_node(command, path, mode="single"):
         with socket.socket() as server:
             server.bind(("127.0.0.1", 0))
             server.listen(1)
             server.settimeout(5)
             endpoint = f"127.0.0.1,{server.getsockname()[1]}"
-            peer = subprocess.Popen([*command, "--db", str(database), "peer", "peer-a", endpoint])
+            peer = subprocess.Popen([*command, "peer", "peer-a", endpoint, "--socket", str(path / "admin")])
             try:
                 connection, _ = server.accept()
                 connection.settimeout(3)
@@ -490,19 +639,16 @@ def peer_socket(command, directory):
                     prefix = bytes([24, 203, 0, 114])
                     connection.sendall(bgp_message(2, struct.pack("!HH", 0, len(attrs)) + attrs + prefix))
                     for _ in range(50):
-                        if mode.call("status")["peer-routes"] == 1:
+                        if admin_call(path, "status")["peer-routes"] == 1:
                             break
                         time.sleep(0.03)
-                    assert mode.call("status")["peer-routes"] == 1
+                    assert admin_call(path, "status")["peer-routes"] == 1
                 assert peer.wait(timeout=5) == 0
-                assert mode.call("status")["peer-routes"] == 0
+                assert admin_call(path, "status")["peer-routes"] == 0
             finally:
                 if peer.poll() is None:
                     peer.kill()
                     peer.wait(timeout=5)
-    finally:
-        mode.close()
-
 
 def loopback_port():
     with socket.socket() as bound:
@@ -591,27 +737,25 @@ afi-safi-name = "ipv4-unicast"
 
 
 def health_socket(command, directory):
-    path = directory / "probe.sqlite"
-    mode = Mode(command, path)
-    try:
-        with socket.socket() as backend:
-            backend.bind(("127.0.0.1", 0))
-            backend.listen(1)
-            backend.settimeout(3)
-            config = deepcopy(TOPOLOGY)
-            config["listeners"][0]["backends"][0].update(
-                address=list(packed("127.0.0.1")), healthy=False, **{"probe-port": backend.getsockname()[1]},
-            )
-            assert mode.call("boot", {"config": config})["reason"] == "configured"
-            invocation = [*command, "--db", str(path), "probe"]
+    path = directory / "health"
+    with socket.socket() as backend:
+        backend.bind(("127.0.0.1", 0))
+        backend.listen(1)
+        backend.settimeout(3)
+        config = deepcopy(TOPOLOGY)
+        config["listeners"][0]["backends"][0].update(
+            address=list(packed("127.0.0.1")), healthy=False, **{"probe-port": backend.getsockname()[1]},
+        )
+        with replica_node(command, path, mode="single", config=config):
+            invocation = [*command, "probe", "--socket", str(path / "admin")]
             first = json.loads(subprocess.check_output(invocation, timeout=5))
             assert first[0]["reason"] == "backend-updated"
             connection, _ = backend.accept()
             connection.close()
-        second = json.loads(subprocess.check_output(invocation, timeout=5))
-        assert second[0]["reason"] == "backend-updated" and second[0]["generation"] == first[0]["generation"] + 1
-    finally:
-        mode.close()
+            backend.close()
+            second = json.loads(subprocess.check_output(invocation, timeout=5))
+            assert second[0]["reason"] == "backend-updated"
+            assert second[0]["generation"] == first[0]["generation"] + 1
 
 
 def mutations(compiler, baseline, baseline_ownership, directory):
@@ -621,9 +765,9 @@ def mutations(compiler, baseline, baseline_ownership, directory):
     for name in (*manifest["sources"], *manifest["assets"], "manifest.json"):
         contents = (HERE / name).read_text()
         if name == "appliance.shen":
-            assert contents.count('(rt.frame "round-robin" Arg)') == 1
+            assert contents.count('(rt.frame "round-robin" Defer Arg)') == 1
             assert contents.count('Interface Packet -> (rt.policy-at (get Interface "policy") Packet 0)') == 1
-            contents = contents.replace('(rt.frame "round-robin" Arg)', '(rt.frame "reverse" Arg)')
+            contents = contents.replace('(rt.frame "round-robin" Defer Arg)', '(rt.frame "reverse" Defer Arg)')
             contents = contents.replace(
                 'Interface Packet -> (rt.policy-at (get Interface "policy") Packet 0)',
                 'Interface Packet -> (and (not (= (get Packet "dst") [203 0 113 89])) (rt.policy-at (get Interface "policy") Packet 0))',
@@ -679,7 +823,10 @@ def main():
     parser.add_argument("release", type=Path)
     parser.add_argument("--compiler", type=Path, help="also rebuild a source-only mutation")
     parser.add_argument("--gobgp", type=Path, help="also qualify against GoBGP binaries in the given directory")
+    parser.add_argument("--replay-only", action="store_true", help="exercise executable replays without sockets")
     args = parser.parse_args()
+    if args.replay_only and args.gobgp:
+        parser.error("--gobgp requires sockets")
     native = [sys.executable, str(args.release.resolve() / "router-nlb")]
     ownership = json.loads((args.release / "ownership.json").read_text())
     assert all(choice["static"][0] == {"value": "round-robin"}
@@ -701,14 +848,22 @@ def main():
         counts += availability(reference, native, path)
     for command in (reference, native):
         with TemporaryDirectory(prefix="router-", dir="/tmp") as temp:
-            endpoints(command, Path(temp))
             race(command, Path(temp))
-            peer_socket(command, Path(temp))
-            replica_sockets(command, Path(temp))
-            health_socket(command, Path(temp))
-            if args.gobgp:
-                daemon_neighbor(args.gobgp.resolve(), command, Path(temp))
-    print(f"{counts} reference/native event pairs plus Unix Ethernet ports, replica failover, TCP peer replay, TCP health checks, and concurrent allocation in both modes")
+            durable_reservations(command, Path(temp))
+            if not args.replay_only:
+                endpoints(command, Path(temp))
+                peer_socket(command, Path(temp))
+                replica_sockets(command, Path(temp))
+                health_socket(command, Path(temp))
+                with TemporaryDirectory(prefix="router-hot-", dir="/tmp") as isolated:
+                    stalled_management_and_storage(command, Path(isolated))
+                with TemporaryDirectory(prefix="router-ha-", dir="/tmp") as isolated:
+                    stalled_replica(command, Path(isolated))
+                if args.gobgp:
+                    daemon_neighbor(args.gobgp.resolve(), command, Path(temp))
+    print(f"{counts} reference/native event pairs plus concurrent allocation and crash-safe deadline reservations in both modes")
+    if not args.replay_only:
+        print("Unix Ethernet ports, replica failover, TCP peer replay, TCP health checks, and held management/storage/replication passed in both modes")
     if args.gobgp:
         print("GoBGP establishment, static export, import, forwarding, and withdrawal passed in both modes")
     if args.compiler:

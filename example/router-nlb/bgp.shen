@@ -93,9 +93,9 @@
 
 (define bgp.normalize
   Bytes Bits ->
-    (if (= (shen.mod Bits 8) 0) Bytes
+    (if (= (floor-mod Bits 8) 0) Bytes
       (let Last (- (bgp.bits-size Bits) 1)
-        (let Unit (at [256 128 64 32 16 8 4 2] (shen.mod Bits 8))
+        (let Unit (at [256 128 64 32 16 8 4 2] (floor-mod Bits 8))
           (rt.patch Bytes Last [(* Unit (rt.div (at Bytes Last) Unit))])))))
 
 (define bgp.prefixes
@@ -143,7 +143,7 @@
       (if (or (> (+ I 3) End) (>= Count 32)) (obj [["reason" "bad-update"]])
         (let Flags (at Bytes I)
           (let Type (at Bytes (+ I 1))
-            (let Extended (= (shen.mod (rt.div Flags 16) 2) 1)
+            (let Extended (= (floor-mod (rt.div Flags 16) 2) 1)
               (let Start (+ I (if Extended 4 3))
                 (if (> Start End) (obj [["reason" "bad-update"]])
                   (let Next (+ Start (if Extended (rt.byte-word Bytes (+ I 2)) (at Bytes (+ I 2))))

@@ -1,4 +1,5 @@
 {
+  "language": "app-shen/1",
   "name": "router-nlb",
   "version": "0.1.0",
   "sources": [
@@ -60,6 +61,21 @@
     },
     "probes": {
       "function": "rt.probes"
+    },
+    "stage-frame": {
+      "function": "rt.stage-frame"
+    },
+    "stage-ack": {
+      "function": "rt.stage-ack"
+    },
+    "resume": {
+      "function": "rt.resume"
+    },
+    "sending-permitted": {
+      "function": "rt.sending-permitted"
+    },
+    "publish-live": {
+      "function": "rt.publish-live"
     }
   },
   "assets": [
@@ -72,10 +88,12 @@
   ],
   "processes": {
     "packet": {
-      "entry": "frame",
+      "entry": "stage-frame",
       "request-bytes": "frame",
       "response-bytes": "tx",
-      "interface": "port"
+      "interface": "port",
+      "resume": "resume",
+      "sending-permitted": "sending-permitted"
     },
     "management": {
       "boot": "boot",
@@ -87,14 +105,16 @@
       "status": "status",
       "lease": "lease",
       "replica": "replica",
-      "recover": "recover"
+      "recover": "recover",
+      "peer": "peer",
+      "probes": "probes"
     },
     "replication": {
       "offer": "replicate",
       "operation": "replica",
       "arg": "offer",
       "ack": "ack",
-      "success": "replica-ack"
+      "success": "stage-ack"
     },
     "peer": {
       "entry": "peer",
@@ -118,6 +138,13 @@
     "recovery": {
       "entry": "recover",
       "success": "recovered"
+    },
+    "publication": {
+      "entry": "publish-live",
+      "reads": [
+        "status",
+        "probes"
+      ]
     }
   },
   "launchers": {

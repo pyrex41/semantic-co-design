@@ -5,10 +5,10 @@
   Bytes I -> (+ (* 256 (at Bytes I)) (at Bytes (+ I 1))))
 
 (define rt.div
-  N D -> (/ (- N (shen.mod N D)) D))
+  N D -> (floor-div (- N (floor-mod N D)) D))
 
 (define rt.net-word
-  N -> [(rt.div N 256) (shen.mod N 256)])
+  N -> [(rt.div N 256) (floor-mod N 256)])
 
 (define rt.patch
   Bytes At Replacement ->
@@ -16,7 +16,7 @@
       (append Replacement (rt.slice Bytes (+ At (len Replacement)) (len Bytes)))))
 
 (define rt.fold-word
-  N -> (+ (shen.mod N 65536) (rt.div N 65536)))
+  N -> (+ (floor-mod N 65536) (rt.div N 65536)))
 
 (define rt.sum-words
   Bytes First End ->
@@ -43,7 +43,7 @@
 
 (define rt.mac-allowed
   Mac -> (and (= (len Mac) 6)
-              (and (= (shen.mod (at Mac 0) 2) 0) (not (= Mac [0 0 0 0 0 0])))))
+              (and (= (floor-mod (at Mac 0) 2) 0) (not (= Mac [0 0 0 0 0 0])))))
 
 (define rt.parse-ethernet
   Frame ->
@@ -53,7 +53,7 @@
           (if (= Type 33024)
             (if (< (len Frame) 18) (obj [["reason" "truncated-vlan"]])
               (obj [["reason" "ok"] ["type" (rt.byte-word Frame 16)]
-                ["vlan" (shen.mod (rt.byte-word Frame 14) 4096)] ["tagged" true]
+                ["vlan" (floor-mod (rt.byte-word Frame 14) 4096)] ["tagged" true]
                 ["src" (rt.slice Frame 6 12)] ["dst" (rt.slice Frame 0 6)] ["offset" 18]]))
             (obj [["reason" "ok"] ["type" Type] ["vlan" 0] ["tagged" false]
               ["src" (rt.slice Frame 6 12)] ["dst" (rt.slice Frame 0 6)] ["offset" 14]]))))))
@@ -62,7 +62,7 @@
   Net ->
     (if (< (len Net) 20) (obj [["reason" "truncated-ipv4"]])
       (if (not (= (rt.div (at Net 0) 16) 4)) (obj [["reason" "invalid-ipv4-version"]])
-        (let HeaderLength (* 4 (shen.mod (at Net 0) 16))
+        (let HeaderLength (* 4 (floor-mod (at Net 0) 16))
           (let Total (rt.byte-word Net 2)
             (if (or (< HeaderLength 20) (< Total HeaderLength)) (obj [["reason" "invalid-ipv4-length"]])
               (if (> Total (len Net)) (obj [["reason" "truncated-ipv4"]])
@@ -476,8 +476,8 @@
         (rt.translation-at Listeners Address (+ I 1)))))
 
 (define rt.choose-index
-  "reverse" Serial Tried Count -> (shen.mod (+ (- Count 1) (- Serial Tried)) Count)
-  _ Serial Tried Count -> (shen.mod (+ Serial Tried) Count))
+  "reverse" Serial Tried Count -> (floor-mod (+ (- Count 1) (- Serial Tried)) Count)
+  _ Serial Tried Count -> (floor-mod (+ Serial Tried) Count))
 
 (define rt.choose-backend-at
   Rule Backends Serial Tried ->
@@ -514,7 +514,7 @@
         (+ Count (if (= (get (at Flows I) "tenant") Tenant) 1 0)))))
 
 (define rt.syn
-  Flags -> (= (shen.mod Flags 64) 2))
+  Flags -> (= (floor-mod Flags 64) 2))
 
 (define rt.lifetime
   Protocol -> (if (= Protocol 6) 300 30))
@@ -529,16 +529,22 @@
               (rt.translate-ip Packet Transport Src Dst Sport Dport) Now))))))
 
 (define rt.remembered-flow
-  State Packet Transport InPort SourceMac Position Reverse Now ->
+  Defer State Packet Transport InPort SourceMac Position Reverse Now ->
     (let Flows (get State "flows")
-      (let Flow (if (= (get State "mode") "single")
-                    (rt.put (at Flows Position) "until" (+ Now (rt.lifetime (get Packet "protocol"))))
-                    (at Flows Position))
-        (rt.translate-flow (rt.put State "flows" (rt.patch Flows Position [Flow]))
-          Packet Transport InPort SourceMac Flow Reverse Now))))
+      (let Flow (at Flows Position)
+        (if (not (= (get State "mode") "single"))
+          (rt.translate-flow State Packet Transport InPort SourceMac Flow Reverse Now)
+          (let Until (+ Now (rt.lifetime (get Packet "protocol")))
+            (let Refreshed (rt.put Flow "until" Until)
+              (if (and Defer (> Until (rt.get-or Flow "reserved-until" (get Flow "until"))))
+                (let Reserved (rt.put Refreshed "reserved-until" (+ Until 30))
+                  (rt.resume-plan (rt.put State "flows" (rt.patch Flows Position [Reserved]))
+                    Packet Transport InPort SourceMac Reserved Reverse))
+                (rt.translate-flow (rt.put State "flows" (rt.patch Flows Position [Refreshed]))
+                  Packet Transport InPort SourceMac Refreshed Reverse Now))))))))
 
 (define rt.add-flow
-  State Packet Transport InPort SourceMac Listener Backend Key Flows Allocated Now ->
+  Defer State Packet Transport InPort SourceMac Listener Backend Key Flows Allocated Now ->
     (let Protocol (get Packet "protocol")
       (let Flow (obj [["fwd" Key]
                        ["rev" (rt.flow-key (get InPort "tenant") Protocol (get Backend "address") (get Backend "port")
@@ -552,21 +558,25 @@
                        ["until" (+ Now (rt.lifetime Protocol))]])
         (let Serial (+ 1 (get State "flow-serial"))
           (if (= (get State "mode") "single")
-            (rt.translate-flow (rt.put (rt.put State "flows" (append Flows [Flow])) "flow-serial" Serial)
-              Packet Transport InPort SourceMac Flow false Now)
+            (let Chosen (if Defer (rt.put Flow "reserved-until" (+ (get Flow "until") 30)) Flow)
+              (let Bound (rt.put (rt.put State "flows" (append Flows [Chosen])) "flow-serial" Serial)
+                (if Defer
+                  (rt.resume-plan Bound Packet Transport InPort SourceMac Chosen false)
+                  (rt.translate-flow Bound Packet Transport InPort SourceMac Chosen false Now))))
             (let Offer (obj [["id" [(get State "epoch") Serial]] ["epoch" (get State "epoch")]
                               ["generation" (get State "generation")] ["configuration" (digest (get State "config"))]
                               ["flow" Flow]])
               (let Pending (obj [["offer" Offer] ["packet" Packet] ["transport" Transport]
                                    ["port" (get InPort "id")] ["source-mac" SourceMac]])
-                (rt.put (rt.result (merge State (obj [["offer" Pending] ["flow-serial" Serial] ["flows" Flows]]))
-                          "replica-required" []) "replicate" Offer))))))))
+                (let Result (rt.put (rt.result (merge State (obj [["offer" Pending] ["flow-serial" Serial] ["flows" Flows]]))
+                                "replica-required" []) "replicate" Offer)
+                  (if Defer (rt.put Result "durable" true) Result)))))))))
 
 (define rt.new-flow
-  Selection State Packet Transport InPort SourceMac Listener Key Now ->
+  Defer Selection State Packet Transport InPort SourceMac Listener Key Now ->
     (if (and (= (get Packet "protocol") 6) (not (rt.syn (get Transport "flags"))))
       (rt.result State "unbound-tcp" [])
-      (if (not (= (get State "offer") null))
+      (if (rt.offer-live State Now)
         (let Offer (get (get State "offer") "offer")
           (if (= Key (get (get Offer "flow") "fwd"))
             (rt.put (rt.result State "replica-required" []) "replicate" Offer)
@@ -575,33 +585,33 @@
           (let Config (get State "config")
             (if (or (>= (len Flows) (get Config "flow-limit"))
                   (>= (rt.tenant-count-at Flows (get InPort "tenant") 0 0) (get Config "tenant-limit")))
-              (rt.result (rt.put State "flows" Flows) "flow-limit" [])
+              (rt.result State "flow-limit" [])
               (let Backend (rt.choose-backend-at Selection (get Listener "backends") (get State "flow-serial") 0)
                 (if (= Backend null) (rt.result State "backend-unavailable" [])
                   (let Port (rt.allocate-at (rt.owned-ports Flows (get Listener "translation") (get Packet "protocol") 0 [])
                                (get Config "port-low") (get Config "port-high"))
                     (if (= Port 0) (rt.result State "port-exhausted" [])
-                      (rt.add-flow State Packet Transport InPort SourceMac Listener Backend Key Flows Port Now)))))))))))
+                      (rt.add-flow Defer State Packet Transport InPort SourceMac Listener Backend Key Flows Port Now)))))))))))
 
 (define rt.transport-route
-  Selection State Packet Transport InPort SourceMac Now ->
+  Defer Selection State Packet Transport InPort SourceMac Now ->
     (let Destination (get Packet "dst")
       (let Key (rt.flow-key (get InPort "tenant") (get Packet "protocol")
                  (get Packet "src") (get Transport "source") Destination (get Transport "destination"))
         (let Flows (get State "flows")
           (let Existing (rt.flow-at Flows Key "fwd" 0 Now)
             (if (not (= Existing null))
-              (rt.remembered-flow State Packet Transport InPort SourceMac Existing false Now)
+              (rt.remembered-flow Defer State Packet Transport InPort SourceMac Existing false Now)
               (let Reverse (rt.flow-at Flows Key "rev" 0 Now)
                 (if (not (= Reverse null))
-                  (rt.remembered-flow State Packet Transport InPort SourceMac Reverse true Now)
+                  (rt.remembered-flow Defer State Packet Transport InPort SourceMac Reverse true Now)
                   (let Listeners (get (get State "config") "listeners")
                     (let Listener (rt.listener-at Listeners
                                      [(get InPort "tenant") (get Packet "protocol") Destination (get Transport "destination")] 0)
                       (if (or (= Listener null) (not (= (get Listener "front") (get InPort "id"))))
                         (if (rt.translation-at Listeners Destination 0) (rt.result State "unbound-translation" [])
                           (rt.route-wire State Packet InPort SourceMac Destination (rt.forward-ip Packet) Now))
-                        (rt.new-flow Selection State Packet Transport InPort SourceMac Listener Key Now))))))))))))
+                        (rt.new-flow Defer Selection State Packet Transport InPort SourceMac Listener Key Now))))))))))))
 
 (define rt.is-ndp
   Packet ->
@@ -610,7 +620,7 @@
         (and (> (get Packet "end") 40) (rt.contains [135 136] (at (get Packet "bytes") 40))))))
 
 (define rt.forward-frame
-  Selection State Interface SourceMac Packet Now ->
+  Defer Selection State Interface SourceMac Packet Now ->
     (let Protocol (get Packet "protocol")
       (if (not (rt.forwarding-policy Interface Packet))
         (rt.result State "ingress-policy" [])
@@ -622,7 +632,7 @@
             (if (or (= Protocol 6) (= Protocol 17))
               (let Transport (rt.parse-transport Packet)
                 (if (= (get Transport "reason") "ok")
-                  (rt.transport-route Selection State Packet Transport Interface SourceMac Now)
+                  (rt.transport-route Defer Selection State Packet Transport Interface SourceMac Now)
                   (rt.result State (get Transport "reason") [])))
               (if (and (rt.is-icmp-error Packet (get Packet "family"))
                     (rt.translation-at (get (get State "config") "listeners") (get Packet "dst") 0))
@@ -640,7 +650,7 @@
       (and (= (get Ethernet "type") 2054) (= (get Ethernet "dst") [255 255 255 255 255 255]))))
 
 (define rt.ingress
-  Selection State Interface Frame Now ->
+  Defer Selection State Interface Frame Now ->
     (let Ether (rt.parse-ethernet Frame)
       (if (not (= (get Ether "reason") "ok")) (rt.result State (get Ether "reason") [])
         (if (or (not (= (get Interface "vlan") (get Ether "vlan")))
@@ -657,11 +667,11 @@
                       (if (rt.ingress-addressed Interface Ether)
                         (if (rt.contains (get Interface "addresses") (get Packet "dst"))
                           (rt.result State "local-ip-unsupported" [])
-                          (rt.forward-frame Selection State Interface (get Ether "src") Packet Now))
+                          (rt.forward-frame Defer Selection State Interface (get Ether "src") Packet Now))
                         (rt.result State "ingress-destination-mac" []))))))))))))
 
 (define rt.frame
-  Selection Arg ->
+  Selection Defer Arg ->
     (let State (get Arg "state")
       (let Now (get Arg "now")
         (if (not (rt.owns-lease State Now)) (rt.result State "fenced" [])
@@ -671,7 +681,7 @@
                 (if (not (list? Frame)) (rt.result State "invalid-frame" [])
                   (if (> (len Frame) 9218) (rt.result State "frame-oversized" [])
                     (if (not (rt.bytes-valid Frame 0 (len Frame))) (rt.result State "invalid-frame" [])
-                      (rt.ingress Selection State Interface Frame Now)))))))))))
+                      (rt.ingress Defer Selection State Interface Frame Now)))))))))))
 
 (define rt.bytes-valid
   Bytes First End ->
@@ -984,8 +994,19 @@
           (and (not (= (get Listener "front") (get Listener "back")))
             (and (= Tenant (get Front "tenant")) (= Tenant (get Back "tenant"))))))))
 
+(define rt.selected-frame
+  Defer Arg -> (rt.frame "round-robin" Defer Arg))
+
 (define rt.packet-entry
-  Arg -> (rt.frame "round-robin" Arg))
+  Arg -> (rt.selected-frame false Arg))
+
+(define rt.stage-frame
+  Arg -> (rt.selected-frame true Arg))
+
+(define rt.offer-live
+  State Now ->
+    (let Pending (get State "offer")
+      (and (not (= Pending null)) (> (get (get (get Pending "offer") "flow") "until") Now))))
 
 \\ Replication uses trusted outcomes from a standby. A pending binding is
 \\ absent from lookup and emission until its exact offer returns committed.
@@ -1031,8 +1052,8 @@
                                           ["last-replica" Offer]]))
                         "replica-committed") "ack" Id)))))))
 
-(define rt.replica-ack
-  Arg ->
+(define rt.ack
+  Defer Arg ->
     (let State (get Arg "state")
       (let Now (get Arg "now")
         (let Pending (get State "offer")
@@ -1044,11 +1065,12 @@
                   (rt.result State "unknown-replica-ack" [])
                   (if (or (not (= (get Offer "generation") (get State "generation"))) (<= (get Flow "until") Now))
                     (rt.result (rt.put State "offer" null) "stale-replica-ack" [])
-                    (rt.translate-flow
-                      (merge State (obj [["offer" null] ["flows" (append (get State "flows") [Flow])]]))
-                      (get Pending "packet") (get Pending "transport")
-                      (rt.interface (get State "config") (get Pending "port")) (get Pending "source-mac")
-                      Flow false Now))))))))))
+                    (let Bound (merge State (obj [["offer" null] ["flows" (append (get State "flows") [Flow])]]))
+                      (let Port (rt.interface (get State "config") (get Pending "port"))
+                        (if Defer
+                          (rt.resume-plan Bound (get Pending "packet") (get Pending "transport") Port (get Pending "source-mac") Flow false)
+                          (rt.translate-flow Bound (get Pending "packet") (get Pending "transport") Port
+                            (get Pending "source-mac") Flow false Now)))))))))))))
 
 (define rt.recover
   Arg ->
@@ -1056,6 +1078,7 @@
       (if (not (= (get State "schema") 1)) (rt.control State "unsupported-schema")
         (rt.control
           (merge State (obj [["sessions" (obj [])] ["peer-routes" []] ["neighbors" []] ["pending" []] ["offer" null]
+                            ["flows" (if (= (get State "mode") "single") (rt.restore-reservations (get State "flows") 0 []) (get State "flows"))]
                             ["mode" (if (= (get State "mode") "single") "single" "standby")] ["lease-until" 0]]))
           "recovered"))))
 
@@ -1093,3 +1116,89 @@
 (define rt.probes
   Arg ->
     (obj [["probes" (rt.probe-listeners (get (get (get Arg "state") "config") "listeners") 0 [])]]))
+
+
+(define rt.replica-ack
+  Arg -> (rt.ack false Arg))
+
+(define rt.stage-ack
+  Arg -> (rt.ack true Arg))
+
+(define rt.resume-plan
+  State Packet Transport Port SourceMac Flow Reverse ->
+    (obj [["state" State] ["durable" true] ["tx" []]
+          ["resume" (obj [["packet" Packet] ["transport" Transport] ["port" (get Port "id")]
+                          ["source-mac" SourceMac] ["key" (get Flow "fwd")] ["reverse" Reverse]])]]))
+
+(define rt.resume
+  Arg ->
+    (let State (get Arg "state")
+      (let Now (get Arg "now")
+        (if (not (rt.owns-lease State Now)) (rt.result State "fenced" [])
+          (let Flows (get State "flows")
+            (let Position (rt.flow-at Flows (get Arg "key") "fwd" 0 Now)
+              (if (= Position null) (rt.result State "flow-expired" [])
+                (rt.translate-flow State (get Arg "packet") (get Arg "transport")
+                  (rt.interface (get State "config") (get Arg "port")) (get Arg "source-mac")
+                  (at Flows Position) (get Arg "reverse") Now))))))))
+
+(define rt.sending-permitted
+  Arg -> (obj [["ready" (rt.owns-lease (get Arg "state") (get Arg "now"))]]))
+
+\\ The slow transaction stages against a fixed view. Packet batches may
+\\ refresh timers and counters while its durable write is in flight.
+
+(define rt.restore-reservations
+  Flows I Rows ->
+    (if (= I (len Flows)) Rows
+      (let Flow (at Flows I)
+        (rt.restore-reservations Flows (+ I 1)
+          (let Until (get Flow "until")
+            (let Reserved (rt.get-or Flow "reserved-until" Until)
+              (append Rows [(rt.put Flow "until" (if (> Reserved Until) Reserved Until))])))))))
+
+(define rt.index-bound-flows
+  Flows I ByKey ->
+    (if (= I (len Flows)) ByKey
+      (let Flow (at Flows I)
+        (rt.index-bound-flows Flows (+ I 1) (rt.put ByKey (json (get Flow "fwd")) Flow)))))
+
+(define rt.latest-flow
+  Flow ByKey ->
+    (let Candidate (get ByKey (json (get Flow "fwd")))
+      (if (and (not (= Candidate null))
+            (and (> (get Candidate "until") (get Flow "until"))
+              (= Flow (rt.put Candidate "until" (get Flow "until")))))
+        Candidate Flow)))
+
+(define rt.keep-refreshes
+  Flows ByKey I Rows ->
+    (if (= I (len Flows)) Rows
+      (rt.keep-refreshes Flows ByKey (+ I 1)
+        (append Rows [(rt.latest-flow (at Flows I) ByKey)]))))
+
+(define rt.keep-counts
+  Keys Base Next Live I ->
+    (if (= I (len Keys)) Live
+      (let Key (at Keys I)
+        (let Delta (- (get Next Key) (rt.get-or Base Key 0))
+          (rt.keep-counts Keys Base Next
+            (if (= Delta 0) Live (rt.put Live Key (+ (rt.get-or Live Key 0) Delta))) (+ I 1))))))
+
+(define rt.publish-live
+  Arg ->
+    (let Next (get Arg "next")
+      (let Live (get Arg "state")
+        (let Base (get Arg "base")
+          (let Reset (or (not (= (get Base "epoch") (get Next "epoch")))
+                         (rt.contains ["committed" "rolled-back" "recovered"] (get Arg "reason")))
+            (let Counters (get Next "counters")
+              (obj [["state"
+                  (merge Next
+                    (obj [["flows" (if (= (get Base "flows") (get Next "flows")) (get Live "flows")
+                                     (rt.keep-refreshes (get Next "flows") (rt.index-bound-flows (get Live "flows") 0 (obj [])) 0 []))]
+                          ["neighbors" (if Reset (get Next "neighbors") (get Live "neighbors"))]
+                          ["pending" (if Reset (get Next "pending") (get Live "pending"))]
+                          ["control-second" (get Live "control-second")]
+                          ["control-used" (get Live "control-used")]
+                          ["counters" (rt.keep-counts (keys Counters) (get Base "counters") Counters (get Live "counters") 0)]]))]])))))))
