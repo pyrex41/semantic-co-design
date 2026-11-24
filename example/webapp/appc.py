@@ -1,6 +1,7 @@
-"""Evaluate an ordinary first-order Shen fragment or specialize it to native entry points."""
+"""Interpret App Shen or specialize its manifest entries to native functions."""
 import argparse
 import hashlib
+from importlib.metadata import version
 import json
 import platform
 import re
@@ -10,7 +11,10 @@ import sys
 import sysconfig
 from pathlib import Path
 
-from values import PURE
+from values import PURE, Problem, same
+
+
+LANGUAGE = "app-shen/1"
 
 
 class Symbol(str):
@@ -115,10 +119,6 @@ def is_variable(value):
 
 def literal(value):
     return str(value) if isinstance(value, Symbol) else value
-
-
-def same(left, right):
-    return type(left) is type(right) and left == right
 
 
 class Evaluator:
@@ -285,7 +285,7 @@ class Specializer:
                     value = PURE[name][1](*values)
                     if type(value) in (str, bool, type(None), int, list, dict):
                         return value
-                except (ValueError, TypeError, KeyError, ArithmeticError):
+                except (Problem, ValueError, TypeError, KeyError, ArithmeticError):
                     pass
             arguments = ", ".join(self.expression(x) for x in values)
             return bind(f"pure[{str(name)!r}]({arguments})")
@@ -346,6 +346,8 @@ class Specializer:
 
 def load(manifest):
     release = json.loads(manifest.read_text())
+    if release.get("language") != LANGUAGE:
+        raise SourceError(f"{manifest}: expected language {LANGUAGE!r}")
     definitions, locations = {}, {}
     for name in release["sources"]:
         defs, locs = read_program(manifest.parent / name)
@@ -491,6 +493,11 @@ def build(manifest, out):
         digests["policy_native"] = digest(policy_native)
     (out / "ownership.json").write_text(json.dumps({
         "entries": release["entries"],
+        "language": LANGUAGE,
+        "toolchain": {
+            "python": platform.python_version(), "cython": version("Cython"),
+            "cc": subprocess.check_output(["cc", "--version"], text=True, timeout=10).splitlines()[0],
+        },
         "definitions": {
             name: {"source": evaluator.locations[name], "residual": instances, "policy": policy_mapping.get(name, [])}
             for name, instances in mapping.items()

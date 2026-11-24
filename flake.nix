@@ -26,6 +26,19 @@
         });
       });
       checks = eachSystem (system: {
+        generated-applications = let
+          pkgs = nixpkgs.legacyPackages.${system};
+          python = pkgs.python3.withPackages (p: [ p.cython ]);
+          shen = pkgs.callPackage ./nix/shen-jit.nix { };
+        in pkgs.runCommand "generated-applications" {
+          nativeBuildInputs = [ python pkgs.clang shen ];
+          PYTHONDONTWRITEBYTECODE = "1";
+          SHEN_JIT = "${shen}/bin/shen-jit";
+        } ''
+          cd ${self}
+          python3 example/qualify.py
+          touch "$out"
+        '';
         staged-examples = nixpkgs.legacyPackages.${system}.runCommand "staged-examples" (environment system) ''
           cd ${self}
           python3 -m unittest specializer.test_backend

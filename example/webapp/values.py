@@ -25,7 +25,13 @@ def failure(status, code, detail):
 
 
 def same(left, right):
-    return type(left) is type(right) and left == right
+    if type(left) is not type(right):
+        return False
+    if isinstance(left, list):
+        return len(left) == len(right) and all(same(a, b) for a, b in zip(left, right))
+    if isinstance(left, dict):
+        return left.keys() == right.keys() and all(same(left[k], right[k]) for k in left)
+    return left == right
 
 
 def get(value, key):
@@ -40,6 +46,15 @@ def signed(value):
     if type(value) is not int or not -(2**63) <= value < 2**63:
         failure(422, "integer-range", "Expected a signed 64-bit integer.")
     return value
+
+
+def integer_operation(operation):
+    def checked(left, right):
+        a, b = signed(left), signed(right)
+        if b == 0 and operation in (operator.floordiv, operator.mod):
+            failure(422, "zero-divisor", "The divisor must be nonzero.")
+        return signed(operation(a, b))
+    return checked
 
 
 def canonical(value):
@@ -159,9 +174,9 @@ def parse_int(value):
 
 PURE = {
     "=": (2, same), "<": (2, operator.lt), ">": (2, operator.gt), ">=": (2, operator.ge),
-    "<=": (2, operator.le), "+": (2, lambda a, b: signed(a + b)), "-": (2, lambda a, b: signed(a - b)),
-    "*": (2, lambda a, b: signed(a * b)), "/": (2, lambda a, b: signed(a // b)),
-    "shen.mod": (2, lambda a, b: signed(a % b)),
+    "<=": (2, operator.le), "+": (2, integer_operation(operator.add)), "-": (2, integer_operation(operator.sub)),
+    "*": (2, integer_operation(operator.mul)), "floor-div": (2, integer_operation(operator.floordiv)),
+    "floor-mod": (2, integer_operation(operator.mod)),
     "not": (1, operator.not_), "truth": (1, bool),
     "get": (2, get), "obj": (1, lambda pairs: dict(pairs)), "merge": (2, lambda a, b: {**a, **b}),
     "obj?": (1, lambda a: isinstance(a, dict)), "keys": (1, lambda a: sorted(a)),

@@ -11,8 +11,9 @@ from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
-from trading_checks import CLIENT, MANIFEST, PRODUCT, VENUE, accounts, fixture, intent, order
+from trading_checks import CLIENT, MANIFEST, PRODUCT, VENUE, accounts, fill, fixture, intent, order
 from event_host import Store
+from oracle import QUOTE_SCALE, balances_from_statement
 from package import appc
 
 
@@ -47,6 +48,9 @@ def child_main():
     def fault(observed):
         if observed == args.get("at"):
             os._exit(args["code"])
+        if observed == "after-authorization" and "prewire" in args:
+            Path(args["prewire"]).touch()
+            wait_file(Path(args["unblock"]))
 
     if args["mode"] == "admit":
         result = store.invoke("admit", intent(args["client"], args["price"]), time_ms=args["time"],
@@ -56,15 +60,163 @@ def child_main():
     def accept(request, _):
         raw = request["body"]
         body = order(raw["client_oid"], VENUE.format(1), raw["price"], raw["size"])
-        with Path(args["exchange"]).open("x") as file:
+        observed = Path(args["exchange"])
+        staged = observed.with_suffix(".pending")
+        with staged.open("x") as file:
             file.write(json.dumps(body))
             file.flush()
             os.fsync(file.fileno())
+        staged.replace(observed)
+        if "unblock" in args and "prewire" not in args:
+            wait_file(Path(args["unblock"]))
         return {"network": "response", "status": 200, "body": body}
 
-    store.send({"client-id": args["client"]}, None, fence=1, actor="acceptance", roles=roles,
-               effect=accept, fault=fault, clock=lambda: args["time"])
-    raise RuntimeError("the injected process failure did not occur")
+    result = store.send({"client-id": args["client"]}, None, fence=1, actor="acceptance", roles=roles,
+                        effect=accept, fault=fault, clock=lambda: args["time"])
+    if "reply" not in args:
+        raise RuntimeError("the injected process failure did not occur")
+    Path(args["reply"]).write_text(json.dumps(result))
+
+
+def wait_file(path, process=None):
+    end = time.monotonic() + 15
+    while not path.exists():
+        if (process is not None and process.poll() is not None) or time.monotonic() >= end:
+            raise AssertionError(f"process did not signal {path.name}")
+        time.sleep(0.01)
+
+
+def prepared_case(entries, manifest, version, database):
+    store = Store(database, manifest, entries, version)
+    roles = {role for target in manifest["access"].values() for role in target["roles"]}
+    now = 1000
+
+    def clock():
+        nonlocal now
+        now += 200
+        return now
+
+    def invoke(entry, event, expected, fence=1):
+        reply = store.invoke(entry, event, time_ms=clock(), fence=fence, actor="acceptance", roles=roles)
+        assert reply["status"] == expected, (entry, reply, expected)
+        return reply["data"]
+
+    opening = accounts("100")
+    invoke("acquire-writer", {"fence": 1}, "reconciliation-required")
+    invoke("start", {"accounts": opening}, "initialized")
+    invoke("reconcile", {"from-cursor": 0, "to-cursor": 0, "fills-complete": True,
+                         "open-orders": [], "accounts": opening}, "reconciled")
+    invoke("resume", {}, "trading")
+    invoke("metadata", {"product": PRODUCT, "body": fixture(PRODUCT, "product")}, "metadata")
+    invoke("snapshot", {"product": PRODUCT, "body": fixture(PRODUCT, "book")}, "book")
+    return store, invoke, clock
+
+
+def transport_race(release, entries, manifest, version, root):
+    database = root / "stalled.sqlite"
+    store, invoke, clock = prepared_case(entries, manifest, version, database)
+    active, staged = (CLIENT.format(i) for i in (1, 2))
+    invoke("admit", intent(active, 2_500), "admitted")
+    invoke("admit", intent(staged, 2_500), "admitted")
+    unstarted = invoke("claim", {"client-id": staged}, "claimed")
+    exchange, unblock, reply = (root / name for name in ("stalled.venue", "stalled.unblock", "stalled.reply"))
+    process = child(release, database, {"mode": "send", "client": active, "exchange": str(exchange),
+                "unblock": str(unblock), "reply": str(reply), "time": clock()})
+    try:
+        wait_file(exchange, process)
+        accepted = json.loads(exchange.read_text())
+        kill = invoke("kill", {}, "cancel-only")
+        assert kill["outstanding"] == [active] and kill["reserved"]["USD"] == 2_525 * (QUOTE_SCALE // 100)
+        invoke("authorize-send", unstarted, "transport-fenced")
+        assert invoke("order", {"client-id": staged}, "order")["phase"] == "cancelled"
+        invoke("claim", {"client-id": active}, "cancel-awaiting-identity")
+        invoke("order-evidence", {"client-id": active, "body": accepted}, "cancel-pending")
+        first = fill(accepted["id"], 1, "25", "0.4", "0.10")
+        invoke("fill", {"body": first}, "cancel-pending")
+        invoke("fill", {"body": first}, "duplicate-fill")
+        assert process.poll() is None and not reply.exists(), "the transport must still be stalled"
+        unblock.touch()
+        assert process.wait(timeout=20) == 0
+        observed = json.loads(reply.read_text())
+        assert observed["status"] == "cancel-pending" and observed["data"]["remaining"] == 60_000_000
+    finally:
+        unblock.touch()
+        if process.poll() is None:
+            process.terminate()
+            process.wait(timeout=10)
+
+    cancel = invoke("claim", {"client-id": active}, "claimed")
+    invoke("authorize-send", cancel, "transport-authorized")
+    last = fill(accepted["id"], 2, "25", "0.6", "0.15")
+    invoke("fill", {"body": last}, "fully-filled")
+    outcome = {**cancel, "response": {"network": "response", "status": 200, "body": active}}
+    invoke("http-result", outcome, "already-terminal")
+    invoke("http-result", outcome, "stale-transport-result")
+    status = invoke("status", {}, "status")
+    expected = balances_from_statement({"USD": "100", "BTC": "0", "BCH": "0"}, [first, last])
+    assert status["mode"] == "cancel-only" and status["outstanding"] == []
+    assert {asset: value["total"] for asset, value in status["balances"].items()} == expected
+    assert status["balances"]["USD"]["reserved"] == 0
+    return store.replay({version: entries})["events"]
+
+
+def transport_crashes(release, entries, manifest, version, root):
+    scenarios = [("after-claim", False, "sent-unknown", False, "pending-send"),
+                 ("after-authorization", False, "sent-unknown", True, "sent-unknown"),
+                 ("before-result-commit", True, "sent-unknown", True, "sent-unknown"),
+                 ("after-result-commit", True, "acknowledged", True, "acknowledged")]
+    for code, (point, reached_venue, phase, submitted, recovered_phase) in enumerate(scenarios, 76):
+        database = root / f"{point}.sqlite"
+        exchange = root / f"{point}.venue"
+        store, invoke, clock = prepared_case(entries, manifest, version, database)
+        client = CLIENT.format(1)
+        invoke("admit", intent(client, 2_500), "admitted")
+        process = child(release, database, {"mode": "send", "client": client, "exchange": str(exchange),
+                        "time": clock(), "at": point, "code": code})
+        assert process.wait(timeout=20) == code
+        actual = invoke("order", {"client-id": client}, "order")
+        assert actual["phase"] == phase and actual["submitted"] is submitted
+        assert exchange.exists() is reached_venue
+        invoke("acquire-writer", {"fence": 2}, "reconciliation-required", fence=2)
+        actual = invoke("order", {"client-id": client}, "order")
+        assert actual["phase"] == recovered_phase and actual["reservation"] > 0
+        if reached_venue and phase == "sent-unknown":
+            evidence = {"client-id": client, "body": json.loads(exchange.read_text())}
+            invoke("order-evidence", evidence, "acknowledged", fence=2)
+        assert store.replay({version: entries})["events"] >= 9
+    return len(scenarios)
+
+
+def kill_before_wire(release, entries, manifest, version, root):
+    database = root / "prewire.sqlite"
+    store, invoke, clock = prepared_case(entries, manifest, version, database)
+    client = CLIENT.format(1)
+    invoke("admit", intent(client, 2_500), "admitted")
+    ready, exchange, unblock, reply = (
+        root / f"prewire.{name}" for name in ("ready", "venue", "unblock", "reply"))
+    process = child(release, database, {"mode": "send", "client": client, "exchange": str(exchange),
+                "prewire": str(ready), "unblock": str(unblock), "reply": str(reply), "time": clock()})
+    try:
+        wait_file(ready, process)
+        assert not exchange.exists()
+        kill = invoke("kill", {}, "cancel-only")
+        assert kill["outstanding"] == [client] and kill["reserved"]["USD"] > 0
+        invoke("claim", {"client-id": client}, "cancel-awaiting-identity")
+        invoke("admit", intent(CLIENT.format(2), 2_500), "admission-fenced")
+        assert process.poll() is None and not exchange.exists()
+        unblock.touch()
+        assert process.wait(timeout=20) == 0
+        observed = json.loads(reply.read_text())
+        assert observed["status"] == "cancel-pending"
+        assert observed["data"]["venue-id"] == json.loads(exchange.read_text())["id"]
+        cancel = invoke("claim", {"client-id": client}, "claimed")
+        assert cancel["stage"] == "cancel"
+    finally:
+        unblock.touch()
+        if process.poll() is None:
+            process.terminate()
+            process.wait(timeout=10)
+    return store.replay({version: entries})["events"]
 
 
 def run(release, entries, root):
@@ -119,13 +271,17 @@ def run(release, entries, root):
     invoke("order-evidence", {"client-id": winner, "body": accepted}, "acknowledged", fence=2)
     invoke("admit", intent(lost, 2_500), "admission-fenced", fence=2)
     report = store.replay({version: entries})
-    assert report["events"] == 16
+    assert report["events"] == 17
     backup = root / "restored.sqlite"
     assert json.loads(command(release, database, "backup", str(backup)).stdout) == {"backup": str(backup)}
     assert json.loads(command(release, backup, "replay").stdout) == report
     assert json.loads(command(release, backup, "call", "status").stdout)["data"]["outstanding"]
     auth_events = api(release, store, root)
-    return {"durable_events": report["events"], "process_deaths": 3, "api_checks": auth_events,
+    stalled_events = transport_race(release, entries, manifest, version, root)
+    additional_deaths = transport_crashes(release, entries, manifest, version, root)
+    prewire_events = kill_before_wire(release, entries, manifest, version, root)
+    return {"durable_events": report["events"], "process_deaths": 3 + additional_deaths,
+            "stalled_send_events": stalled_events, "kill_before_wire_events": prewire_events, "api_checks": auth_events,
             "recovered_execution_identity": accepted["id"], "durable_fingerprint": report["state_digest"]}
 
 
@@ -196,8 +352,9 @@ def versions(original, mutant, work):
     call(original, "limits", "limits-updated", {"ceiling": 100 * 10**16, "fee-ppm": 200_000})
     prior, candidate, comparison = (CLIENT.format(i) for i in range(3))
     call(original, "admit", "admitted", intent(prior, 5_000))
-    call(original, "claim", "claimed", {"client-id": prior})
-    call(original, "send-result", "acknowledged", {"client-id": prior, "outcome": "accepted",
+    work = call(original, "claim", "claimed", {"client-id": prior})
+    call(original, "authorize-send", "transport-authorized", work)
+    call(original, "send-result", "acknowledged", {**work, "outcome": "accepted",
                                                     "body": order(prior, VENUE.format(0), "50.00")})
     call(original, "cancel", "cancel-pending", {"client-id": prior})
     assert call(original, "admit", "admitted", intent(candidate, 500))["origin-release"] == old_release

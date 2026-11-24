@@ -5,7 +5,7 @@
   State Req ->
     (let Fence (get Req "fence")
       (if (and (tx.positive Fence 9000000000000000000) (> Fence (get State "fence")))
-        (tx.mode (tx.disconnect-books (merge State (obj [["fence" Fence] ["blocked" true]])) (tx.products) 0)
+        (tx.mode (tx.disconnect-books (merge (tx.recover-unstarted State (tx.open-ids State) 0) (obj [["fence" Fence] ["blocked" true]])) (tx.products) 0)
           "reconciliation-required")
         (tx.result State "stale-fence" null))))
 
@@ -216,7 +216,7 @@
         (let Order (tx.order State Id)
           (let Phase (tx.phase Order)
             (tx.work-list State Ids (+ Offset 1)
-              (if (or (and (= Phase "cancel-pending") (= null (get Order "cancel-outcome")))
+              (if (or (tx.cancel-dispatchable Order)
                     (and (= Phase "pending-send") (= "trading" (get State "mode"))))
                 (prepend Id Work) Work)))))))
 
@@ -229,7 +229,7 @@
 (define tx.rotate
   State Epoch ->
     (if (and (tx.positive Epoch 9000000000000000000) (> Epoch (get State "credential-epoch")))
-      (tx.mode (merge State (obj [["credential-epoch" Epoch] ["blocked" true]])) "reconciliation-required")
+      (tx.mode (merge (tx.recover-unstarted State (tx.open-ids State) 0) (obj [["credential-epoch" Epoch] ["blocked" true]])) "reconciliation-required")
       (tx.result State "invalid-credential-epoch" null)))
 
 (define tx.channel-complete

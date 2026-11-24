@@ -1,12 +1,30 @@
 # Build three applications by specializing their specifications
 
-These are implementation plans. Each product has one authored application, expressed as ordinary executable Shen definitions. A reference runner executes those definitions. The build fixes the definitions, schemas, protocol descriptions and release manifest as inputs to a general evaluator and specializes that evaluator. The resulting package owns the public entry points, state transitions, outputs and recovery behavior. Each product specification must run against real drivers in reference mode before it can serve as the native build input.
+These directories contain the implementation plans and their locally executable applications. Each product has one authored application expressed in App Shen, a first-order language with Shen syntax and a versioned value and effect contract. See the [language contract and independent conformance gate](LANGUAGE.md). A reference runner executes those definitions. The build fixes the definitions, schemas, protocol descriptions and release manifest as inputs to a general evaluator and specializes that evaluator. The resulting package owns the public entry points, state transitions, outputs and recovery behavior. Each product specification must run against real drivers in reference mode before it can serve as the native build input.
 
 | Product | What the operator installs | Public acceptance surface |
 |---|---|---|
 | [Document approval service](webapp/PLAN.md) | Web server, worker and migration executable built from one application release | Browser journeys, HTTP clients, identity provider and notification receiver |
 | [Spot trading engine](trading-engine/PLAN.md) | Feed, strategy, order, ledger, reconciliation and operator entry points built from one engine release | Exchange sessions, operator CLI/API, account statements and restart |
 | [Router and layer-4 load balancer](router-nlb/PLAN.md) | Linux appliance package with generated forwarding, connection handling and control plane | Ethernet interfaces, routing peer, backend servers and administrative API |
+
+## Qualification from a checkout
+
+The ownership receipt identifies the dialect, Python ABI and actual Python, Cython and C compiler versions used. The pip qualification environment and the flake each pin their own toolchain.
+
+Run `nix flake check -L` to build all three native packages, run the language conformance suite, execute the generated web policy process, and replay trading and router histories. This gate runs alongside the existing AcceptedJob and staged-example checks.
+
+The full local gate opens loopback sockets and drives a real browser and PostgreSQL. Run as an unprivileged user with the PostgreSQL client/server tools, a C compiler, OpenSSL and the pinned Shen JIT on PATH. Set `SHEN_JIT` if the executable has a different name. Install the check environment and run from the repository root:
+
+```sh
+python3 -m venv /tmp/application-check-env
+. /tmp/application-check-env/bin/activate
+python -m pip install -r example/webapp/requirements-check.txt
+python -m playwright install chromium
+python example/qualify.py --full
+```
+
+Pass `--chromium PATH` for an existing browser and `--gobgp DIR` for the GoBGP 3.37.0 binaries to include independent peer qualification. The runner creates and shuts down a private PostgreSQL cluster, builds to a temporary directory and uses only local test accounts and transports. Authenticated exchange operations, cross-host failure, physical networking and production load require separate infrastructure.
 
 ## What must be built in the compiler
 

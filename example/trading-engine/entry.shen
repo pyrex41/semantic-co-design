@@ -79,7 +79,13 @@
   State Req ->
     (let Change (obj [["actor" (get Req "actor")] ["from" (get Req "previous-release")]
                      ["to" (get Req "release")] ["schema" (get State "schema")]])
-      (tx.result (tx.journal State "release-activation" Change []) "release-activated" Change)))
+      (let Old (get State "transport-activation")
+        (let New (tx.set (tx.recover-unstarted State (tx.open-ids State) 0)
+                     "transport-activation" (+ (if (= null Old) 0 Old) 1))
+          (let Open (tx.venue-open (get New "orders") (tx.open-ids New) 0 (obj []))
+            (let Active (if (= Open null)
+                           (merge New (obj [["mode" "reconciliation-required"] ["blocked" true]])) New)
+              (tx.result (tx.journal Active "release-activation" Change []) "release-activated" Change)))))))
 
 (define tx.event
   "activate-release" State Req -> (tx.activate-release State Req)
@@ -94,7 +100,7 @@
   "configure-strategy" State Req -> (tx.strategy-set State Req)
   "strategy" State Req -> (tx.strategy State Req)
   "admit" State Req -> (tx.admit State Req)
-  "claim" State Req -> (tx.claim State (get Req "client-id"))
+  "claim" State Req -> (tx.claim State Req)
   "authorize-send" State Req -> (tx.authorize-send State Req)
   "http-result" State Req -> (tx.http-result State Req)
   "send-result" State Req -> (tx.send-result State Req)
@@ -119,11 +125,12 @@
       (let Req (get Envelope "event")
         (if (not (and (obj? Req) (tx.bounded Time 9000000000000000000)))
           (tx.result State "invalid-command" null)
-          (if (< Time (get State "clock")) (tx.result State "stale-clock" null)
+          (if (and (< Time (get State "clock")) (not (contains ["http-result" "send-result" "cancel-result"] Action)))
+            (tx.result State "stale-clock" null)
             (if (and (not (= Action "acquire-writer"))
                   (or (= (get State "fence") 0) (not (= (get State "fence") (get Envelope "fence")))))
               (tx.result State "stale-fence" null)
-              (tx.event Action (tx.set State "clock" Time)
+              (tx.event Action (tx.set State "clock" (tx.max Time (get State "clock")))
                 (merge Req (obj [["actor" (get Envelope "actor")] ["release" (get Envelope "release")]
                                  ["previous-release" (get Envelope "previous-release")]])))))))))
 

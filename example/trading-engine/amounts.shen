@@ -1,6 +1,6 @@
 \\ Positive fixed-point values. -1 marks invalid venue decimal text.
 (define tx.floor
-  N D -> (/ (- N (shen.mod N D)) D))
+  N D -> (floor-div (- N (floor-mod N D)) D))
 
 (define tx.min
   A B -> (if (< A B) A B))
@@ -60,7 +60,7 @@
 (define tx.format-decimal
   Value Scale ->
     (let Divisor (tx.power10 Scale)
-      (let Fraction (str (shen.mod Value Divisor))
+      (let Fraction (str (floor-mod Value Divisor))
         (concat [(str (tx.floor Value Divisor)) "." (tx.zeroes (- Scale (len Fraction))) Fraction]))))
 
 (define tx.bounded
@@ -81,4 +81,4 @@
 (define tx.fee-reserve
   Quote Ppm ->
     (+ (* (tx.floor Quote 1000000) Ppm)
-       (tx.floor (+ (* (shen.mod Quote 1000000) Ppm) 999999) 1000000)))
+       (tx.floor (+ (* (floor-mod Quote 1000000) Ppm) 999999) 1000000)))

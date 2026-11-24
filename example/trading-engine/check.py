@@ -69,6 +69,11 @@ class Session:
         self.trace.append((entry, {k: v for k, v in envelope.items() if k != "state"}, reply["status"], reply["data"]))
         return reply["data"]
 
+    def dispatch(self, client):
+        work = self.run("claim", "claimed", {"client-id": client})
+        self.run("authorize-send", "transport-authorized", work, step=0)
+        return work
+
     def product(self, product):
         metadata = fixture(product, "product")
         self.run("metadata", "metadata", {"product": product, "body": metadata})
@@ -113,6 +118,9 @@ class Session:
         assert held == self.state["reserved"]
         assert all(self.state["balances"][asset] >= value for asset, value in held.items())
         for posting in self.state["journal"]:
+            if posting["kind"] == "release-activation":
+                assert posting["postings"] == []
+                continue
             assert sum(row[2] for row in posting["postings"]) == 0
             assert len({row[0] for row in posting["postings"]}) == 1
 
@@ -153,14 +161,14 @@ def decisive(entries):
     prev_venue, winner_venue, fresh_venue = (VENUE.format(i) for i in (0, 1, 3))
     engine.run("limits", "limits-updated", {"ceiling": 100 * unit, "fee-ppm": 200_000})
     engine.run("admit", "admitted", intent(previous, 5_000))
-    payload = engine.run("claim", "claimed", {"client-id": previous})
+    payload = engine.dispatch(previous)
     initial = venue.accept(payload["request"], prev_venue)
-    engine.run("send-result", "acknowledged", {"client-id": previous, "outcome": "accepted", "body": initial})
+    engine.run("send-result", "acknowledged", {**payload, "outcome": "accepted", "body": initial})
     engine.balance("USD", 100 * unit, 60 * unit)
     engine.run("admit", "admitted", intent(winner, 2_500))
     engine.run("admit", "insufficient-available", intent(loser, 2_500))
     engine.balance("USD", 100 * unit, 90 * unit)
-    request = engine.run("claim", "claimed", {"client-id": winner})
+    request = engine.dispatch(winner)
     assert request["stage"] == "send" and request["request"]["body"]["price"] == "25.00"
     accepted = venue.accept(request["request"], winner_venue)
     assert venue.posts == [previous, winner]
@@ -188,12 +196,12 @@ def decisive(entries):
     engine.run("fill", "duplicate-fill", {"body": first})
     engine.run("cancel", "cancel-pending", {"client-id": winner})
     engine.balance("USD", 100 * unit - 1015 * (unit // 100), 60 * unit + 1985 * (unit // 100))
-    cancel = engine.run("claim", "claimed", {"client-id": winner})
+    cancel = engine.dispatch(winner)
     assert cancel["stage"] == "cancel"
     cancel_receipt = venue.cancel(cancel["request"], winner)
-    engine.run("cancel-result", "cancel-awaiting-proof", {"client-id": winner, "outcome": "accepted", "body": cancel_receipt})
+    engine.run("cancel-result", "cancel-awaiting-proof", {**cancel, "outcome": "accepted", "body": cancel_receipt})
     engine.run("fill", "fully-filled", {"body": last})
-    engine.run("cancel-result", "already-terminal", {"client-id": winner, "outcome": "unknown"})
+    engine.run("cancel-result", "stale-transport-result", {**cancel, "outcome": "unknown"})
     engine.run("fill", "duplicate-fill", {"body": last})
     journal = engine.run("journal", "journal")
     executions = engine.run("executions", "executions")
@@ -208,9 +216,9 @@ def decisive(entries):
     engine.statement("reconciled", "74.60", btc="1", open_ids=(prev_venue,), cursor=42)
     engine.run("resume", "trading")
     engine.run("admit", "admitted", intent(fresh, 500))
-    engine.run("claim", "claimed", {"client-id": fresh})
-    venue.accept(engine.trace[-1][3]["request"], fresh_venue)
-    engine.run("send-result", "send-outcome-unknown", {"client-id": fresh, "outcome": "unknown"})
+    work = engine.dispatch(fresh)
+    venue.accept(work["request"], fresh_venue)
+    engine.run("send-result", "send-outcome-unknown", {**work, "outcome": "unknown"})
     engine.run("order-evidence", "missing-order-proof", {"client-id": fresh, "body": None})
     engine.run("resume", "resume-blocked")
     engine.invariant()
@@ -268,9 +276,11 @@ def lifecycle(entries):
     assert request["request"]["body"]["side"] == "sell"
     engine.run("authorize-send", "transport-authorized", request, step=0)
     engine.run("http-result", "pending-send", {**request, "response": {"network": "not-sent", "status": 0}})
-    engine.run("claim", "claimed", {"client-id": first})
+    retry = engine.dispatch(first)
+    assert request["attempt"] != retry["attempt"]
+    engine.run("http-result", "stale-transport-result", {**request, "response": {"network": "not-sent", "status": 0}})
     body = order(first, VENUE.format(1), "50", side="sell")
-    engine.run("send-result", "acknowledged", {"client-id": first, "outcome": "accepted", "body": body})
+    engine.run("send-result", "acknowledged", {**retry, "outcome": "accepted", "body": body})
     sold = fill(VENUE.format(1), 10, "51.00", "0.50", "0.10", "sell")
     assert engine.run("fill", "unsettled-fill", {"body": {**sold, "settled": False}}) is None
     engine.run("fill", "partially-filled", {"body": sold})
@@ -281,8 +291,8 @@ def lifecycle(entries):
     engine.statement("reconciled", "125.40", btc="1.5", open_ids=(VENUE.format(1),), cursor=10)
     engine.run("resume", "trading")
     engine.run("admit", "admitted", intent(second, 1_000))
-    engine.run("claim", "claimed", {"client-id": second})
-    engine.run("send-result", "rejected", {"client-id": second, "outcome": "rejected"})
+    work = engine.dispatch(second)
+    engine.run("send-result", "rejected", {**work, "outcome": "rejected"})
     engine.run("admit", "admitted", intent(third, 5_000, lifetime=300))
     assert third not in engine.run("tick", "ticked", step=500)
     assert engine.run("order", "order", {"client-id": third})["phase"] == "cancelled"
@@ -318,7 +328,7 @@ def venue_history(entries):
     ids = [CLIENT.format(1), VENUE.format(1)]
     client, venue = ids
     engine.run("admit", "admitted", intent(client, 6_000_000, 10_000))
-    engine.run("claim", "claimed", {"client-id": client})
+    engine.dispatch(client)
     request = engine.run("wire", "wire-request", {"kind": "subscribe"})
     assert request["body"]["product_ids"] == [PRODUCT, SECOND_PRODUCT]
     subscribe = {"type": "subscriptions", "channels": [{"name": "full", "product_ids": [PRODUCT, SECOND_PRODUCT]}]}
@@ -389,6 +399,40 @@ def operator_history(entries):
     return engine
 
 
+def transport_scope_history(entries):
+    trace = []
+    for boundary in ("fence", "epoch", "release"):
+        engine = Session(entries)
+        engine.start()
+        client = CLIENT.format(8)
+        engine.run("admit", "admitted", intent(client, 2_500))
+        work = engine.dispatch(client)
+        body = order(client, VENUE.format(8), "25.00")
+        observation = {**work, "response": {"network": "response", "status": 200, "body": body}}
+        if boundary == "fence":
+            engine.fence = 2
+            engine.run("acquire-writer", "reconciliation-required", {"fence": 2})
+            engine.run("http-result", "stale-fence", observation, fence=1)
+        elif boundary == "epoch":
+            engine.run("rotate", "reconciliation-required", {"epoch": 2})
+        else:
+            first_release = engine.release
+            engine.release = "acceptance-r2"
+            engine.run("activate-release", "release-activated")
+            engine.run("http-result", "stale-transport-result", observation)
+            engine.release = first_release
+            engine.run("activate-release", "release-activated")
+        engine.run("http-result", "stale-transport-result", observation)
+        parked = engine.run("order", "order", {"client-id": client})
+        assert parked["phase"] == "sent-unknown" and parked["venue-id"] is None and parked["reservation"] > 0
+        assert engine.run("status", "status")["mode"] == "reconciliation-required"
+        engine.run("order-evidence", "acknowledged", {"client-id": client, "body": body})
+        engine.invariant()
+        trace.extend(engine.trace)
+    engine.trace = trace
+    return engine
+
+
 @lru_cache(maxsize=1)
 def import_native(build):
     lib = build / "lib" / ("_application" + sysconfig.get_config_var("EXT_SUFFIX"))
@@ -404,7 +448,7 @@ def native_acceptance(build):
     manifest, evaluator = appc.load(MANIFEST)
     reference = appc.reference_entries(manifest, evaluator)
     native = import_native(build)
-    checks = [decisive, market_history, lifecycle, venue_history, strategy_history, operator_history]
+    checks = [decisive, market_history, lifecycle, venue_history, strategy_history, operator_history, transport_scope_history]
     count, covered = 0, set()
     for history in checks:
         expected = history(reference)

@@ -29,17 +29,43 @@
 (define tx.private-next
   State -> (tx.set State "next-private" (+ (get State "clock") 100)))
 
+(define tx.attempt-field
+  "send" -> "submit-attempt"
+  "cancel" -> "cancel-attempt")
+
+(define tx.attempt-scope
+  State Release ->
+    (obj [["fence" (get State "fence")] ["credential-epoch" (get State "credential-epoch")]
+          ["release" Release] ["activation" (get State "transport-activation")]]))
+
+(define tx.attempt-current
+  State Order Stage Req Phase ->
+    (let Work (get Order (tx.attempt-field Stage))
+      (and (= Phase (get Work "phase"))
+        (and (= (get Req "attempt") (get Work "id"))
+          (= (tx.attempt-scope State (get Req "release")) (get Work "scope"))))))
+
 (define tx.order-work
-  State Order Stage ->
-    (tx.result (tx.private-next (tx.put-order State Order)) "claimed"
-      (obj [["client-id" (get Order "client-id")] ["stage" Stage]
-            ["credential-epoch" (get State "credential-epoch")]
-            ["request" (tx.connect-request State (if (= Stage "send") (tx.submit-request Order) (tx.cancel-request Order)))]])))
+  State Order Stage Release ->
+    (let Previous (get State "transport-sequence")
+      (let Id (+ (if (= Previous null) 0 Previous) 1)
+        (let Marker (obj [["id" Id] ["phase" "claimed"] ["scope" (tx.attempt-scope State Release)]])
+          (let Updated (tx.set Order (tx.attempt-field Stage) Marker)
+            (tx.result (tx.set (tx.private-next (tx.put-order State Updated)) "transport-sequence" Id) "claimed"
+              (obj [["client-id" (get Order "client-id")] ["stage" Stage] ["attempt" Id]
+                    ["credential-epoch" (get State "credential-epoch")]
+                    ["request" (tx.connect-request State (if (= Stage "send") (tx.submit-request Order) (tx.cancel-request Order)))]])))))))
+
+(define tx.cancel-dispatchable
+  Order ->
+    (and (= "cancel-pending" (tx.phase Order))
+      (and (not (= null (get Order "venue-id"))) (= null (get Order "cancel-outcome")))))
 
 (define tx.claim-cancel
-  State Order ->
+  State Order Release ->
     (if (not (= (get Order "cancel-outcome") null)) (tx.result State "cancel-awaiting-venue" null)
-      (tx.order-work State (tx.set Order "cancel-outcome" "unknown") "cancel")))
+      (if (not (tx.cancel-dispatchable Order)) (tx.result State "cancel-awaiting-identity" null)
+        (tx.order-work State (tx.set Order "cancel-outcome" "claimed") "cancel" Release))))
 
 (define tx.send-instrument-valid
   State Order ->
@@ -48,8 +74,8 @@
         (and (not (get (get State "disabled") Product))
           (and (get Live "online")
             (and (not (= null (tx.active-book State Product 60000)))
-              (and (= 0 (shen.mod (get Order "size") (get Live "quantity-increment")))
-                (and (= 0 (shen.mod (get Order "price") (get Live "price-increment")))
+              (and (= 0 (floor-mod (get Order "size") (get Live "quantity-increment")))
+                (and (= 0 (floor-mod (get Order "price") (get Live "price-increment")))
                   (or (not (get Live "post-only")) (get Order "post-only"))))))))))
 
 (define tx.currently-sendable
@@ -60,19 +86,21 @@
           (<= (tx.gross-exposure Orders (keys Orders) 0 0) (get State "risk-ceiling"))))))
 
 (define tx.claim-order
-  State Order ->
+  State Order Release ->
     (if (not (= "trading" (get State "mode"))) (tx.result State "send-fenced" null)
       (if (not (tx.currently-sendable State Order)) (tx.mark-terminal State Order "cancelled")
-        (tx.order-work State (merge Order (obj [["phase" "sent-unknown"] ["submitted" true]])) "send"))))
+        (tx.order-work State (tx.set Order "phase" "sent-unknown") "send" Release))))
 
 (define tx.claim
-  State Id ->
-    (let Order (if (tx.uuid Id) (tx.order State Id) null)
-      (if (= Order null) (tx.result State "unknown-order" null)
-        (if (< (get State "clock") (get State "next-private")) (tx.result State "rate-limited" null)
-          (if (= (tx.phase Order) "pending-send") (tx.claim-order State Order)
-            (if (= (tx.phase Order) "cancel-pending") (tx.claim-cancel State Order)
-              (tx.result State "no-work" (tx.phase Order))))))))
+  State Req ->
+    (let Id (get Req "client-id")
+      (let Order (if (tx.uuid Id) (tx.order State Id) null)
+        (let Release (get Req "release")
+          (if (= Order null) (tx.result State "unknown-order" null)
+            (if (< (get State "clock") (get State "next-private")) (tx.result State "rate-limited" null)
+              (if (= (tx.phase Order) "pending-send") (tx.claim-order State Order Release)
+                (if (= (tx.phase Order) "cancel-pending") (tx.claim-cancel State Order Release)
+                  (tx.result State "no-work" (tx.phase Order))))))))))
 
 (define tx.order-from-evidence
   Order Data ->
@@ -84,30 +112,47 @@
                      (and (text? (get Order "venue-id") 1 72) (= (get Order "venue-id") (get Data "id"))))
               (text? (get Data "id") 1 72)))))))
 
+(define tx.awaiting-submit-proof
+  Order -> (and (not (tx.terminal (tx.phase Order))) (= null (get Order "venue-id"))))
+
+(define tx.apply-submit-result
+  State Order Kind Body ->
+    (let Id (get Order "client-id")
+      (let Phase (tx.phase Order)
+        (if (= Kind "accepted")
+          (if (= Phase "rejected") (tx.restrict State "ack-after-rejection" Id)
+            (if (tx.order-from-evidence Order Body) (tx.acknowledge State Order (get Body "id"))
+              (tx.restrict State "unproven-acknowledgement" Id)))
+          (if (tx.awaiting-submit-proof Order)
+            (if (= Kind "rejected") (tx.mark-terminal State Order "rejected")
+              (if (= Kind "not-sent")
+                (let New (tx.set Order "submitted" false)
+                  (if (= Phase "cancel-pending") (tx.mark-terminal State New "cancelled")
+                    (tx.result (tx.put-order State (tx.set New "phase" "pending-send")) "pending-send" null)))
+                (let New (if (= Phase "cancel-pending") Order (tx.set Order "phase" "reconciliation-required"))
+                  (tx.restrict (tx.put-order State New) "send-outcome-unknown" Id))))
+            (if (or (= Kind "rejected") (= Kind "not-sent"))
+              (tx.restrict State "contradictory-submit-outcome" Id)
+              (tx.result State "order-already-observed" Order)))))))
+
+(define tx.finish-attempt
+  Order Stage ->
+    (let Field (tx.attempt-field Stage)
+      (tx.set Order Field (tx.set (get Order Field) "phase" "finished"))))
+
 (define tx.send-result
   State Req ->
     (let Order (tx.order State (get Req "client-id"))
-      (if (= Order null) (tx.restrict State "response-for-unknown-order" null)
-        (let Kind (get Req "outcome")
-          (let Body (get Req "body")
-            (if (not (get Order "submitted")) (tx.restrict State "response-before-claim" (get Req "client-id"))
-              (if (= Kind "accepted")
-                (if (= "rejected" (tx.phase Order)) (tx.restrict State "ack-after-rejection" (get Req "client-id"))
-                  (if (tx.order-from-evidence Order Body) (tx.acknowledge State Order (get Body "id"))
-                    (tx.restrict State "unproven-acknowledgement" (get Req "client-id"))))
-                (if (and (= Kind "rejected") (= "sent-unknown" (tx.phase Order)))
-                  (tx.mark-terminal State Order "rejected")
-                  (if (and (= Kind "not-sent") (= "sent-unknown" (tx.phase Order)))
-                    (tx.result (tx.put-order State (merge Order (obj [["phase" "pending-send"] ["submitted" false]]))) "pending-send" null)
-                    (if (tx.terminal (tx.phase Order)) (tx.result State "already-terminal" Order)
-                      (tx.restrict (tx.put-order State (tx.set Order "phase" "reconciliation-required"))
-                        "send-outcome-unknown" (get Req "client-id"))))))))))))
+      (if (not (tx.attempt-current State Order "send" Req "authorized"))
+        (tx.result State "stale-transport-result" null)
+        (let Finished (tx.finish-attempt Order "send")
+          (tx.apply-submit-result (tx.put-order State Finished) Finished (get Req "outcome") (get Req "body"))))))
 
 (define tx.cancel-order
   State Order ->
     (let Phase (tx.phase Order)
       (if (tx.terminal Phase) (tx.result State "already-terminal" Order)
-        (if (= Phase "pending-send") (tx.mark-terminal State Order "cancelled")
+        (if (not (get Order "submitted")) (tx.mark-terminal State Order "cancelled")
           (let Updated (tx.set Order "phase" "cancel-pending")
             (tx.result (tx.put-order State Updated) "cancel-pending" Updated))))))
 
@@ -116,21 +161,25 @@
     (let Order (tx.order State Id)
       (if (= Order null) (tx.result State "unknown-order" null) (tx.cancel-order State Order))))
 
+(define tx.apply-cancel-result
+  State Order Req ->
+    (if (tx.terminal (tx.phase Order)) (tx.result State "already-terminal" Order)
+      (let Outcome (get Req "outcome")
+        (if (= Outcome "not-sent")
+          (tx.result (tx.put-order State (tx.set Order "cancel-outcome" null)) "cancel-pending" null)
+          (if (and (= Outcome "accepted")
+                (or (= (get Order "client-id") (get Req "body"))
+                  (and (not (= null (get Order "venue-id"))) (= (get Order "venue-id") (get Req "body")))))
+            (tx.result (tx.put-order State (tx.set Order "cancel-outcome" "accepted")) "cancel-awaiting-proof" null)
+            (tx.restrict State "cancel-outcome-unknown" (get Order "client-id")))))))
+
 (define tx.cancel-result
   State Req ->
     (let Order (tx.order State (get Req "client-id"))
-      (if (= Order null) (tx.restrict State "cancel-for-unknown-order" null)
-        (if (tx.terminal (tx.phase Order)) (tx.result State "already-terminal" Order)
-          (if (or (not (= "cancel-pending" (tx.phase Order))) (not (= "unknown" (get Order "cancel-outcome"))))
-            (tx.restrict State "cancel-response-before-claim" (get Req "client-id"))
-            (let Outcome (get Req "outcome")
-              (if (= Outcome "not-sent")
-                (tx.result (tx.put-order State (tx.set Order "cancel-outcome" null)) "cancel-pending" null)
-                (if (and (= Outcome "accepted")
-                      (or (= (get Order "client-id") (get Req "body"))
-                        (and (not (= null (get Order "venue-id"))) (= (get Order "venue-id") (get Req "body")))))
-                  (tx.result (tx.put-order State (tx.set Order "cancel-outcome" "accepted")) "cancel-awaiting-proof" null)
-                  (tx.restrict State "cancel-outcome-unknown" (get Req "client-id"))))))))))
+      (if (not (tx.attempt-current State Order "cancel" Req "authorized"))
+        (tx.result State "stale-transport-result" null)
+        (let Finished (tx.finish-attempt Order "cancel")
+          (tx.apply-cancel-result (tx.put-order State Finished) Finished Req)))))
 
 (define tx.terminal-evidence-phase
   Order Data ->
@@ -146,7 +195,8 @@
   State Order Req Data ->
     (if (tx.terminal (tx.phase Order)) (tx.restrict State "venue-reopened-terminal-order" (get Order "client-id"))
       (let Ack (tx.acknowledge State Order (get Data "id"))
-        (if (and (= (get Ack "status") "cancel-pending") (= true (get Req "retry-cancel")))
+        (if (and (= (get Ack "status") "cancel-pending")
+              (and (= true (get Req "retry-cancel")) (not (tx.cancel-in-flight State Order Req))))
           (tx.result (tx.put-order (get Ack "state") (tx.set (get Ack "data") "cancel-outcome" null))
             "cancel-pending" (get Ack "data")) Ack))))
 
@@ -194,24 +244,59 @@
                              ["epoch" (get State "credential-epoch")]
                              ["auth" (obj [["scheme" "hmac-sha256/base64"] ["fields" (tx.auth-fields Method)]])]])))))
 
+(define tx.cancel-in-flight
+  State Order Req ->
+    (let Attempt (get Order "cancel-attempt")
+      (and (contains ["claimed" "authorized"] (get Attempt "phase"))
+        (= (tx.attempt-scope State (get Req "release")) (get Attempt "scope")))))
+
+(define tx.abandon-claim
+  Order Stage ->
+    (if (= Stage "send")
+      (let New (tx.set Order "submit-attempt" null)
+        (if (= (tx.phase Order) "sent-unknown") (tx.set New "phase" "pending-send") New))
+      (merge Order (obj [["cancel-attempt" null] ["cancel-outcome" null]]))))
+
+(define tx.abandon-unstarted
+  Order ->
+    (let Send (if (= "claimed" (get (get Order "submit-attempt") "phase"))
+                 (tx.abandon-claim Order "send") Order)
+      (if (= "claimed" (get (get Send "cancel-attempt") "phase"))
+        (tx.abandon-claim Send "cancel") Send)))
+
+(define tx.recover-unstarted
+  State Ids Position ->
+    (if (= Position (len Ids)) State
+      (let Order (tx.order State (at Ids Position))
+        (tx.recover-unstarted (tx.put-order State (tx.abandon-unstarted Order)) Ids (+ Position 1)))))
+
+(define tx.authorized-request
+  State Order Stage ->
+    (if (= Stage "send")
+      (if (and (= "sent-unknown" (tx.phase Order))
+            (and (= "trading" (get State "mode")) (tx.currently-sendable State Order)))
+        (tx.connect-request State (tx.submit-request Order)) null)
+      (if (and (= "cancel-pending" (tx.phase Order))
+            (and (= "claimed" (get Order "cancel-outcome")) (not (= null (get Order "venue-id")))))
+        (tx.connect-request State (tx.cancel-request Order)) null)))
+
+(define tx.authorize-attempt
+  State Order Stage ->
+    (let Field (tx.attempt-field Stage)
+      (let New (tx.set Order Field (tx.set (get Order Field) "phase" "authorized"))
+        (let Updated (if (= Stage "send") (tx.set New "submitted" true) (tx.set New "cancel-outcome" "unknown"))
+          (tx.result (tx.put-order State Updated) "transport-authorized" null)))))
+
 (define tx.authorize-send
   State Req ->
     (let Order (tx.order State (get Req "client-id"))
       (let Stage (get Req "stage")
-        (let Request (get Req "request")
-          (if (and (not (= Order null))
-                (and (= (get Req "credential-epoch") (get State "credential-epoch"))
-                  (if (= Stage "send")
-                    (and (= "sent-unknown" (tx.phase Order))
-                      (and (= "trading" (get State "mode"))
-                        (and (tx.currently-sendable State Order)
-                          (= (tx.connect-request State (tx.submit-request Order)) Request))))
-                    (and (= Stage "cancel")
-                      (and (= "cancel-pending" (tx.phase Order))
-                        (and (= "unknown" (get Order "cancel-outcome"))
-                          (= (tx.connect-request State (tx.cancel-request Order)) Request)))))))
-            (tx.result State "transport-authorized" null)
-            (tx.result State "transport-fenced" null))))))
+        (if (not (and (contains ["send" "cancel"] Stage) (tx.attempt-current State Order Stage Req "claimed")))
+          (tx.result State "transport-fenced" null)
+          (let Request (tx.authorized-request State Order Stage)
+            (if (and (not (= Request null)) (= Request (get Req "request")))
+              (tx.authorize-attempt State Order Stage)
+              (tx.result (tx.put-order State (tx.abandon-claim Order Stage)) "transport-fenced" null)))))))
 
 (define tx.http-result
   State Req ->

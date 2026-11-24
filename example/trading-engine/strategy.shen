@@ -29,10 +29,10 @@
     (if (< Balance Lower) "buy" (if (> Balance Upper) "sell" null)))
 
 (define tx.floor-step
-  Value Step -> (- Value (shen.mod Value Step)))
+  Value Step -> (- Value (floor-mod Value Step)))
 
 (define tx.ceil-step
-  Value Step -> (+ Value (shen.mod (- Step (shen.mod Value Step)) Step)))
+  Value Step -> (+ Value (floor-mod (- Step (floor-mod Value Step)) Step)))
 
 (define tx.open-product
   Orders Ids Offset Product ->

@@ -159,8 +159,8 @@
       (let Size (get Req "size")
         (let Amount (tx.notional Price Size)
           (if (< Amount 0) "invalid-or-overflowing-amount"
-            (if (or (not (= 0 (shen.mod Price (get Metadata "price-increment"))))
-                    (not (= 0 (shen.mod Size (get Metadata "quantity-increment"))))) "invalid-increment"
+            (if (or (not (= 0 (floor-mod Price (get Metadata "price-increment"))))
+                    (not (= 0 (floor-mod Size (get Metadata "quantity-increment"))))) "invalid-increment"
               (if (< Amount (get Metadata "minimum")) "below-venue-minimum"
                 (let Fee (tx.fee-reserve Amount (get State "fee-ppm"))
                   (let Side (get Req "side")

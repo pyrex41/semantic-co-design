@@ -24,6 +24,10 @@ python3 logic/build.py logic/accepted-job.maude --compile "$demo/job-maude"
 
 The first command to the job prints `pending-a receipt-a`. The second finds job 17 after restart and prints `pending-a conflict`. The binaries use the host platform and dynamically link SQLite. Python and the language runtimes are build-time dependencies.
 
+## Generated applications
+
+The document approval webapp, spot trading engine, and router/load balancer have executable application sources, package builders, and local public-interface qualification suites. Their manifests use the [App Shen language contract](example/LANGUAGE.md). The [application guide](example/README.md) covers the clean-checkout Nix gate and full browser, exchange-simulator, and network-peer replay.
+
 ## Four explicitly staged specifications
 
 Inside `nix develop`, build a native executable from either source. For example, this prints the sum of three runtime inputs and retains both intermediate artifacts.

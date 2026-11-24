@@ -26,6 +26,10 @@ class HostError(Exception):
     pass
 
 
+class StaleRelease(HostError):
+    pass
+
+
 def fields(pairs):
     result = {}
     for name, value in pairs:
@@ -126,8 +130,8 @@ class Store:
             active = self.release if row is None else row[2]
             activation = entry == self.manifest["activation"]
             if active != self.release and not activation:
-                raise HostError("activate this release before opening the existing state")
-            request = {"event": event, "time": time_ms, "fence": fence, "actor": actor,
+                raise StaleRelease("activate this release before opening the existing state")
+            request = {"event": event, "time": time_ms() if callable(time_ms) else time_ms, "fence": fence, "actor": actor,
                        "release": self.release, "previous-release": active}
             reply = self.entries[entry](None, {**request, "state": previous})
             data = {"status": reply["status"], "data": reply["data"]}
@@ -144,36 +148,36 @@ class Store:
             return data
 
     def send(self, event, signing, *, fence, actor, roles, effect=transport.http, fault=None, clock=timestamp):
-        """Persist a claim before I/O. Hold the writer lock through the bounded send."""
+        """Commit dispatch authorization, submit without a writer lock, then record the result."""
         rules = self.manifest["transport"]
         for name in ("claim", "authorize", "result"):
             self.permit(rules[name], roles)
-        claim = self.invoke(rules["claim"], event, time_ms=clock(), fence=fence, actor=actor, roles=roles)
+        terms = {"time_ms": clock, "fence": fence, "actor": actor, "roles": roles}
+        claim = self.invoke(rules["claim"], event, **terms)
         if claim["status"] != rules["ready-status"]:
             return claim
         if fault is not None:
             fault("after-claim")
-        with self.connection() as db:
-            db.execute("BEGIN IMMEDIATE")
-            seq, encoded, active = db.execute("SELECT seq, document, release FROM snapshot WHERE slot=1").fetchone()
-            if active != self.release:
-                raise HostError("release changed after the send claim")
-            state = json.loads(encoded)
-            request = {"event": claim["data"], "time": clock(), "fence": fence,
-                       "actor": actor, "release": self.release}
-            verdict = self.entries[rules["authorize"]](None, {**request, "state": state})
-            decision = {"status": verdict["status"], "data": verdict["data"]}
-            self.save(db, rules["authorize"], request, verdict["state"], decision, seq + 1)
-            if verdict["status"] == rules["authorized-status"]:
-                response = effect(claim["data"]["request"], signing)
-                if fault is not None:
-                    fault("after-effect")
-                observed = {**request, "event": {**claim["data"], "response": response}, "time": clock()}
-                result = self.entries[rules["result"]](None, {**observed, "state": verdict["state"]})
-                decision = {"status": result["status"], "data": result["data"]}
-                self.save(db, rules["result"], observed, result["state"], decision, seq + 2)
-            db.commit()
-        return decision
+        try:
+            verdict = self.invoke(rules["authorize"], claim["data"], **terms)
+        except StaleRelease:
+            return {"status": "stale-release", "data": None}
+        if verdict["status"] != rules["authorized-status"]:
+            return verdict
+        if fault is not None:
+            fault("after-authorization")
+        response = effect(claim["data"]["request"], signing)
+        if fault is not None:
+            fault("after-effect")
+
+        def observing(point):
+            fault(point.replace("-commit", "-result-commit"))
+
+        try:
+            return self.invoke(rules["result"], {**claim["data"], "response": response},
+                               fault=observing if fault is not None else None, **terms)
+        except StaleRelease:
+            return {"status": "stale-release", "data": None}
 
     def fetch(self, event, signing, *, fence, actor, roles, effect=transport.http):
         result = self.invoke(self.manifest["wire-entry"], event, time_ms=timestamp(),
