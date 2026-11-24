@@ -1,0 +1,29 @@
+{
+  "name": "accepted_job",
+  "spec": "spec.shen",
+  "step": "job.step",
+  "init": "job.init",
+  "symbols": ["unknown", "free", "stored", "idle", "writing", "ok", "conflict", "full"],
+  "state": [
+    {"capacity": 2, "of": ["sym", "num", "num"]},
+    ["sym", "num", "num", "num", "num", "num"],
+    "num"
+  ],
+  "events": {
+    "restart": {"role": "restart"},
+    "submit": {"role": "request", "fields": ["num", "num", "num"]},
+    "written": {"role": "disk-ack", "fields": ["num"]},
+    "loaded": {"role": "disk-read-result", "fields": ["num", "num", "num", "num", "num"]}
+  },
+  "effects": {
+    "read": {"role": "disk-read", "fields": ["num", "num"]},
+    "write": {"role": "disk-write", "fields": ["num", "num", "num", "num"]},
+    "reply": {"role": "output", "fields": ["num", "sym", "num"]}
+  },
+  "max_effects": 2,
+  "invariants": {
+    "file": "invariants.shen",
+    "state": ["inv.one-row-per-key"],
+    "trace": ["inv.ok-is-durable", "inv.conflict-is-real", "inv.rows-are-immutable"]
+  }
+}
