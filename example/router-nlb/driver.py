@@ -585,7 +585,7 @@ def main():
             recovery = manifest["processes"]["recovery"]
             outcome = process.call(recovery["entry"], {}, int(time.time()), allow_empty=True)
             if outcome and outcome["reason"] != recovery["success"]:
-                raise DriverError("the persisted state cannot be recovered")
+                raise DriverError(f"persisted state recovery rejected: {outcome['reason']}")
             try:
                 serve(process, manifest, args.socket, args.virtual, args.physical, args.replica)
             except KeyboardInterrupt:

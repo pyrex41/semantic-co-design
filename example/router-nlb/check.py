@@ -3,11 +3,13 @@
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import ExitStack, contextmanager
+from contextlib import ExitStack, closing, contextmanager
 from copy import deepcopy
+from ipaddress import ip_address
 from pathlib import Path
 import json
 import os
+from random import Random
 import signal
 import socket
 import sqlite3
@@ -383,6 +385,284 @@ def durable_reservations(command, path):
         assert recovered.call("resume", continued["resume"], now=413)["tx"] == expected
     finally:
         recovered.close()
+
+
+class OwnershipHistory:
+    def __init__(self, commands, directory, law):
+        self.commands, self.directory, self.law = commands, directory, law
+        self.nodes = {}
+        self.previous = [{}, {}]
+        self.cuts = 0
+
+    def open(self, node):
+        if node in self.nodes:
+            for mode in self.nodes[node][1]:
+                mode.close()
+        paths = [self.directory / f"{node}-{i}.sqlite" for i in range(len(self.commands))]
+        self.nodes[node] = (paths, [Mode(command, db) for command, db in zip(self.commands, paths)])
+
+    def observe(self, now, label):
+        expected = {"holds": True, "verdict": "holds"}
+        observed = []
+        for i, prior in enumerate(self.previous):
+            nodes = []
+            for name, (paths, _) in self.nodes.items():
+                with closing(sqlite3.connect(paths[i])) as reader:
+                    row = reader.execute("SELECT payload FROM application_state").fetchone()
+                after = json.loads(row[0])["flows"] if row else []
+                nodes.append({"before": prior.get(name, []), "after": after})
+                prior[name] = after
+            verdict = self.law(None, {"clock": now, "nodes": nodes})
+            assert verdict == expected, (self.directory.name, label, i, now, verdict, nodes)
+            observed.append(nodes)
+        assert observed[0] == observed[1], (self.directory.name, label, observed)
+        self.cuts += 1
+
+    def step(self, node, entry, now, arg=None):
+        replies = [mode.call(entry, arg, now=now) for mode in self.nodes[node][1]]
+        assert replies[0] == replies[1], (self.directory.name, node, entry, now, replies)
+        self.observe(now, (node, entry))
+        return replies[0]
+
+    def restart(self, node, now):
+        self.open(node)
+        self.observe(now, (node, "reopened persisted state"))
+        assert self.step(node, "recover", now)["reason"] == "recovered"
+
+    def close(self):
+        for _, modes in self.nodes.values():
+            for mode in modes:
+                mode.close()
+
+
+def stage_binding(history, node, now, frame, port="front"):
+    return history.step(node, "stage-frame", now, {"frame": list(frame), "port": port})
+
+
+def finish_binding(history, node, now, decision):
+    if "resume" not in decision:
+        return decision
+    assert decision["durable"] is True and decision["tx"] == []
+    return history.step(node, "resume", now, decision["resume"])
+
+
+def reverse_wire(flow, flags=0x12):
+    backend = str(ip_address(bytes(flow["backend"])))
+    translated = str(ip_address(bytes(flow["translation"])))
+    transport = tcp(backend, translated, flow["backend-port"], flow["allocated"], flags)
+    mac = BLUE if backend == BLUE4 else GREEN
+    return frame4(mac, ROUTER_BACK, backend, translated, 6, transport, back=True)
+
+
+def ownership_single(history, seed):
+    rng = Random(seed)
+    now = 100
+    config = deepcopy(TOPOLOGY)
+    config["port-high"] = config["port-low"] + rng.randrange(3)
+    history.open("A")
+    assert history.step("A", "boot", now, {"config": config})["reason"] == "configured"
+    ports = rng.sample(range(51200, 51300), 5)
+    udp_request = frame6(CLIENT, ROUTER_FRONT, PC6, VIP6, 17, udp(PC6, VIP6, ports[0], 53))
+    finish_binding(history, "A", now, stage_binding(history, "A", now, udp_request))
+    for port in ports:
+        now += 1
+        frame = tcp_syn(port)
+        result = finish_binding(history, "A", now, stage_binding(history, "A", now, frame))
+        assert result["reason"] in {"forwarded", "port-exhausted"}
+        if result["reason"] == "forwarded" and rng.choice((True, False)):
+            repeated = finish_binding(history, "A", now, stage_binding(history, "A", now, frame))
+            assert repeated["tx"] == result["tx"]
+    assert result["reason"] == "port-exhausted"
+    drain = {"listener": ["main", 6, list(packed(VIP4)), 443], "backend": rng.choice(("blue", "green")), "value": True}
+    assert history.step("A", "drain", now, drain)["reason"] == "backend-updated"
+    before = next(flow for flow in history.previous[0]["A"] if flow["protocol"] == 6)
+    history.restart("A", now + 1)
+    returned = finish_binding(history, "A", now + 2, stage_binding(history, "A", now + 2, reverse_wire(before), "back"))
+    assert returned["reason"] == "forwarded"
+    now += 400
+    history.step("A", "tick", now)
+    assert not history.previous[0]["A"]
+    acquired = finish_binding(history, "A", now, stage_binding(history, "A", now, tcp_syn(ports[0])))
+    assert acquired["reason"] == "forwarded"
+    assert history.previous[0]["A"][0]["allocated"] == config["port-low"]
+
+
+def ownership_failover(history, ack_before_crash):
+    now = 100
+    for name in ("A", "B"):
+        history.open(name)
+        assert history.step(name, "boot", now, {"config": TOPOLOGY, "mode": "standby"})["reason"] == "configured"
+    assert history.step("A", "lease", now, {"epoch": 1, "until": 130})["reason"] == "lease-active"
+    original = tcp_syn(51300 + ack_before_crash)
+    first = stage_binding(history, "A", 101, original)
+    retry = stage_binding(history, "A", 102, original)
+    assert first["replicate"] == retry["replicate"] and first["tx"] == retry["tx"] == []
+    assert history.previous[0]["A"] == []
+    offer = first["replicate"]
+    one = history.step("B", "replica", 103, {"offer": offer})
+    two = history.step("B", "replica", 104, {"offer": offer})
+    assert one == two and one["reason"] == "replica-committed"
+    wrong = history.step("A", "stage-ack", 105, {"ack": [1, 100]})
+    assert wrong["reason"] == "unknown-replica-ack" and wrong["tx"] == []
+    if ack_before_crash:
+        committed = history.step("A", "stage-ack", 106, {"ack": one["ack"]})
+        assert committed["durable"] is True and committed["tx"] == []
+        # Simulate a restart after durable publication and before TX resume.
+    history.restart("A", 107)
+    fenced = history.step("A", "stage-ack", 108, {"ack": one["ack"]})
+    assert fenced["reason"] == "fenced" and fenced["tx"] == []
+    assert history.step("B", "lease", 109, {"epoch": 2, "until": 139})["reason"] == "lease-active"
+    returning = stage_binding(history, "B", 110, reverse_wire(offer["flow"]), "back")
+    segment = tcp(VIP4, PC4, 443, 51300 + ack_before_crash, 0x12)
+    translated = frame4(ROUTER_FRONT, CLIENT, VIP4, PC4, 6, segment, ttl=63)
+    assert returning["tx"] == [rows(("front", translated))]
+    assert stage_binding(history, "A", 110, reverse_wire(offer["flow"]), "back")["reason"] == "fenced"
+    moved = stage_binding(history, "B", 111, tcp_syn(51400))
+    copied = history.step("A", "replica", 112, {"offer": moved["replicate"]})
+    assert copied["reason"] == "replica-committed"
+    accepted = history.step("B", "stage-ack", 113, {"ack": copied["ack"]})
+    assert finish_binding(history, "B", 113, accepted)["reason"] == "forwarded"
+    assert stage_binding(history, "B", 139, original)["reason"] == "fenced"
+
+
+def ownership_alias(history):
+    config = deepcopy(TOPOLOGY)
+    normal = config["listeners"][0]
+    normal["backends"] = normal["backends"][:1]
+    alias = deepcopy(normal)
+    alias.update(address=list(packed(SNAT4)), translation=list(packed("198.51.100.101")), port=40000, front="back", back="front")
+    alias["backends"][0]["address"] = list(packed(PC4))
+    config["listeners"].append(alias)
+    for node in ("A", "B"):
+        history.open(node)
+        assert history.step(node, "boot", 100, {"config": config, "mode": "standby"})["reason"] == "configured"
+    assert history.step("A", "lease", 100, {"epoch": 1, "until": 130})["reason"] == "lease-active"
+    alias_request = frame4(BLUE, ROUTER_BACK, BLUE4, SNAT4, 6, tcp(BLUE4, SNAT4, 8443, 40000, 2), back=True)
+    first = stage_binding(history, "A", 101, alias_request, "back")
+    first_commit = history.step("B", "replica", 102, {"offer": first["replicate"]})
+    assert first_commit["reason"] == "replica-committed"
+    assert finish_binding(history, "A", 103, history.step("A", "stage-ack", 103, {"ack": first_commit["ack"]}))["reason"] == "forwarded"
+    second = stage_binding(history, "A", 104, tcp_syn(51308))
+    assert second["replicate"]["flow"]["allocated"] == 40001
+    invalid = deepcopy(second["replicate"])
+    invalid["flow"]["allocated"] = invalid["flow"]["rev"][-1] = 40000
+    assert history.step("B", "replica", 105, {"offer": invalid})["reason"] == "replica-conflict"
+    second_commit = history.step("B", "replica", 106, {"offer": second["replicate"]})
+    assert second_commit["reason"] == "replica-committed"
+    assert finish_binding(history, "A", 107, history.step("A", "stage-ack", 107, {"ack": second_commit["ack"]}))["reason"] == "forwarded"
+    return invalid["flow"], history.previous[0]["A"]
+
+
+def legacy_collision_recovery(history, conflicting):
+    now = int(time.time())
+    for i, command in enumerate(history.commands):
+        legacy = history.directory / f"legacy-{i}.sqlite"
+        with closing(sqlite3.connect(history.nodes["A"][0][i])) as source:
+            with closing(sqlite3.connect(legacy)) as destination:
+                source.backup(destination)
+                payload = destination.execute("SELECT payload FROM application_state").fetchone()[0]
+                state = json.loads(payload)
+                first = {**state["flows"][0], "until": now + 120}
+                second = {**conflicting, "until": now + 180}
+                state["flows"] = [first, second]
+                encoded = json.dumps(state)
+                destination.execute("UPDATE application_state SET payload = ?", (encoded,))
+                destination.commit()
+                original = destination.execute("SELECT payload, release_digest FROM application_state").fetchone()
+
+        # The service must stop before binding even its management socket.
+        socket_path = history.directory / f"rejected-{i}"
+        startup = subprocess.run([
+            *command, "--db", str(legacy), "serve", "--socket", str(socket_path),
+            "--virtual", f"front={history.directory / 'rx-a'},{history.directory / 'tx-a'}",
+            "--virtual", f"back={history.directory / 'rx-b'},{history.directory / 'tx-b'}",
+        ], capture_output=True, text=True, timeout=5)
+        assert startup.returncode == 1 and "ownership-conflict" in startup.stderr, startup
+        assert not socket_path.exists()
+        with closing(sqlite3.connect(legacy)) as reader:
+            assert reader.execute("SELECT payload, release_digest FROM application_state").fetchone() == original
+
+        # At the boundary the earlier binding is expired. Recovery preserves
+        # the later reservation and leaves ordinary expiry to reclaim the first.
+        restarted = Mode(command, legacy)
+        try:
+            assert restarted.call("recover", now=now + 119)["reason"] == "ownership-conflict"
+            assert restarted.call("recover", now=now + 120)["reason"] == "recovered"
+            assert restarted.call("status", now=now + 120)["flows"] == 1
+            with closing(sqlite3.connect(legacy)) as reader:
+                payload = reader.execute("SELECT payload FROM application_state").fetchone()[0]
+                assert json.loads(payload)["flows"] == [first, second]
+        finally:
+            restarted.close()
+
+
+def ownership_counterexamples(law, cross_direction, rows):
+    first, normal = rows
+    wrong_reverse = deepcopy(normal)
+    wrong_reverse["rev"][-1] += 1
+    reused_port = deepcopy(normal)
+    reused_port["client-port"] = reused_port["fwd"][3] = normal["client-port"] + 1
+    reused_port["backend"] = reused_port["rev"][2] = list(packed(GREEN4))
+    alternate = deepcopy(normal)
+    alternate["allocated"] = alternate["rev"][-1] = 40002
+    expired = deepcopy(normal)
+    expired["until"] = 105
+    changed_deadline = deepcopy(normal)
+    changed_deadline["until"] += 1
+    full = []
+    for i in range(64):
+        binding = deepcopy(normal)
+        binding["client-port"] = binding["fwd"][3] = 52000 + i
+        binding["allocated"] = binding["rev"][-1] = 40000 + i
+        full.append(binding)
+
+    def node(after, before=None):
+        return {"after": after, "before": before or []}
+
+    for verdict, cuts in (
+        ("incoherent-tuple", [node([wrong_reverse])]),
+        ("local-collision", [node([normal, deepcopy(normal)])]),
+        ("local-collision", [node([normal, alternate])]),
+        ("local-collision", [node([normal, reused_port])]),
+        ("local-collision", [node([first, cross_direction])]),
+        ("retired-live-binding", [node([alternate], [normal])]),
+        ("replica-conflict", [node([normal]), node([reused_port])]),
+        ("replica-conflict", [node([first]), node([cross_direction])]),
+        ("replica-conflict", [node([normal]), node([changed_deadline])]),
+        ("holds", [node([normal]), node([normal])]),
+        ("holds", [node([expired, reused_port], [expired])]),
+        ("holds", [node(full, full), node(full, full)]),
+    ):
+        actual = law(None, {"nodes": cuts, "clock": 108})
+        assert actual == {"holds": verdict == "holds", "verdict": verdict}, (verdict, actual)
+    return 9
+
+
+def ownership_histories(reference, native):
+    sys.path.insert(0, str(HERE.parent / "webapp"))
+    import appc
+
+    manifest, evaluator = appc.load(HERE / "ownership-law.json")
+    law = appc.reference_entries(manifest, evaluator)["ownership-law"]
+    cases = [(f"single-{seed}", ownership_single, (seed,)) for seed in (17, 41, 79)]
+    cases += [(f"failover-{cut}", ownership_failover, (cut,)) for cut in (False, True)]
+    cases.append(("tuple-alias", ownership_alias, ()))
+    cuts, negatives = 0, 0
+    with TemporaryDirectory(prefix="router-law-") as temp:
+        for name, run, args in cases:
+            path = Path(temp) / name
+            path.mkdir()
+            history = OwnershipHistory((reference, native), path, law)
+            try:
+                counterexample = run(history, *args)
+                if counterexample:
+                    negatives += ownership_counterexamples(law, *counterexample)
+                    legacy_collision_recovery(history, counterexample[0])
+                cuts += history.cuts
+            finally:
+                history.close()
+    print(f"Router ownership law passed {cuts} observed cuts per mode across {len(cases)} histories, "
+          f"rejected {negatives} negative controls, and checked legacy collision recovery in both modes.")
 
 
 def race(command, directory):
@@ -824,14 +1104,19 @@ def main():
     parser.add_argument("--compiler", type=Path, help="also rebuild a source-only mutation")
     parser.add_argument("--gobgp", type=Path, help="also qualify against GoBGP binaries in the given directory")
     parser.add_argument("--replay-only", action="store_true", help="exercise executable replays without sockets")
+    parser.add_argument("--state-law-only", action="store_true", help="run only the tuple ownership histories")
     args = parser.parse_args()
-    if args.replay_only and args.gobgp:
+    if (args.replay_only or args.state_law_only) and args.gobgp:
         parser.error("--gobgp requires sockets")
     native = [sys.executable, str(args.release.resolve() / "router-nlb")]
     ownership = json.loads((args.release / "ownership.json").read_text())
+    assert "ownership-law" not in ownership["entries"]
     assert all(choice["static"][0] == {"value": "round-robin"}
                for choice in ownership["definitions"]["rt.choose-index"]["residual"])
     reference = [sys.executable, str(HERE / "driver.py"), "--reference", str(HERE / "manifest.json")]
+    ownership_histories(reference, native)
+    if args.state_law_only:
+        return
     counts = 0
     for test in (routing_replay, neighbor_replay, flow_replay):
         with TemporaryDirectory(prefix="router-", dir="/tmp") as temp:

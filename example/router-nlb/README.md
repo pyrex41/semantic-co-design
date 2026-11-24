@@ -27,6 +27,14 @@ The test checks learned forwarding bytes and live withdrawal as well as the appl
 
 The release's Python ABI and architecture are recorded in `ownership.json`. Build on a matching Linux target for Linux installation. Run the reference service by substituting `python3 example/router-nlb/driver.py --reference example/router-nlb/manifest.json` for `"$build_root/release/router-nlb"`.
 
+## Tuple ownership law
+
+Run `python3 example/router-nlb/check.py "$build_root/release" --state-law-only` to qualify ownership without socket tests or a rebuild. The ordinary gate includes the same check. [The test-only law](ownership.shen) computes forward and reply keys directly from durable flow records. At every observed cut it requires unique lookup keys across both directions and unique ownership of each protocol, translation address, and port within a node. If live ownership keys overlap across nodes, the records must identify the same binding and expiration. A live binding also retains its identity across successive cuts until its clock deadline.
+
+The histories feed the reference and native processes the same packet bytes and control events, read each committed SQLite state, and pass each observation independently to the law. Fixed seeds 17, 41, and 79 vary client tuples, retries, drain choices, and pool widths from one to three ports. Other histories exercise a standby duplicate offer, the active restart both before and after its acknowledgment commit, promotion of the standby, a first transmit after local durability, lease expiry, and a listener address that overlaps a different listener's translation address. Negative controls cover malformed mirrors, local and cross-node collisions, disagreeing replica deadlines, and replacement of a live binding. A positive control checks two legitimate copies at the 64-flow limit.
+
+The check uses one logical clock and trusted lease events. A standby copy may legitimately share an owner's keys, and a pending offer becomes an owner only when its record is committed to a node. The histories check that pending proposals never release a first packet. The result covers these bounded histories and their durable cuts. External quorum, clock skew, and queue scheduling require separate qualification.
+
 ## Operate a local topology
 
 [The fixture](topology.json) defines a client port, a VLAN 42 backend port, static routes, fixed neighbor entries, and two listeners. The test harness opens both endpoints automatically. For a separate local process, point `--virtual` at private paths and supply a bound datagram socket at each `*-tx` endpoint.
@@ -80,6 +88,8 @@ The virtual profile can start two independently persisted standby instances. `le
 Single-node flows persist a port reservation covering the idle deadline plus 30 seconds before the first frame. A refresh reaching beyond that reservation commits its extension before transmitting the triggering frame. The service can keep other established flows moving while that write is pending. When a process restarts, it keeps the original binding through the later of the saved idle deadline and reservation, so a missed checkpoint cannot allow early port reuse. Reserving for recovery can retain an otherwise idle flow longer after a crash.
 
 At packet-service startup, the generated `recover` entry runs before the host opens ports. It clears volatile peer, pending-neighbor, and leadership state and retains committed configuration and flow records. Resume by rebuilding peer sessions and acquiring a higher epoch. When replacing a standby, restore its SQLite state from a consistent backup, start it as standby, and verify configuration compatibility before accepting offers. For a same-schema upgrade or failback, retain the old release and database backup, recover volatile state, verify status and neighbor discovery, and reauthorize leadership independently. A rejected candidate leaves the previous committed version active and can be resubmitted through the separate management socket.
+
+Startup reports `ownership-conflict` if a database from an earlier release contains overlapping live lookup keys or reservations. The service leaves the persisted rows intact and opens no ports. Keep the database stopped and preserve a consistent backup. Once the earlier conflicting reservation has expired, recover with the normal application startup. The recovery check retains each still-live binding. Single-node reservations use the later of the saved idle deadline and recovery reservation.
 
 ## Qualification boundary
 

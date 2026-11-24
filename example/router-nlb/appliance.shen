@@ -494,13 +494,23 @@
               (and (= (get Flow "translation") Address) (= (get Flow "allocated") Port)))
           true (rt.port-owned-at Flows Address Protocol Port (+ I 1))))))
 
-(define rt.owned-ports
-  Flows Address Protocol I Ports ->
+(define rt.reply-alias
+  Flow Address Tenant Backend Protocol ->
+    (and (= (get Flow "tenant") Tenant)
+      (and (= (get Flow "protocol") Protocol)
+        (and (= (get Flow "listener") Address)
+          (and (= (get Flow "client") (get Backend "address"))
+            (= (get Flow "client-port") (get Backend "port")))))))
+
+(define rt.allocation-conflicts
+  Flows Address Tenant Backend Protocol I Ports ->
     (if (= I (len Flows)) Ports
       (let Flow (at Flows I)
-        (rt.owned-ports Flows Address Protocol (+ I 1)
-          (if (and (= (get Flow "protocol") Protocol) (= (get Flow "translation") Address))
-            (prepend (get Flow "allocated") Ports) Ports)))))
+        (let Reserved (if (and (= (get Flow "protocol") Protocol) (= (get Flow "translation") Address))
+                         (prepend (get Flow "allocated") Ports) Ports)
+          (rt.allocation-conflicts Flows Address Tenant Backend Protocol (+ I 1)
+            (if (rt.reply-alias Flow Address Tenant Backend Protocol)
+              (prepend (get Flow "listener-port") Reserved) Reserved))))))
 
 (define rt.allocate-at
   Owned Low High ->
@@ -588,7 +598,8 @@
               (rt.result State "flow-limit" [])
               (let Backend (rt.choose-backend-at Selection (get Listener "backends") (get State "flow-serial") 0)
                 (if (= Backend null) (rt.result State "backend-unavailable" [])
-                  (let Port (rt.allocate-at (rt.owned-ports Flows (get Listener "translation") (get Packet "protocol") 0 [])
+                  (let Port (rt.allocate-at (rt.allocation-conflicts Flows (get Listener "translation") (get InPort "tenant")
+                                                   Backend (get Packet "protocol") 0 [])
                                (get Config "port-low") (get Config "port-high"))
                     (if (= Port 0) (rt.result State "port-exhausted" [])
                       (rt.add-flow Defer State Packet Transport InPort SourceMac Listener Backend Key Flows Port Now)))))))))))
@@ -1042,7 +1053,7 @@
                         (or (not (= (get Flow "rev") (rt.flow-key (get Flow "tenant") (get Flow "protocol")
                                                        (get Flow "backend") (get Flow "backend-port")
                                                        (get Flow "translation") (get Flow "allocated"))))
-                          (not (= (rt.flow-at Flows (get Flow "fwd") "fwd" 0 Now) null))))))))
+                          (rt.replica-key-conflict Flows Flow Now)))))))
             (rt.control State "replica-conflict")
             (if (or (rt.port-owned-at Flows (get Flow "translation") (get Flow "protocol") (get Flow "allocated") 0)
                   (>= (len Flows) (get (get State "config") "flow-limit")))
@@ -1051,6 +1062,15 @@
                         (merge State (obj [["flows" (append Flows [Flow])] ["replica-epoch" (get Offer "epoch")]
                                           ["last-replica" Offer]]))
                         "replica-committed") "ack" Id)))))))
+
+(define rt.replica-key-conflict
+  Flows Flow Now ->
+    (let Forward (get Flow "fwd")
+      (let Reverse (get Flow "rev")
+        (or (= Forward Reverse)
+          (or (not (= (rt.flow-at Flows Forward "fwd" 0 Now) null))
+            (or (not (= (rt.flow-at Flows Forward "rev" 0 Now) null))
+              (not (= (rt.flow-at Flows Reverse "fwd" 0 Now) null))))))))
 
 (define rt.ack
   Defer Arg ->
@@ -1072,15 +1092,34 @@
                           (rt.translate-flow Bound (get Pending "packet") (get Pending "transport") Port
                             (get Pending "source-mac") Flow false Now)))))))))))))
 
+(define rt.recovery-keys-clear
+  Flows Now I Lookups Ports ->
+    (if (= I (len Flows)) true
+      (let Flow (at Flows I)
+        (if (<= (get Flow "until") Now)
+          (rt.recovery-keys-clear Flows Now (+ I 1) Lookups Ports)
+          (let Forward (json (get Flow "fwd"))
+            (let Reverse (json (get Flow "rev"))
+              (let Reservation (json [(get Flow "protocol") (get Flow "translation") (get Flow "allocated")])
+                (if (or (= Forward Reverse)
+                      (or (get Lookups Forward) (or (get Lookups Reverse) (get Ports Reservation))))
+                  false
+                  (rt.recovery-keys-clear Flows Now (+ I 1)
+                    (rt.put (rt.put Lookups Forward true) Reverse true)
+                    (rt.put Ports Reservation true))))))))))
+
 (define rt.recover
   Arg ->
     (let State (get Arg "state")
       (if (not (= (get State "schema") 1)) (rt.control State "unsupported-schema")
-        (rt.control
-          (merge State (obj [["sessions" (obj [])] ["peer-routes" []] ["neighbors" []] ["pending" []] ["offer" null]
-                            ["flows" (if (= (get State "mode") "single") (rt.restore-reservations (get State "flows") 0 []) (get State "flows"))]
-                            ["mode" (if (= (get State "mode") "single") "single" "standby")] ["lease-until" 0]]))
-          "recovered"))))
+        (let Single (= (get State "mode") "single")
+          (let Flows (if Single (rt.restore-reservations (get State "flows") 0 []) (get State "flows"))
+            (if (not (rt.recovery-keys-clear Flows (get Arg "now") 0 (obj []) (obj [])))
+              (rt.control State "ownership-conflict")
+              (rt.control
+                (merge State (obj [["sessions" (obj [])] ["peer-routes" []] ["neighbors" []] ["pending" []] ["offer" null]
+                                  ["flows" Flows] ["mode" (if Single "single" "standby")] ["lease-until" 0]]))
+                "recovered")))))))
 
 (define rt.forwarding-policy
   Interface Packet -> (rt.policy-at (get Interface "policy") Packet 0))
