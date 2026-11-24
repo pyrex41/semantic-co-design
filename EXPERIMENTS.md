@@ -113,3 +113,7 @@ For runtime payload digests, use [sha256-receipt.json](native/sha256-receipt.jso
 Three fresh sessions per arm, all gpt-5.6-luna at medium effort, graded against the frozen tasks. The independent [builder output](experiments/learning/inferred-library.md) was frozen before participants received the tasks. Each final policy passed 24 worlds across both tasks. Counts of format repairs by repetition were 1/1/2 with examples, 1/1/1 with the reference library and 1/0/1 with the inferred library. No participant needed semantic counterexample feedback. The feedback on malformed submissions disclosed the required JSON encoding. No human intervened during the trials.
 
 [Per-run usage, elapsed time and submission filenames](experiments/learning/runs/results.json) include time waiting for evaluator feedback. Elapsed differences therefore have limited value for comparing construction efficiency. All sessions received the same declared budgets. The builder took about 28 seconds and 1,220 output tokens. Correctness differences between arms were zero in every repetition. The examples-only arm already achieved full task success. This pilot provides no evidence that the compiler needs a learner.
+
+## Ordinary interpreter specialization
+
+An unstaged Shen stack interpreter and a separate Clang control test whether fixed bytecode disappears without writing the interpreter over residual expressions. The experiment includes the source, derived sum IR, mutation checks and replay commands. [Procedure and limits](experiments/ordinary_vm/README.md)
