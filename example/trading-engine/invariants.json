@@ -1,0 +1,7 @@
+{
+  "language": "app-shen/1",
+  "name": "trading-ledger-laws",
+  "sources": ["invariants.shen"],
+  "entries": {"ledger-laws": {"function": "law.check"}},
+  "capabilities": {}
+}

@@ -15,6 +15,7 @@ import time
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "webapp"))
 import appc
 from oracle import QUOTE_SCALE, balances_from_statement, book_checkpoint
+from values import digest
 
 
 ROOT = Path(__file__).resolve().parent
@@ -66,7 +67,8 @@ class Session:
         reply = self.entries[entry](None, envelope)
         assert reply["status"] == expected, (entry, expected, reply["status"], reply["data"])
         self.state = reply["state"]
-        self.trace.append((entry, {k: v for k, v in envelope.items() if k != "state"}, reply["status"], reply["data"]))
+        self.trace.append((entry, {k: v for k, v in envelope.items() if k != "state"},
+                           reply["status"], reply["data"], digest(reply["state"])))
         return reply["data"]
 
     def dispatch(self, client):
@@ -442,17 +444,21 @@ def import_native(build):
     return native.entries
 
 
-def native_acceptance(build):
-    import package
+def native_acceptance(build, laws, source=None):
+    import check_reachable
+    from event_host import release_id
 
-    manifest, evaluator = appc.load(MANIFEST)
-    reference = appc.reference_entries(manifest, evaluator)
+    if source is None:
+        manifest, evaluator = appc.load(MANIFEST)
+        source = appc.reference_entries(manifest, evaluator)
+    reference = source
     native = import_native(build)
+    checked_reference, checked_native = laws.wrap(reference), laws.wrap(native)
     checks = [decisive, market_history, lifecycle, venue_history, strategy_history, operator_history, transport_scope_history]
     count, covered = 0, set()
     for history in checks:
-        expected = history(reference)
-        actual = history(native)
+        expected = history(checked_reference)
+        actual = history(checked_native)
         assert expected.trace == actual.trace and expected.state == actual.state, history.__name__
         count += len(actual.trace)
         covered.update(event for event, *_ in actual.trace)
@@ -462,23 +468,31 @@ def native_acceptance(build):
     assert all(ownership["definitions"][name]["residual"] for name in ("tx.admit", "tx.fill", "tx.delta", "tx.inventory-direction"))
     source = (build / "_application.pyx").read_text()
     assert "from values import" in source and "eval(" not in source and "ctx.effect(" not in source
-    return {"public_histories": len(checks), "observations": count, "native_entries": len(native),
+    return {**check_reachable.bounded(reference, native, laws),
+            "public_histories": len(checks), "observations": count, "native_entries": len(native),
             "native_bytes": next((build / "lib").glob("_application*.so")).stat().st_size,
-            "revision": package.revision(MANIFEST, manifest)}
+            "revision": release_id(ownership)}
 
 
 def main():
     sys.modules.setdefault("trading_checks", sys.modules[__name__])
     import check_host
+    import check_reachable
     import package
+    from event_host import release_id
 
     sys.setrecursionlimit(20_000)
     start = time.monotonic()
     if len(sys.argv) == 2:
-        print(json.dumps(native_acceptance(Path(sys.argv[1])), sort_keys=True))
+        with tempfile.TemporaryDirectory(prefix="trading-laws-") as root:
+            laws = check_reachable.LedgerLaws(Path(root))
+            report = native_acceptance(Path(sys.argv[1]), laws)
+            print(json.dumps({**report, "ledger_assertions": laws.observations}, sort_keys=True))
     else:
         with tempfile.TemporaryDirectory(prefix="trading-engine-") as root:
             build = Path(root) / "release"
+            manifest, evaluator = appc.load(MANIFEST)
+            original_reference = appc.reference_entries(manifest, evaluator)
             private = Path(root) / "signing.pem"
             public = Path(root) / "signing.pub"
             subprocess.run(["openssl", "genrsa", "-out", str(private), "2048"],
@@ -487,11 +501,11 @@ def main():
                            capture_output=True, check=True, timeout=10)
             package.build(MANIFEST, build, private)
             package.verify(build, public)
-            results = native_acceptance(build)
+            laws = check_reachable.LedgerLaws(Path(root))
+            results = native_acceptance(build, laws, original_reference)
             results.update(check_host.run(build, import_native(build), Path(root)))
             candidate = Path(root) / "edited-source"
             candidate.mkdir()
-            manifest, _ = appc.load(MANIFEST)
             for name in ["manifest.json", *manifest["sources"], *manifest["assets"]]:
                 shutil.copyfile(ROOT / name, candidate / name)
             changes = {"strategy.shen": ("Lower -> Lower", "Lower -> (+ Lower 10000)"),
@@ -504,10 +518,18 @@ def main():
                 source.write_text(old.replace(before, after))
             candidate_manifest = candidate / "manifest.json"
             changed, evaluator = appc.load(candidate_manifest)
-            strategy_history(appc.reference_entries(changed, evaluator), changed=True)
+            modified_reference = appc.reference_entries(changed, evaluator)
+            strategy_history(laws.wrap(modified_reference), changed=True)
             mutant = Path(root) / "mutant"
             package.build(candidate_manifest, mutant)
             results.update(check_host.versions(build, mutant, Path(root)))
+            modified_release = release_id(json.loads((mutant / "ownership.json").read_text()))
+            releases = {
+                results["revision"]: (original_reference, import_native(build)),
+                modified_release: (modified_reference, import_native(mutant)),
+            }
+            results.update(check_reachable.committed_histories(Path(root).resolve(), releases, laws))
+            results["ledger_assertions"] = laws.observations
             results["signed_package"] = True
             print(json.dumps({**results, "elapsed_seconds": round(time.monotonic() - start, 3)}, sort_keys=True))
 

@@ -12,7 +12,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from trading_checks import CLIENT, MANIFEST, PRODUCT, VENUE, accounts, fill, fixture, intent, order
-from event_host import Store
+from event_host import Store, release_id
 from oracle import QUOTE_SCALE, balances_from_statement
 from package import appc
 
@@ -39,7 +39,7 @@ def child_main():
     release, database = map(Path, sys.argv[1:])
     args = json.load(sys.stdin)
     manifest, _ = appc.load(MANIFEST)
-    version = json.loads((release / "ownership.json").read_text())["release"]
+    version = release_id(json.loads((release / "ownership.json").read_text()))
     roles = {role for target in manifest["access"].values() for role in target["roles"]}
     store = Store(database, manifest, import_native(release), version)
     if "start-at" in args:
@@ -219,10 +219,10 @@ def kill_before_wire(release, entries, manifest, version, root):
     return store.replay({version: entries})["events"]
 
 
-def run(release, entries, root):
+def run(release, entries, root, *, include_api=True):
     manifest, _ = appc.load(MANIFEST)
     ownership = json.loads((release / "ownership.json").read_text())
-    version = ownership["release"]
+    version = release_id(ownership)
     database = root / "trading.sqlite"
     store = Store(database, manifest, entries, version)
     roles = {role for target in manifest["access"].values() for role in target["roles"]}
@@ -276,7 +276,7 @@ def run(release, entries, root):
     assert json.loads(command(release, database, "backup", str(backup)).stdout) == {"backup": str(backup)}
     assert json.loads(command(release, backup, "replay").stdout) == report
     assert json.loads(command(release, backup, "call", "status").stdout)["data"]["outstanding"]
-    auth_events = api(release, store, root)
+    auth_events = api(release, store, root) if include_api else 0
     stalled_events = transport_race(release, entries, manifest, version, root)
     additional_deaths = transport_crashes(release, entries, manifest, version, root)
     prewire_events = kill_before_wire(release, entries, manifest, version, root)

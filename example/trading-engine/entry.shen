@@ -55,25 +55,27 @@
 
 (define tx.propose-adjustment
   State Req ->
-    (let Id (get Req "adjustment-id")
-      (let Pending (get State "adjustments")
-        (if (or (not (get State "blocked"))
-                (or (not (tx.uuid Id)) (not (= null (get Pending Id)))))
-          (tx.result State "invalid-adjustment-id" null)
-          (let Proposal (obj [["actor" (get Req "actor")] ["reason" (get Req "reason")]
-                               ["amount" (get Req "amount")] ["asset" (get Req "asset")]] )
-            (tx.result (tx.set State "adjustments" (tx.set Pending Id Proposal)) "adjustment-proposed" Proposal))))))
+    (if (not (get State "started")) (tx.result State "opening-statement-required" null)
+      (let Id (get Req "adjustment-id")
+        (let Pending (get State "adjustments")
+          (if (or (not (get State "blocked"))
+                  (or (not (tx.uuid Id)) (not (= null (get Pending Id)))))
+            (tx.result State "invalid-adjustment-id" null)
+            (let Proposal (obj [["actor" (get Req "actor")] ["reason" (get Req "reason")]
+                                 ["amount" (get Req "amount")] ["asset" (get Req "asset")]])
+              (tx.result (tx.set State "adjustments" (tx.set Pending Id Proposal)) "adjustment-proposed" Proposal)))))))
 
 (define tx.approve-adjustment
   State Req ->
-    (let Id (get Req "adjustment-id")
-      (let Pending (get State "adjustments")
-        (let Proposal (get Pending Id)
-          (if (= Proposal null) (tx.result State "unknown-adjustment" null)
-            (let Decision (tx.adjust State (tx.set Proposal "approver" (get Req "actor")))
-              (if (= "adjusted" (get Decision "status"))
-                (tx.result (tx.set (get Decision "state") "adjustments" (remove Pending Id))
-                  "adjusted" (get Decision "data")) Decision)))))))
+    (if (not (get State "started")) (tx.result State "opening-statement-required" null)
+      (let Id (get Req "adjustment-id")
+        (let Pending (get State "adjustments")
+          (let Proposal (get Pending Id)
+            (if (= Proposal null) (tx.result State "unknown-adjustment" null)
+              (let Decision (tx.adjust State (tx.set Proposal "approver" (get Req "actor")))
+                (if (= "adjusted" (get Decision "status"))
+                  (tx.result (tx.set (get Decision "state") "adjustments" (remove Pending Id))
+                    "adjusted" (get Decision "data")) Decision))))))))
 
 (define tx.activate-release
   State Req ->

@@ -9,15 +9,28 @@
           "reconciliation-required")
         (tx.result State "stale-fence" null))))
 
+(define tx.empty-opening-history
+  Journal Position ->
+    (or (= Position (len Journal))
+      (and (= "release-activation" (get (at Journal Position) "kind"))
+        (tx.empty-opening-history Journal (+ Position 1)))))
+
+(define tx.opening-ledger-clean
+  State ->
+    (and (= (get State "balances") (obj [["USD" 0] ["BTC" 0] ["BCH" 0]]))
+      (tx.empty-opening-history (get State "journal") 0)))
+
 (define tx.start
   State Req ->
     (if (get State "started") (tx.result State "already-initialized" null)
-      (let Balances (tx.statement (get Req "accounts"))
-        (if (or (= Balances null) (not (contains ["sandbox" "production" null] (get Req "environment"))))
-          (tx.restrict State "invalid-opening-statement" null)
-          (let New (tx.balance-opening (merge State (obj [["started" true] ["balances" Balances]
-                    ["environment" (if (= null (get Req "environment")) "sandbox" (get Req "environment"))]])) Balances)
-            (tx.result New "initialized" Balances))))))
+      (if (not (tx.opening-ledger-clean State)) (tx.restrict State "opening-ledger-conflict" null)
+        (let Balances (tx.statement (get Req "accounts"))
+          (if (or (= Balances null) (not (contains ["sandbox" "production" null] (get Req "environment"))))
+            (tx.restrict State "invalid-opening-statement" null)
+            (let New (tx.balance-opening (merge State (obj [["started" true] ["balances" Balances]
+                      ["environment" (if (= null (get Req "environment")) "sandbox" (get Req "environment"))]
+                      ["adjustments" (obj [])]])) Balances)
+              (tx.result New "initialized" Balances)))))))
 
 (define tx.metadata-at
   State Product -> (get (get State "metadata") Product))
@@ -153,7 +166,7 @@
         (let Asset (get Req "asset")
           (let Amount (get Req "amount")
             (let Limit (tx.amount-limit Asset)
-              (if (not (and (get State "blocked")
+              (if (not (and (and (get State "started") (get State "blocked"))
                          (and (text? Reason 8 400) (and (text? Approver 1 100)
                            (and (not (= Approver (get Req "actor")))
                              (and (> Limit 0) (and (int? Amount) (and (>= Amount (- 0 Limit)) (<= Amount Limit)))))))))
