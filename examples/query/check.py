@@ -1,31 +1,32 @@
-"""Independent correspondence check, including 100 seeded SQLite datasets."""
+"""Query oracle and SQLite correspondence checks."""
 import random
 import sqlite3
 import sys
 from pathlib import Path
-
 sys.path.insert(0, str(Path(__file__).parent))
-from query import QUERIES, execute, fixture
+from query import oracle, fixture
 
 
-def sqlite_group(rows, cutoff):
+def sql_group(rows):
     db = sqlite3.connect(":memory:")
-    db.executescript("create table orders(id integer, customer_id integer, amount integer);")
-    db.executemany("insert into orders values(?,?,?)", [tuple(r.values()) for r in rows])
-    return [{"customer_id": k, "amount": v} for k, v in db.execute(
-        "select customer_id, sum(amount) from orders where id <= ? group by customer_id order by customer_id", (cutoff,))]
+    db.execute("create table t (a integer, b integer, c integer)")
+    db.executemany("insert into t values (?,?,?)", rows)
+    out = []
+    for key, total in db.execute("select a, sum(c) from t group by a order by a"):
+        out.extend((key, total))
+    return out
 
 
 def main():
-    assert execute(QUERIES["filter"], fixture(), 12) == [{"id": 11, "customer_id": 1, "amount": 9}]
-    assert execute(QUERIES["group_sum"], fixture(), 12) == [{"customer_id": 1, "amount": 16}, {"customer_id": 2, "amount": 4}]
+    static, dynamic = fixture()
+    assert oracle(static, dynamic) == [1, 2, 7, 8, 1, 6]
     for seed in range(100):
         rng = random.Random(seed)
-        rows = [{"id": i, "customer_id": rng.randrange(4), "amount": rng.randrange(-5, 20)} for i in range(rng.randrange(0, 20))]
-        cutoff = rng.randrange(0, 20)
-        tables = {"customers": [], "orders": rows}
-        assert execute(QUERIES["group_sum"], tables, cutoff) == sqlite_group(rows, cutoff)
-    print("query checks: 100 datasets passed")
+        rows = [(rng.randrange(4), rng.randrange(8), rng.randrange(-10, 20))
+                for _ in range(rng.randrange(0, 25))]
+        flat = [0, len(rows), 0] + [v for row in rows for v in row]
+        assert oracle((3, 3, [2, 0, 2]), flat) == sql_group(rows)
+    print("query checks: oracle plus 100 SQLite datasets passed")
 
 
 if __name__ == "__main__":
