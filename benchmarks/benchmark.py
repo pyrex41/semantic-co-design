@@ -23,6 +23,16 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 
+def _staged_cases() -> dict[str, tuple[object, list[list[int]]]]:
+    """Static values and dynamic rows for the shared ``specializer`` API."""
+    return {
+        "vm": ([[0]], [list(range(-32, 32))] * 32),
+        "decoder": ([], [[0xA5, 1, 0, 1, 7, 9]] * 32),
+        "railway": ([], [[0, 1, 2, 3, 4, 5]] * 32),
+        "query": ([], [[1, 2, 1, 7, 2, 4]] * 32),
+    }
+
+
 def _samples(fn, iterations: int) -> list[float]:
     # Warm the Python import/cache path once, then time only the requested work.
     fn()
@@ -64,20 +74,36 @@ def _source_cases() -> dict[str, tuple[callable, callable]]:
     }
 
 
-def _native_command(name: str, root: Path, directory: Path) -> tuple[list[str], bytes] | None:
-    """Return a common-command native invocation when the lane provides one."""
-    # Lanes may publish a native replay helper.  Keeping discovery here avoids
-    # making the benchmark depend on a particular generated filename.
-    helper = root / "examples" / name / "native-replay.py"
-    if helper.exists():
-        return [sys.executable, str(helper)], b"\n"
-    return None
+def _native_persistent(binary: Path, rows: list[list[int]], iterations: int) -> dict:
+    payload = "".join(" ".join(map(str, row)) + "\n" for row in rows)
+    try:
+        start = time.perf_counter_ns()
+        process = subprocess.Popen([str(binary)], stdin=subprocess.PIPE,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   text=True)
+        startup_ms = (time.perf_counter_ns() - start) / 1_000_000
+        warm = []
+        assert process.stdin is not None
+        for _ in range(iterations):
+            begin = time.perf_counter_ns()
+            process.stdin.write(payload)
+            process.stdin.flush()
+            warm.append((time.perf_counter_ns() - begin) / 1_000_000)
+        process.stdin.close()
+        process.stdin = None
+        process.communicate(timeout=20)
+        if process.returncode:
+            raise subprocess.CalledProcessError(process.returncode, str(binary))
+        return {"status": "ok", "startup_ms": round(startup_ms, 6), **_stats(warm)}
+    except (OSError, subprocess.SubprocessError) as exc:
+        return {"status": "error", "reason": str(exc)}
 
 
 def benchmark(iterations: int = 20, output: Path | None = None) -> dict:
     if iterations < 1:
         raise ValueError("iterations must be positive")
     records = []
+    staged = _staged_cases()
     for name, (source, baseline) in _source_cases().items():
         source_values = _samples(source, iterations)
         baseline_values = _samples(baseline, iterations)
@@ -85,28 +111,33 @@ def benchmark(iterations: int = 20, output: Path | None = None) -> dict:
             "example": name,
             "source": _stats(source_values),
             "direct_baseline": _stats(baseline_values),
-            "native_build": {
-                "status": "unavailable",
-                "generation_ms": None,
-                "binary_bytes": None,
-                "reason": "specializer build receipt is not published by this lane",
-            },
-            "native": {"status": "unavailable", "reason": "lane has no native-replay helper"},
+            "staged_source": {},
+            "native_build": {},
+            "native": {},
         }
         with tempfile.TemporaryDirectory(prefix=f"semantic-{name}-") as temp:
-            found = _native_command(name, ROOT, Path(temp))
-            if found:
-                command, stdin = found
-                try:
-                    generated = []
-                    for _ in range(iterations):
-                        start = time.perf_counter_ns()
-                        proc = subprocess.run(command, input=stdin, stdout=subprocess.PIPE,
-                                              stderr=subprocess.PIPE, check=True, timeout=10)
-                        generated.append((time.perf_counter_ns() - start) / 1_000_000)
-                    row["native"] = {"status": "ok", **_stats(generated)}
-                except (OSError, subprocess.SubprocessError) as exc:
-                    row["native"] = {"status": "error", "reason": str(exc)}
+            static, rows = staged[name]
+            try:
+                from specializer import build, concrete
+                source_rows = rows[:8]
+                source_receipts = {}
+                for source_name in ("shen", "maude"):
+                    started = time.perf_counter_ns()
+                    concrete(name, source_name, static, source_rows)
+                    source_receipts[source_name] = {"startup_ms": round((time.perf_counter_ns() - started) / 1_000_000, 6)}
+                row["staged_source"] = {"status": "ok", "receipts": source_receipts}
+                binary = Path(temp) / "program"
+                started = time.perf_counter_ns()
+                build(name, "shen", static, binary, emit_ir=Path(temp) / "program.ir.json",
+                      emit_c=Path(temp) / "program.c")
+                generation_ms = (time.perf_counter_ns() - started) / 1_000_000
+                row["native_build"] = {"status": "ok", "generation_ms": round(generation_ms, 6),
+                                        "binary_bytes": binary.stat().st_size}
+                row["native"] = _native_persistent(binary, rows, iterations)
+            except (OSError, ValueError, subprocess.SubprocessError, KeyError) as exc:
+                row["staged_source"] = {"status": "unavailable", "reason": str(exc)}
+                row["native_build"] = {"status": "unavailable", "reason": str(exc)}
+                row["native"] = {"status": "unavailable", "reason": str(exc)}
         records.append(row)
     result = {
         "schema": 1,
