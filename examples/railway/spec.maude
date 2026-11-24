@@ -1,0 +1,9 @@
+fmod RAILWAY-SPEC is
+  sorts T Ts Int .
+  subsort Int < T .
+  op nil : -> Ts [ctor] .
+  op box : Ts -> T [ctor] .
+  op specialize : T -> T .
+  var X : T .
+  eq specialize(X) = X .
+endfm

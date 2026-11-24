@@ -1,0 +1,18 @@
+fmod RAILWAY is
+  sorts Route Occupancy Event State Verdict .
+  ops none r1 r2 : -> Route [ctor] .
+  ops free occupied : -> Occupancy [ctor] .
+  ops request cancel entry clear : Route -> Event [ctor] .
+  ops state : Route Occupancy -> State [ctor] .
+  ops grant reject entered cancelled cleared : -> Verdict [ctor] .
+  op step : State Event -> State .
+  vars R R' : Route .
+  eq step(state(none, free), request(R)) = state(R, free) .
+  eq step(state(R, free), cancel(R')) = state(none, free) [owise] .
+  eq step(state(R, free), entry(R)) = state(R, occupied) .
+  eq step(state(R, occupied), clear(R)) = state(none, free) .
+  eq step(state(R, O), request(R')) = state(R, O) [owise] .
+  eq step(state(R, O), entry(R')) = state(R, O) [owise] .
+  eq step(state(R, O), cancel(R')) = state(R, O) [owise] .
+  eq step(state(R, O), clear(R')) = state(R, O) [owise] .
+endfm
