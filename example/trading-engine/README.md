@@ -1,0 +1,43 @@
+# Generated Coinbase Exchange spot engine
+
+The manifest specializes the eight Shen modules into the native entries invoked by `engine`. The same entries run under the reference evaluator. The source owns Coinbase request shapes and signing-field names, level-3 book updates, strategy decisions, concurrent account admission, order and cancel state, reconciliation, ledger postings and operator behavior. The Python host serializes calls, commits JSON records and the event log to SQLite, runs authenticated HTTP, and executes generated transport descriptors through a generic TLS and HMAC driver. The release does not carry an evaluator or the Shen sources.
+
+[Implementation plan](PLAN.md) · [Dated exchange contract and capture provenance](VENUE.md)
+
+## Build and run
+
+The build needs CPython, Cython 3.1.6 and a C compiler. The package needs the same CPython ABI, SQLite and the OS TLS trust store. Its WebSocket command uses `websocket-client` 1.8.0. The build consumes checked-in source and installed dependencies offline. All examples below use the sandbox public endpoint or local state.
+
+```sh
+cd example/trading-engine
+python3 check.py
+python3 package.py build --out /tmp/coinbase-engine
+python3 package.py inspect /tmp/coinbase-engine
+printf '{}\n' | /tmp/coinbase-engine/engine --database /tmp/coinbase.sqlite call status
+printf '{"kind":"product","product":"BTC-USD"}\n' \
+  | /tmp/coinbase-engine/engine --database /tmp/coinbase.sqlite fetch
+```
+
+Use `package.py interpret --database PATH call ENTRY` for the same CLI with the reference evaluator. Build with `--sign-key PATH` and use `package.py verify RELEASE --public-key PATH` to verify the signed ownership record and each listed artifact. The acceptance test generates an ephemeral key for this check. Release signing keys and exchange credentials have separate lifecycles.
+
+Each mutating `call` takes a JSON object, a fence via `--fence` and the host's event time in UTC milliseconds. `acquire-writer` takes a strictly increasing `fence` in its input and parks trading until the account reconciles. `start` anchors the account to its opening statement and `sandbox` by default. Set `environment` to `production` only as part of a separately authorized live deployment. Account and transport descriptors are bound to the stored environment. `resume` requires a completed reconciliation.
+
+`serve` starts the loopback JSON API. Its `--credentials` file maps bearer tokens to an `actor` and list of `roles` declared by `access` in the manifest. Use mode `0600`. A `POST /v1/ENTRY` body contains `fence` and `event`. The API checks credentials and roles before invoking the entry. The local CLI uses the operating-system user as the audit actor. Adjustments require two distinct authenticated actors and retain their reason and paired postings. `status`, `order`, `blotter`, `executions`, `journal` and `exceptions` serve operator reporting.
+
+`stream --signing-file PATH --fence N` negotiates the declared `full` feed, fetches snapshots after subscription, consumes sequenced events and invalidates the books when the session ends. `fetch` performs a generated GET request for `product`, `snapshot`, `accounts`, `open-orders`, `fills` or `lookup`. `send --signing-file PATH --fence N` accepts a `client-id`, atomically claims its persisted send or cancel intent, then checks the fence, mode, phase, credential epoch and request again before performing the request. The signing file is mode `0600`. It supplies `key`, base64 `secret`, `passphrase`, `scope` and `epoch` for the generic driver. Use `rotate` to record a new epoch and require fresh reconciliation before resuming. The signing file and generated signatures remain outside SQLite and the generated package.
+
+The account operator applies settled private fills using `fill`, and applies a client identity lookup with `order-evidence`. `reconcile` checks each open order identity and terms against local obligations, alongside complete overlapping history and the reported balance, hold and availability. Account queries and evidence submission are scripted operator steps. `tick` expires working orders and reports pending actions. Strategies produce `intent` results for submission through `admit`. `kill` fences new sends and moves outstanding orders to cancellation. A confirmed terminal order and completeness of settled fills determine final release of the reservation. Outstanding amounts remain visible through restart.
+
+## Exact amounts and recovery
+
+Prices are signed checked cents and base quantities are integers in units of `10^-8` BTC or BCH. Quote cash and fees use `10^-16` USD. Price and quantity parsing permits trailing zeroes beyond the declared scale and rejects any lost nonzero digit. Order inputs must be positive and satisfy the current increment and minimum. Strategy buys round price down, sells round it up, and quantities round down to their increments. Fee reserves round upward to the nearest quote atom. Notional is first formed in `10^-10` USD and then multiplied by `10^6`. The engine bounds the intermediate at `5 × 10^12` and cash at `5 × 10^18` atoms, or USD 500. Each base holding is limited to 100 units. Release bounds include 1,024 resting orders per book, 1,024 account orders and 4,096 settled executions. Invalid precision, missing metadata, bound exhaustion and ambiguity fail closed. Trade limits and instrument controls are serialized with intents and fills.
+
+The SQLite writer persists the event, actor, release, reply and resulting state digest with the new snapshot in the same transaction. `BEGIN IMMEDIATE` orders competing writes. The host commits the outbox claim before taking the lock again to authorize and perform the socket request. If the response or second commit is lost, recovery starts from the durable unknown state and queries by the persisted client identity. A confirmed pre-transmission failure can be requeued. Exchange-side effects and database commits remain separate. Market book ordering uses the venue's per-product sequence. Live book freshness uses the exchange timestamp, so processing a queued frame cannot restore freshness by changing its arrival time. Account replay uses committed journal order and the recorded UTC millisecond clock. A process replacement advances the fence and invalidates the old book. Snapshots and event history can be checked independently with `engine --database PATH replay`.
+
+`backup OUTPUT` uses a consistent SQLite snapshot. Reopen the restored file and run `replay` before resuming. For a compatible source-only release, run `call activate-release --fence N` under the new package at a planned boundary. Orders retain their original release and obligations. On an upgrade or rollback, use `replay --pinned OLD_RELEASE_DIR` to resolve events against both packages. The activated package and source-only strategy or risk changes are recorded in the database.
+
+## Qualification status
+
+`check.py` independently checks the two captured public REST books, reference/native correspondence, a book gap and resnapshot, stale markets, changed instrument precision, integer bounds, buying-power contention, settled execution identity, fill/cancel ordering, exact fees, incomplete reconciliation, and kill and credential-rotation transitions. Separate process tests exercise contention, process death before and after commit and after simulated exchange acceptance, ownership signatures, API roles, backup and replay, and source-only upgrade and rollback with orders outstanding. Files under `fixtures/` contain only public data. Private histories are deterministic synthetic sessions.
+
+The installed release has fetched current public sandbox metadata. The reference executable has fetched a current BCH-USD level-3 snapshot from the same sandbox. `python3 benchmark.py` records a bounded local workload with generation, package size, cold startup, durable flood handling, queue lag, decisions and cancels to their simulated transport, and replay. The throughput and latency measurements apply to the recorded host and local workload. Authenticated sandbox feed and order tests require approved Coinbase sandbox credentials and a captured private statement. That work must also qualify pagination and retention, fee and terminal-order responses, reconciling live balance and hold discrepancies, stream burst and failover behavior, and pending work under network partitions. The plan's production deployment, cross-host writer fencing, automated private reconciliation scheduling, daily independent statements and quantified load targets remain open. Release promotion requires those observations and named operational ownership.

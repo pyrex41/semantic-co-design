@@ -1,0 +1,1336 @@
+{
+  "name": "Document Desk",
+  "version": "1.0.0",
+  "sources": [
+    "storage.shen",
+    "access.shen",
+    "documents.shen",
+    "review.shen",
+    "worker.shen",
+    "application.shen",
+    "pages.shen"
+  ],
+  "assets": [
+    "approval.css"
+  ],
+  "capabilities": {
+    "begin": 0,
+    "commit": 0,
+    "sql": 2,
+    "token": 0,
+    "now": 0,
+    "setting": 1,
+    "authorize-id": 4,
+    "exchange-id": 4,
+    "blob-put": 2,
+    "blob-check": 1,
+    "blob-get": 1,
+    "blob-delete": 1,
+    "blob-aged": 0,
+    "compile-rule": 1,
+    "mail": 1,
+    "backup-files": 1,
+    "restore-files": 1,
+    "form": 4,
+    "api-schema": 0,
+    "metrics": 0
+  },
+  "entries": {
+    "page-home": {
+      "function": "browser-home"
+    },
+    "page-login": {
+      "function": "begin-login"
+    },
+    "page-callback": {
+      "function": "finish-login"
+    },
+    "page-logout": {
+      "function": "logout"
+    },
+    "api-session": {
+      "function": "current-session"
+    },
+    "api-schema": {
+      "function": "get-schema"
+    },
+    "health": {
+      "function": "get-health"
+    },
+    "metrics": {
+      "function": "get-metrics"
+    },
+    "page-workspace": {
+      "function": "get-page",
+      "static": [
+        "workspace"
+      ]
+    },
+    "api-workspace": {
+      "function": "get-api",
+      "static": [
+        "workspace"
+      ]
+    },
+    "page-members": {
+      "function": "get-page",
+      "static": [
+        "members"
+      ]
+    },
+    "api-members": {
+      "function": "get-api",
+      "static": [
+        "members"
+      ]
+    },
+    "page-workflows": {
+      "function": "get-page",
+      "static": [
+        "workflows"
+      ]
+    },
+    "api-workflows": {
+      "function": "get-api",
+      "static": [
+        "workflows"
+      ]
+    },
+    "page-documents": {
+      "function": "get-page",
+      "static": [
+        "documents"
+      ]
+    },
+    "api-documents": {
+      "function": "get-api",
+      "static": [
+        "documents"
+      ]
+    },
+    "page-new": {
+      "function": "get-page",
+      "static": [
+        "new"
+      ]
+    },
+    "page-document": {
+      "function": "get-page",
+      "static": [
+        "document"
+      ]
+    },
+    "api-document": {
+      "function": "get-api",
+      "static": [
+        "document"
+      ]
+    },
+    "page-revision": {
+      "function": "get-page",
+      "static": [
+        "revision"
+      ]
+    },
+    "api-revision": {
+      "function": "get-api",
+      "static": [
+        "revision"
+      ]
+    },
+    "page-file": {
+      "function": "get-file"
+    },
+    "api-file": {
+      "function": "get-file"
+    },
+    "page-inbox": {
+      "function": "get-page",
+      "static": [
+        "inbox"
+      ]
+    },
+    "api-inbox": {
+      "function": "get-api",
+      "static": [
+        "inbox"
+      ]
+    },
+    "page-review": {
+      "function": "get-page",
+      "static": [
+        "review"
+      ]
+    },
+    "api-review": {
+      "function": "get-api",
+      "static": [
+        "review"
+      ]
+    },
+    "page-audit": {
+      "function": "get-page",
+      "static": [
+        "audit"
+      ]
+    },
+    "api-audit": {
+      "function": "get-api",
+      "static": [
+        "audit"
+      ]
+    },
+    "page-export": {
+      "function": "get-export"
+    },
+    "api-export": {
+      "function": "get-export"
+    },
+    "page-deliveries": {
+      "function": "get-page",
+      "static": [
+        "deliveries"
+      ]
+    },
+    "api-deliveries": {
+      "function": "get-api",
+      "static": [
+        "deliveries"
+      ]
+    },
+    "page-invite": {
+      "function": "mutation",
+      "static": [
+        "invite"
+      ]
+    },
+    "api-invite": {
+      "function": "mutation",
+      "static": [
+        "invite"
+      ]
+    },
+    "page-role": {
+      "function": "mutation",
+      "static": [
+        "role"
+      ]
+    },
+    "api-role": {
+      "function": "mutation",
+      "static": [
+        "role"
+      ]
+    },
+    "page-publish": {
+      "function": "publish-command"
+    },
+    "api-publish": {
+      "function": "publish-command"
+    },
+    "page-create": {
+      "function": "mutation",
+      "static": [
+        "create"
+      ]
+    },
+    "api-create": {
+      "function": "mutation",
+      "static": [
+        "create"
+      ]
+    },
+    "page-edit": {
+      "function": "mutation",
+      "static": [
+        "edit"
+      ]
+    },
+    "api-edit": {
+      "function": "mutation",
+      "static": [
+        "edit"
+      ]
+    },
+    "page-delete": {
+      "function": "mutation",
+      "static": [
+        "delete"
+      ]
+    },
+    "api-delete": {
+      "function": "mutation",
+      "static": [
+        "delete"
+      ]
+    },
+    "page-submit": {
+      "function": "mutation",
+      "static": [
+        "submit"
+      ]
+    },
+    "api-submit": {
+      "function": "mutation",
+      "static": [
+        "submit"
+      ]
+    },
+    "api-stage": {
+      "function": "mutation",
+      "static": [
+        "stage"
+      ]
+    },
+    "api-write": {
+      "function": "mutation",
+      "static": [
+        "write"
+      ]
+    },
+    "api-attach": {
+      "function": "mutation",
+      "static": [
+        "attach"
+      ]
+    },
+    "page-upload": {
+      "function": "mutation",
+      "static": [
+        "upload"
+      ]
+    },
+    "api-upload": {
+      "function": "mutation",
+      "static": [
+        "upload"
+      ]
+    },
+    "page-vote": {
+      "function": "mutation",
+      "static": [
+        "vote"
+      ]
+    },
+    "api-vote": {
+      "function": "mutation",
+      "static": [
+        "vote"
+      ]
+    },
+    "page-delegate": {
+      "function": "mutation",
+      "static": [
+        "delegate"
+      ]
+    },
+    "api-delegate": {
+      "function": "mutation",
+      "static": [
+        "delegate"
+      ]
+    },
+    "page-redrive": {
+      "function": "mutation",
+      "static": [
+        "redrive"
+      ]
+    },
+    "api-redrive": {
+      "function": "mutation",
+      "static": [
+        "redrive"
+      ]
+    },
+    "worker-once": {
+      "function": "worker-once"
+    },
+    "compile-policy": {
+      "function": "compile-policy"
+    },
+    "migrate": {
+      "function": "migrate"
+    },
+    "provision": {
+      "function": "provision"
+    },
+    "operator-doctor": {
+      "function": "operator-doctor"
+    },
+    "backup": {
+      "function": "backup"
+    },
+    "restore": {
+      "function": "restore"
+    },
+    "page-error": {
+      "function": "page-error"
+    }
+  },
+  "routes": [
+    {
+      "name": "page-home",
+      "mode": "page",
+      "method": "GET",
+      "path": "/",
+      "entry": "page-home"
+    },
+    {
+      "name": "page-login",
+      "mode": "page",
+      "method": "GET",
+      "path": "/login",
+      "entry": "page-login"
+    },
+    {
+      "name": "page-callback",
+      "mode": "page",
+      "method": "GET",
+      "path": "/callback",
+      "entry": "page-callback"
+    },
+    {
+      "name": "page-logout",
+      "mode": "page",
+      "method": "POST",
+      "path": "/logout",
+      "entry": "page-logout",
+      "fields": {},
+      "button": "Sign out"
+    },
+    {
+      "name": "api-session",
+      "mode": "api",
+      "method": "GET",
+      "path": "/api/v1/session",
+      "entry": "api-session",
+      "summary": "Get the authenticated session"
+    },
+    {
+      "name": "api-schema",
+      "mode": "api",
+      "method": "GET",
+      "path": "/api/v1/openapi.json",
+      "entry": "api-schema",
+      "transaction": false,
+      "summary": "Read the versioned API schema"
+    },
+    {
+      "name": "health",
+      "mode": "api",
+      "method": "GET",
+      "path": "/health",
+      "entry": "health",
+      "summary": "Check service readiness"
+    },
+    {
+      "name": "metrics",
+      "mode": "system",
+      "method": "GET",
+      "path": "/metrics",
+      "entry": "metrics",
+      "transaction": false
+    },
+    {
+      "name": "page-workspace",
+      "mode": "page",
+      "method": "GET",
+      "path": "/t/{tenant}",
+      "entry": "page-workspace"
+    },
+    {
+      "name": "api-workspace",
+      "mode": "api",
+      "method": "GET",
+      "path": "/api/v1/tenants/{tenant}",
+      "entry": "api-workspace",
+      "summary": "Read a tenant workspace"
+    },
+    {
+      "name": "page-members",
+      "mode": "page",
+      "method": "GET",
+      "path": "/t/{tenant}/members",
+      "entry": "page-members"
+    },
+    {
+      "name": "api-members",
+      "mode": "api",
+      "method": "GET",
+      "path": "/api/v1/tenants/{tenant}/members",
+      "entry": "api-members",
+      "summary": "List members and invitations"
+    },
+    {
+      "name": "page-workflows",
+      "mode": "page",
+      "method": "GET",
+      "path": "/t/{tenant}/workflows",
+      "entry": "page-workflows"
+    },
+    {
+      "name": "api-workflows",
+      "mode": "api",
+      "method": "GET",
+      "path": "/api/v1/tenants/{tenant}/workflows",
+      "entry": "api-workflows",
+      "summary": "List published workflow revisions"
+    },
+    {
+      "name": "page-documents",
+      "mode": "page",
+      "method": "GET",
+      "path": "/t/{tenant}/documents",
+      "entry": "page-documents"
+    },
+    {
+      "name": "api-documents",
+      "mode": "api",
+      "method": "GET",
+      "path": "/api/v1/tenants/{tenant}/documents",
+      "entry": "api-documents",
+      "summary": "List accessible documents"
+    },
+    {
+      "name": "page-new",
+      "mode": "page",
+      "method": "GET",
+      "path": "/t/{tenant}/documents/new",
+      "entry": "page-new"
+    },
+    {
+      "name": "page-document",
+      "mode": "page",
+      "method": "GET",
+      "path": "/t/{tenant}/documents/{document}",
+      "entry": "page-document"
+    },
+    {
+      "name": "api-document",
+      "mode": "api",
+      "method": "GET",
+      "path": "/api/v1/tenants/{tenant}/documents/{document}",
+      "entry": "api-document",
+      "summary": "Read a document and its revision history"
+    },
+    {
+      "name": "page-revision",
+      "mode": "page",
+      "method": "GET",
+      "path": "/t/{tenant}/documents/{document}/revisions/{revision}",
+      "entry": "page-revision"
+    },
+    {
+      "name": "api-revision",
+      "mode": "api",
+      "method": "GET",
+      "path": "/api/v1/tenants/{tenant}/documents/{document}/revisions/{revision}",
+      "entry": "api-revision",
+      "summary": "Read an immutable document revision"
+    },
+    {
+      "name": "page-file",
+      "mode": "page",
+      "method": "GET",
+      "path": "/t/{tenant}/documents/{document}/files/{attachment}",
+      "entry": "page-file"
+    },
+    {
+      "name": "api-file",
+      "mode": "api",
+      "method": "GET",
+      "path": "/api/v1/tenants/{tenant}/documents/{document}/files/{attachment}",
+      "entry": "api-file",
+      "summary": "Download an authorized attachment"
+    },
+    {
+      "name": "page-inbox",
+      "mode": "page",
+      "method": "GET",
+      "path": "/t/{tenant}/inbox",
+      "entry": "page-inbox"
+    },
+    {
+      "name": "api-inbox",
+      "mode": "api",
+      "method": "GET",
+      "path": "/api/v1/tenants/{tenant}/inbox",
+      "entry": "api-inbox",
+      "summary": "Search the reviewer inbox"
+    },
+    {
+      "name": "page-review",
+      "mode": "page",
+      "method": "GET",
+      "path": "/t/{tenant}/reviews/{submission}",
+      "entry": "page-review"
+    },
+    {
+      "name": "api-review",
+      "mode": "api",
+      "method": "GET",
+      "path": "/api/v1/tenants/{tenant}/reviews/{submission}",
+      "entry": "api-review",
+      "summary": "Read an assigned review"
+    },
+    {
+      "name": "page-audit",
+      "mode": "page",
+      "method": "GET",
+      "path": "/t/{tenant}/audit",
+      "entry": "page-audit"
+    },
+    {
+      "name": "api-audit",
+      "mode": "api",
+      "method": "GET",
+      "path": "/api/v1/tenants/{tenant}/audit",
+      "entry": "api-audit",
+      "summary": "Read chronological audit events"
+    },
+    {
+      "name": "page-export",
+      "mode": "page",
+      "method": "GET",
+      "path": "/t/{tenant}/audit/export",
+      "entry": "page-export"
+    },
+    {
+      "name": "api-export",
+      "mode": "api",
+      "method": "GET",
+      "path": "/api/v1/tenants/{tenant}/audit/export",
+      "entry": "api-export",
+      "summary": "Export audit events as CSV"
+    },
+    {
+      "name": "page-deliveries",
+      "mode": "page",
+      "method": "GET",
+      "path": "/t/{tenant}/deliveries",
+      "entry": "page-deliveries"
+    },
+    {
+      "name": "api-deliveries",
+      "mode": "api",
+      "method": "GET",
+      "path": "/api/v1/tenants/{tenant}/deliveries",
+      "entry": "api-deliveries",
+      "summary": "Inspect delivery attempts"
+    },
+    {
+      "name": "page-invite",
+      "mode": "page",
+      "method": "POST",
+      "path": "/t/{tenant}/members/invite",
+      "entry": "page-invite",
+      "fields": {
+        "email": {
+          "label": "Email address",
+          "type": "email",
+          "max": 254
+        },
+        "role": {
+          "label": "Role",
+          "type": "choice",
+          "values": [
+            "author",
+            "reviewer",
+            "auditor",
+            "administrator"
+          ]
+        }
+      },
+      "button": "Send invitation",
+      "idempotent": true
+    },
+    {
+      "name": "api-invite",
+      "mode": "api",
+      "method": "POST",
+      "path": "/api/v1/tenants/{tenant}/members/invite",
+      "entry": "api-invite",
+      "fields": {
+        "email": {
+          "label": "Email address",
+          "type": "email",
+          "max": 254
+        },
+        "role": {
+          "label": "Role",
+          "type": "choice",
+          "values": [
+            "author",
+            "reviewer",
+            "auditor",
+            "administrator"
+          ]
+        }
+      },
+      "idempotent": true,
+      "summary": "Send invitation",
+      "statuses": [
+        200,
+        400,
+        401,
+        403,
+        404,
+        409,
+        422,
+        429,
+        503
+      ]
+    },
+    {
+      "name": "page-role",
+      "mode": "page",
+      "method": "POST",
+      "path": "/t/{tenant}/members/{actor}/role",
+      "entry": "page-role",
+      "fields": {
+        "role": {
+          "label": "Role",
+          "type": "choice",
+          "values": [
+            "author",
+            "reviewer",
+            "auditor",
+            "administrator",
+            "revoked"
+          ]
+        }
+      },
+      "button": "Set role",
+      "idempotent": true
+    },
+    {
+      "name": "api-role",
+      "mode": "api",
+      "method": "PUT",
+      "path": "/api/v1/tenants/{tenant}/members/{actor}/role",
+      "entry": "api-role",
+      "fields": {
+        "role": {
+          "label": "Role",
+          "type": "choice",
+          "values": [
+            "author",
+            "reviewer",
+            "auditor",
+            "administrator",
+            "revoked"
+          ]
+        }
+      },
+      "idempotent": true,
+      "summary": "Set role",
+      "statuses": [
+        200,
+        400,
+        401,
+        403,
+        404,
+        409,
+        422,
+        429,
+        503
+      ]
+    },
+    {
+      "name": "page-publish",
+      "mode": "page",
+      "method": "POST",
+      "path": "/t/{tenant}/workflows/publish",
+      "entry": "page-publish",
+      "fields": {
+        "workflow": {
+          "label": "Workflow definition",
+          "type": "json",
+          "rows": 5
+        }
+      },
+      "button": "Publish workflow",
+      "idempotent": true,
+      "transaction": false
+    },
+    {
+      "name": "api-publish",
+      "mode": "api",
+      "method": "POST",
+      "path": "/api/v1/tenants/{tenant}/workflows/publish",
+      "entry": "api-publish",
+      "fields": {
+        "workflow": {
+          "label": "Workflow definition",
+          "type": "json",
+          "rows": 5
+        }
+      },
+      "idempotent": true,
+      "summary": "Publish workflow",
+      "statuses": [
+        201,
+        400,
+        401,
+        403,
+        404,
+        409,
+        422,
+        429,
+        503
+      ],
+      "transaction": false
+    },
+    {
+      "name": "page-create",
+      "mode": "page",
+      "method": "POST",
+      "path": "/t/{tenant}/documents/create",
+      "entry": "page-create",
+      "fields": {
+        "title": {
+          "label": "Title",
+          "type": "text",
+          "max": 160
+        },
+        "body": {
+          "label": "Document text",
+          "type": "textarea",
+          "max": 16000,
+          "rows": 7
+        },
+        "amount": {
+          "label": "Amount",
+          "type": "integer"
+        }
+      },
+      "button": "Create draft",
+      "idempotent": true
+    },
+    {
+      "name": "api-create",
+      "mode": "api",
+      "method": "POST",
+      "path": "/api/v1/tenants/{tenant}/documents",
+      "entry": "api-create",
+      "fields": {
+        "title": {
+          "label": "Title",
+          "type": "text",
+          "max": 160
+        },
+        "body": {
+          "label": "Document text",
+          "type": "textarea",
+          "max": 16000,
+          "rows": 7
+        },
+        "amount": {
+          "label": "Amount",
+          "type": "integer"
+        }
+      },
+      "idempotent": true,
+      "summary": "Create draft",
+      "statuses": [
+        201,
+        400,
+        401,
+        403,
+        404,
+        409,
+        422,
+        429,
+        503
+      ]
+    },
+    {
+      "name": "page-edit",
+      "mode": "page",
+      "method": "POST",
+      "path": "/t/{tenant}/documents/{document}/edit",
+      "entry": "page-edit",
+      "fields": {
+        "expected_revision": {
+          "label": "Expected revision",
+          "type": "integer",
+          "hidden": true
+        },
+        "title": {
+          "label": "Title",
+          "type": "text",
+          "max": 160
+        },
+        "body": {
+          "label": "Document text",
+          "type": "textarea",
+          "max": 16000,
+          "rows": 7
+        },
+        "amount": {
+          "label": "Amount",
+          "type": "integer"
+        }
+      },
+      "button": "Save new revision",
+      "idempotent": true
+    },
+    {
+      "name": "api-edit",
+      "mode": "api",
+      "method": "PATCH",
+      "path": "/api/v1/tenants/{tenant}/documents/{document}",
+      "entry": "api-edit",
+      "fields": {
+        "expected_revision": {
+          "label": "Expected revision",
+          "type": "integer",
+          "hidden": true
+        },
+        "title": {
+          "label": "Title",
+          "type": "text",
+          "max": 160
+        },
+        "body": {
+          "label": "Document text",
+          "type": "textarea",
+          "max": 16000,
+          "rows": 7
+        },
+        "amount": {
+          "label": "Amount",
+          "type": "integer"
+        }
+      },
+      "idempotent": true,
+      "summary": "Save new revision",
+      "statuses": [
+        200,
+        400,
+        401,
+        403,
+        404,
+        409,
+        422,
+        429,
+        503
+      ]
+    },
+    {
+      "name": "page-delete",
+      "mode": "page",
+      "method": "POST",
+      "path": "/t/{tenant}/documents/{document}/delete",
+      "entry": "page-delete",
+      "fields": {
+        "expected_revision": {
+          "label": "Expected revision",
+          "type": "integer",
+          "hidden": true
+        }
+      },
+      "button": "Delete draft",
+      "idempotent": true
+    },
+    {
+      "name": "api-delete",
+      "mode": "api",
+      "method": "DELETE",
+      "path": "/api/v1/tenants/{tenant}/documents/{document}",
+      "entry": "api-delete",
+      "fields": {
+        "expected_revision": {
+          "label": "Expected revision",
+          "type": "integer",
+          "hidden": true
+        }
+      },
+      "idempotent": true,
+      "summary": "Delete draft",
+      "statuses": [
+        200,
+        400,
+        401,
+        403,
+        404,
+        409,
+        422,
+        429,
+        503
+      ]
+    },
+    {
+      "name": "page-submit",
+      "mode": "page",
+      "method": "POST",
+      "path": "/t/{tenant}/documents/{document}/submit",
+      "entry": "page-submit",
+      "fields": {
+        "expected_revision": {
+          "label": "Expected revision",
+          "type": "integer",
+          "hidden": true
+        }
+      },
+      "button": "Submit for review",
+      "idempotent": true
+    },
+    {
+      "name": "api-submit",
+      "mode": "api",
+      "method": "POST",
+      "path": "/api/v1/tenants/{tenant}/documents/{document}/submit",
+      "entry": "api-submit",
+      "fields": {
+        "expected_revision": {
+          "label": "Expected revision",
+          "type": "integer",
+          "hidden": true
+        }
+      },
+      "idempotent": true,
+      "summary": "Submit for review",
+      "statuses": [
+        200,
+        400,
+        401,
+        403,
+        404,
+        409,
+        422,
+        429,
+        503
+      ]
+    },
+    {
+      "name": "api-stage",
+      "mode": "api",
+      "method": "POST",
+      "path": "/api/v1/tenants/{tenant}/documents/{document}/files",
+      "entry": "api-stage",
+      "fields": {
+        "expected_revision": {
+          "label": "Expected revision",
+          "type": "integer",
+          "hidden": true
+        },
+        "filename": {
+          "label": "Filename",
+          "type": "text",
+          "max": 180
+        },
+        "length": {
+          "label": "Length",
+          "type": "integer"
+        },
+        "digest": {
+          "label": "SHA-256 digest",
+          "type": "text",
+          "max": 64
+        }
+      },
+      "idempotent": true,
+      "summary": "Stage attachment",
+      "statuses": [
+        201,
+        400,
+        401,
+        403,
+        404,
+        409,
+        422,
+        429,
+        503
+      ]
+    },
+    {
+      "name": "api-write",
+      "mode": "api",
+      "method": "PUT",
+      "path": "/api/v1/tenants/{tenant}/documents/{document}/files/{attachment}/bytes",
+      "entry": "api-write",
+      "fields": {
+        "expected_revision": {
+          "label": "Expected revision",
+          "type": "integer",
+          "hidden": true
+        },
+        "file": {
+          "label": "File",
+          "type": "file"
+        }
+      },
+      "idempotent": true,
+      "summary": "Write attachment bytes",
+      "statuses": [
+        200,
+        400,
+        401,
+        403,
+        404,
+        409,
+        422,
+        429,
+        503
+      ]
+    },
+    {
+      "name": "api-attach",
+      "mode": "api",
+      "method": "POST",
+      "path": "/api/v1/tenants/{tenant}/documents/{document}/files/{attachment}/complete",
+      "entry": "api-attach",
+      "fields": {
+        "expected_revision": {
+          "label": "Expected revision",
+          "type": "integer",
+          "hidden": true
+        }
+      },
+      "idempotent": true,
+      "summary": "Complete attachment",
+      "statuses": [
+        200,
+        400,
+        401,
+        403,
+        404,
+        409,
+        422,
+        429,
+        503
+      ]
+    },
+    {
+      "name": "page-upload",
+      "mode": "page",
+      "method": "POST",
+      "path": "/t/{tenant}/documents/{document}/upload",
+      "entry": "page-upload",
+      "fields": {
+        "expected_revision": {
+          "label": "Expected revision",
+          "type": "integer",
+          "hidden": true
+        },
+        "filename": {
+          "label": "Filename",
+          "type": "text",
+          "max": 180
+        },
+        "file": {
+          "label": "File",
+          "type": "file"
+        }
+      },
+      "button": "Attach file",
+      "idempotent": true
+    },
+    {
+      "name": "api-upload",
+      "mode": "api",
+      "method": "POST",
+      "path": "/api/v1/tenants/{tenant}/documents/{document}/upload",
+      "entry": "api-upload",
+      "fields": {
+        "expected_revision": {
+          "label": "Expected revision",
+          "type": "integer",
+          "hidden": true
+        },
+        "filename": {
+          "label": "Filename",
+          "type": "text",
+          "max": 180
+        },
+        "file": {
+          "label": "File",
+          "type": "file"
+        }
+      },
+      "idempotent": true,
+      "summary": "Attach file",
+      "statuses": [
+        201,
+        400,
+        401,
+        403,
+        404,
+        409,
+        422,
+        429,
+        503
+      ]
+    },
+    {
+      "name": "page-vote",
+      "mode": "page",
+      "method": "POST",
+      "path": "/t/{tenant}/reviews/{submission}/vote",
+      "entry": "page-vote",
+      "fields": {
+        "expected_version": {
+          "label": "Expected version",
+          "type": "integer",
+          "hidden": true
+        },
+        "decision": {
+          "label": "Decision",
+          "type": "choice",
+          "values": [
+            "approve",
+            "reject"
+          ]
+        },
+        "note": {
+          "label": "Decision note",
+          "type": "textarea",
+          "max": 2000,
+          "required": false,
+          "default": ""
+        }
+      },
+      "button": "Record decision",
+      "idempotent": true
+    },
+    {
+      "name": "api-vote",
+      "mode": "api",
+      "method": "POST",
+      "path": "/api/v1/tenants/{tenant}/reviews/{submission}/vote",
+      "entry": "api-vote",
+      "fields": {
+        "expected_version": {
+          "label": "Expected version",
+          "type": "integer",
+          "hidden": true
+        },
+        "decision": {
+          "label": "Decision",
+          "type": "choice",
+          "values": [
+            "approve",
+            "reject"
+          ]
+        },
+        "note": {
+          "label": "Decision note",
+          "type": "textarea",
+          "max": 2000,
+          "required": false,
+          "default": ""
+        }
+      },
+      "idempotent": true,
+      "summary": "Record decision",
+      "statuses": [
+        200,
+        400,
+        401,
+        403,
+        404,
+        409,
+        422,
+        429,
+        503
+      ]
+    },
+    {
+      "name": "page-delegate",
+      "mode": "page",
+      "method": "POST",
+      "path": "/t/{tenant}/reviews/{submission}/delegate",
+      "entry": "page-delegate",
+      "fields": {
+        "expected_version": {
+          "label": "Expected version",
+          "type": "integer",
+          "hidden": true
+        },
+        "email": {
+          "label": "Email address",
+          "type": "email",
+          "max": 254
+        }
+      },
+      "button": "Delegate review",
+      "idempotent": true
+    },
+    {
+      "name": "api-delegate",
+      "mode": "api",
+      "method": "POST",
+      "path": "/api/v1/tenants/{tenant}/reviews/{submission}/delegate",
+      "entry": "api-delegate",
+      "fields": {
+        "expected_version": {
+          "label": "Expected version",
+          "type": "integer",
+          "hidden": true
+        },
+        "email": {
+          "label": "Email address",
+          "type": "email",
+          "max": 254
+        }
+      },
+      "idempotent": true,
+      "summary": "Delegate review",
+      "statuses": [
+        200,
+        400,
+        401,
+        403,
+        404,
+        409,
+        422,
+        429,
+        503
+      ]
+    },
+    {
+      "name": "page-redrive",
+      "mode": "page",
+      "method": "POST",
+      "path": "/t/{tenant}/deliveries/{delivery}/retry",
+      "entry": "page-redrive",
+      "fields": {},
+      "button": "Retry delivery",
+      "idempotent": true
+    },
+    {
+      "name": "api-redrive",
+      "mode": "api",
+      "method": "POST",
+      "path": "/api/v1/tenants/{tenant}/deliveries/{delivery}/retry",
+      "entry": "api-redrive",
+      "fields": {},
+      "idempotent": true,
+      "summary": "Retry delivery",
+      "statuses": [
+        200,
+        400,
+        401,
+        403,
+        404,
+        409,
+        422,
+        429,
+        503
+      ]
+    }
+  ],
+  "processes": {
+    "worker": "worker-once",
+    "policy": "compile-policy",
+    "admin": {
+      "migrate": "migrate",
+      "provision": "provision",
+      "doctor": "operator-doctor",
+      "backup": "backup",
+      "restore": "restore"
+    },
+    "page_error": "page-error"
+  }
+}

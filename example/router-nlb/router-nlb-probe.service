@@ -1,0 +1,15 @@
+[Unit]
+Description=Check configured backend TCP endpoints
+After=router-nlb.service
+
+[Service]
+Type=oneshot
+User=router-nlb
+Group=router-nlb
+ExecStart=/opt/router-nlb/router-nlb --db /var/lib/router-nlb/state.sqlite probe
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+NoNewPrivileges=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/router-nlb
+UMask=0077

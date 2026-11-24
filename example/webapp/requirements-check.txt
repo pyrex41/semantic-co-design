@@ -1,0 +1,7 @@
+-r requirements-build.txt
+aiosmtpd==1.4.6
+atpublic==6.0.2
+attrs==26.1.0
+playwright==1.59.0
+pyee==13.0.1
+greenlet==3.2.5

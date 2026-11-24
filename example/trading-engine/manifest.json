@@ -1,0 +1,506 @@
+{
+  "name": "coinbase-spot-engine",
+  "abi": 1,
+  "schema": 1,
+  "sources": [
+    "amounts.shen",
+    "market.shen",
+    "account.shen",
+    "ledger.shen",
+    "execution.shen",
+    "session.shen",
+    "strategy.shen",
+    "entry.shen"
+  ],
+  "entries": {
+    "acquire-writer": {
+      "function": "tx.entry",
+      "static": [
+        "acquire-writer"
+      ]
+    },
+    "start": {
+      "function": "tx.entry",
+      "static": [
+        "start"
+      ]
+    },
+    "metadata": {
+      "function": "tx.entry",
+      "static": [
+        "metadata"
+      ]
+    },
+    "snapshot": {
+      "function": "tx.entry",
+      "static": [
+        "snapshot"
+      ]
+    },
+    "delta": {
+      "function": "tx.entry",
+      "static": [
+        "delta"
+      ]
+    },
+    "disconnect": {
+      "function": "tx.entry",
+      "static": [
+        "disconnect"
+      ]
+    },
+    "configure-strategy": {
+      "function": "tx.entry",
+      "static": [
+        "configure-strategy"
+      ]
+    },
+    "strategy": {
+      "function": "tx.entry",
+      "static": [
+        "strategy"
+      ]
+    },
+    "admit": {
+      "function": "tx.entry",
+      "static": [
+        "admit"
+      ]
+    },
+    "claim": {
+      "function": "tx.entry",
+      "static": [
+        "claim"
+      ]
+    },
+    "send-result": {
+      "function": "tx.entry",
+      "static": [
+        "send-result"
+      ]
+    },
+    "cancel": {
+      "function": "tx.entry",
+      "static": [
+        "cancel"
+      ]
+    },
+    "cancel-result": {
+      "function": "tx.entry",
+      "static": [
+        "cancel-result"
+      ]
+    },
+    "fill": {
+      "function": "tx.entry",
+      "static": [
+        "fill"
+      ]
+    },
+    "order-evidence": {
+      "function": "tx.entry",
+      "static": [
+        "order-evidence"
+      ]
+    },
+    "reconcile": {
+      "function": "tx.entry",
+      "static": [
+        "reconcile"
+      ]
+    },
+    "pause": {
+      "function": "tx.entry",
+      "static": [
+        "pause"
+      ]
+    },
+    "kill": {
+      "function": "tx.entry",
+      "static": [
+        "kill"
+      ]
+    },
+    "resume": {
+      "function": "tx.entry",
+      "static": [
+        "resume"
+      ]
+    },
+    "limits": {
+      "function": "tx.entry",
+      "static": [
+        "limits"
+      ]
+    },
+    "disable": {
+      "function": "tx.entry",
+      "static": [
+        "disable"
+      ]
+    },
+    "tick": {
+      "function": "tx.entry",
+      "static": [
+        "tick"
+      ]
+    },
+    "rotate": {
+      "function": "tx.entry",
+      "static": [
+        "rotate"
+      ]
+    },
+    "propose-adjustment": {
+      "function": "tx.entry",
+      "static": [
+        "propose-adjustment"
+      ]
+    },
+    "approve-adjustment": {
+      "function": "tx.entry",
+      "static": [
+        "approve-adjustment"
+      ]
+    },
+    "blotter": {
+      "function": "tx.entry",
+      "static": [
+        "blotter"
+      ]
+    },
+    "journal": {
+      "function": "tx.entry",
+      "static": [
+        "journal"
+      ]
+    },
+    "executions": {
+      "function": "tx.entry",
+      "static": [
+        "executions"
+      ]
+    },
+    "exceptions": {
+      "function": "tx.entry",
+      "static": [
+        "exceptions"
+      ]
+    },
+    "status": {
+      "function": "tx.entry",
+      "static": [
+        "status"
+      ]
+    },
+    "wire": {
+      "function": "tx.entry",
+      "static": [
+        "wire"
+      ]
+    },
+    "order": {
+      "function": "tx.entry",
+      "static": [
+        "order"
+      ]
+    },
+    "authorize-send": {
+      "function": "tx.entry",
+      "static": [
+        "authorize-send"
+      ]
+    },
+    "http-result": {
+      "function": "tx.entry",
+      "static": [
+        "http-result"
+      ]
+    },
+    "venue-frame": {
+      "function": "tx.entry",
+      "static": [
+        "venue-frame"
+      ]
+    },
+    "rest-result": {
+      "function": "tx.entry",
+      "static": [
+        "rest-result"
+      ]
+    },
+    "activate-release": {
+      "function": "tx.entry",
+      "static": [
+        "activate-release"
+      ]
+    }
+  },
+  "capabilities": {},
+  "access": {
+    "start": {
+      "roles": [
+        "operator"
+      ],
+      "read-only": false
+    },
+    "configure-strategy": {
+      "roles": [
+        "operator"
+      ],
+      "read-only": false
+    },
+    "cancel": {
+      "roles": [
+        "operator"
+      ],
+      "read-only": false
+    },
+    "pause": {
+      "roles": [
+        "operator"
+      ],
+      "read-only": false
+    },
+    "kill": {
+      "roles": [
+        "operator"
+      ],
+      "read-only": false
+    },
+    "resume": {
+      "roles": [
+        "operator"
+      ],
+      "read-only": false
+    },
+    "limits": {
+      "roles": [
+        "operator"
+      ],
+      "read-only": false
+    },
+    "disable": {
+      "roles": [
+        "operator"
+      ],
+      "read-only": false
+    },
+    "rotate": {
+      "roles": [
+        "operator"
+      ],
+      "read-only": false
+    },
+    "propose-adjustment": {
+      "roles": [
+        "operator"
+      ],
+      "read-only": false
+    },
+    "approve-adjustment": {
+      "roles": [
+        "operator"
+      ],
+      "read-only": false
+    },
+    "metadata": {
+      "roles": [
+        "feed"
+      ],
+      "read-only": false
+    },
+    "snapshot": {
+      "roles": [
+        "feed"
+      ],
+      "read-only": false
+    },
+    "delta": {
+      "roles": [
+        "feed"
+      ],
+      "read-only": false
+    },
+    "disconnect": {
+      "roles": [
+        "feed"
+      ],
+      "read-only": false
+    },
+    "strategy": {
+      "roles": [
+        "strategy"
+      ],
+      "read-only": false
+    },
+    "admit": {
+      "roles": [
+        "strategy"
+      ],
+      "read-only": false
+    },
+    "acquire-writer": {
+      "roles": [
+        "writer"
+      ],
+      "read-only": false
+    },
+    "claim": {
+      "roles": [
+        "writer"
+      ],
+      "read-only": false
+    },
+    "send-result": {
+      "roles": [
+        "writer"
+      ],
+      "read-only": false
+    },
+    "tick": {
+      "roles": [
+        "writer"
+      ],
+      "read-only": false
+    },
+    "cancel-result": {
+      "roles": [
+        "writer"
+      ],
+      "read-only": false
+    },
+    "fill": {
+      "roles": [
+        "reconcile"
+      ],
+      "read-only": false
+    },
+    "order-evidence": {
+      "roles": [
+        "reconcile"
+      ],
+      "read-only": false
+    },
+    "reconcile": {
+      "roles": [
+        "reconcile"
+      ],
+      "read-only": false
+    },
+    "blotter": {
+      "roles": [
+        "observer"
+      ],
+      "read-only": true
+    },
+    "journal": {
+      "roles": [
+        "observer"
+      ],
+      "read-only": true
+    },
+    "executions": {
+      "roles": [
+        "observer"
+      ],
+      "read-only": true
+    },
+    "exceptions": {
+      "roles": [
+        "observer"
+      ],
+      "read-only": true
+    },
+    "status": {
+      "roles": [
+        "observer",
+        "operator",
+        "writer",
+        "reconcile"
+      ],
+      "read-only": true
+    },
+    "wire": {
+      "roles": [
+        "observer",
+        "feed",
+        "writer",
+        "reconcile"
+      ],
+      "read-only": true
+    },
+    "order": {
+      "roles": [
+        "observer"
+      ],
+      "read-only": true
+    },
+    "authorize-send": {
+      "roles": [
+        "writer"
+      ],
+      "read-only": false
+    },
+    "http-result": {
+      "roles": [
+        "writer"
+      ],
+      "read-only": false
+    },
+    "venue-frame": {
+      "roles": [
+        "feed"
+      ],
+      "read-only": false
+    },
+    "rest-result": {
+      "roles": [
+        "feed"
+      ],
+      "read-only": false
+    },
+    "activate-release": {
+      "roles": [
+        "operator"
+      ],
+      "read-only": false
+    }
+  },
+  "wire-entry": "wire",
+  "transport": {
+    "claim": "claim",
+    "authorize": "authorize-send",
+    "result": "http-result",
+    "ready-status": "claimed",
+    "authorized-status": "transport-authorized"
+  },
+  "stream": {
+    "entry": "venue-frame",
+    "rest": "rest-result",
+    "disconnect": "disconnect",
+    "subscribe": {
+      "kind": "subscribe"
+    },
+    "rest-status": [
+      "feed-subscribed",
+      "feed-resnapshot",
+      "feed-fills"
+    ],
+    "stop-status": [
+      "session-rejected",
+      "stale-fence",
+      "stale-clock"
+    ],
+    "clock-field": "time"
+  },
+  "activation": "activate-release",
+  "activation-status": "release-activated",
+  "assets": [
+    "event_host.py",
+    "transport.py"
+  ],
+  "launchers": {
+    "engine": "event_host.py"
+  }
+}

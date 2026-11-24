@@ -1,0 +1,126 @@
+{
+  "name": "router-nlb",
+  "version": "0.1.0",
+  "sources": [
+    "appliance.shen",
+    "bgp.shen"
+  ],
+  "capabilities": {},
+  "entries": {
+    "boot": {
+      "function": "rt.boot"
+    },
+    "candidate": {
+      "function": "rt.candidate"
+    },
+    "commit": {
+      "function": "rt.commit"
+    },
+    "rollback": {
+      "function": "rt.rollback"
+    },
+    "frame": {
+      "function": "rt.packet-entry"
+    },
+    "batch": {
+      "function": "rt.batch"
+    },
+    "health": {
+      "function": "rt.health",
+      "static": [
+        "healthy"
+      ]
+    },
+    "drain": {
+      "function": "rt.health",
+      "static": [
+        "draining"
+      ]
+    },
+    "tick": {
+      "function": "rt.tick"
+    },
+    "status": {
+      "function": "rt.status"
+    },
+    "lease": {
+      "function": "rt.lease"
+    },
+    "peer": {
+      "function": "bgp.event"
+    },
+    "replica": {
+      "function": "rt.replica"
+    },
+    "replica-ack": {
+      "function": "rt.replica-ack"
+    },
+    "recover": {
+      "function": "rt.recover"
+    },
+    "probes": {
+      "function": "rt.probes"
+    }
+  },
+  "assets": [
+    "driver.py",
+    "config.schema.json",
+    "topology.json",
+    "router-nlb.service",
+    "router-nlb-probe.service",
+    "router-nlb-probe.timer"
+  ],
+  "processes": {
+    "packet": {
+      "entry": "frame",
+      "request-bytes": "frame",
+      "response-bytes": "tx",
+      "interface": "port"
+    },
+    "management": {
+      "boot": "boot",
+      "candidate": "candidate",
+      "commit": "commit",
+      "rollback": "rollback",
+      "health": "health",
+      "drain": "drain",
+      "status": "status",
+      "lease": "lease",
+      "replica": "replica",
+      "recover": "recover"
+    },
+    "replication": {
+      "offer": "replicate",
+      "operation": "replica",
+      "arg": "offer",
+      "ack": "ack",
+      "success": "replica-ack"
+    },
+    "peer": {
+      "entry": "peer",
+      "id": "peer",
+      "event": "event",
+      "request": "bytes",
+      "response": "send",
+      "close": "close",
+      "header": 19,
+      "offset": 16,
+      "width": 2,
+      "maximum": 4096
+    },
+    "probe": {
+      "entry": "probes",
+      "response": "probes",
+      "target": "target",
+      "outcome": "health",
+      "value": "value"
+    },
+    "recovery": {
+      "entry": "recover",
+      "success": "recovered"
+    }
+  },
+  "launchers": {
+    "router-nlb": "driver.py"
+  }
+}
