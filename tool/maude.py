@@ -170,7 +170,7 @@ ENVIRONMENT = """mod ENV is
   op lev : Int Val -> Thing [ctor] .        --- a local event; lost when the node crashes
   op out : Val -> Thing [ctor] .            --- an output on its way to the outside
   ops got dropped lostw : Val -> Thing [ctor] .
-  op rows : Int Val -> Thing [ctor] .
+  ops rows state : Int Val -> Thing [ctor] .
   op budget : Qid Nat -> Thing [ctor] .
   op noP : -> PSet [ctor] .
   op px : Val -> PSet [ctor] .
@@ -244,8 +244,8 @@ ENVIRONMENT = """mod ENV is
    if px(Pre) PS := allPrefixes(PW) .
 
   op obs : Soup -> Soup .                   --- what an outside observer can know
-  eq obs(node(I, S) R) = obs(R) .
-  eq obs(down(I) R) = obs(R) .
+  eq obs(node(I, S) R) = %SEEN% obs(R) .
+  eq obs(down(I) R) = %UNSEEN% obs(R) .
   eq obs(ev(I, E) R) = obs(R) .
   eq obs(lev(I, E) R) = obs(R) .
   eq obs(out(V) R) = obs(R) .
@@ -355,6 +355,8 @@ def environment_module(schema, prof, workload):
     out = ENVIRONMENT
     for marker, text in (("EFFECTS", "\n".join(effects)), ("STEPS", "\n".join(steps)),
                          ("ACK", ack), ("MISSING", missing), ("BOOT", boot),
+                         ("SEEN", "state(I, S)" if prof["observe_states"] else "none"),
+                         ("UNSEEN", "state(I, q('down))" if prof["observe_states"] else "none"),
                          ("WORKLOAD", workload["rules"]), ("INIT", soup)):
         if out.count(f"%{marker}%") != 1:
             raise AssertionError(marker)

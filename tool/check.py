@@ -110,7 +110,8 @@ def maude_refinement(modules, schema, traces):
     return len(pairs)
 
 
-def maude_agreement(schema, native, workload, maude_workload, prof, inits, *, source=None):
+def maude_agreement(schema, native, workload, maude_workload, prof, inits, *, source=None,
+                    max_states=200000, timeout=300):
     """Reachable observations of the Maude model and of the simulator, for one untimed profile.
 
     Returns (simulator set, Maude set, facts). Equality is the caller's assertion, so a
@@ -118,8 +119,8 @@ def maude_agreement(schema, native, workload, maude_workload, prof, inits, *, so
     """
     source = schema.source if source is None else source
     modules = maude.step_module(source) + maude.environment_module(schema, prof, maude_workload)
-    reached, states, trap = maude.search(modules)
-    explored, sim_states, edges = sim.explore(native, workload, prof, inits)
+    explored, sim_states, edges = sim.explore(native, workload, prof, inits, max_states=max_states)
+    reached, states, trap = maude.search(modules, timeout=timeout)
     return explored, reached, {"maude_states": states, "maude_observations": len(reached),
                                "sim_states": sim_states, "sim_edges": edges,
                                "sim_observations": len(explored), "maude_trap": trap}

@@ -1,0 +1,20 @@
+{
+  "name": "gossip",
+  "spec": "spec.shen",
+  "step": "ring.step",
+  "init": "ring.init",
+  "symbols": [],
+  "state": ["num", "num", "num", "num"],
+  "events": {
+    "restart": {"role": "restart"},
+    "set": {"role": "request", "fields": ["num"]},
+    "heard": {"role": "recv", "fields": ["num", "num"]},
+    "alarm": {"role": "timer", "fields": ["num"]}
+  },
+  "effects": {
+    "tell": {"role": "send", "deliver": "heard", "fields": ["num", "num"]},
+    "arm": {"role": "timer-set", "fields": ["num", "num"]}
+  },
+  "max_effects": 2,
+  "invariants": {"file": "invariants.shen", "state": [], "trace": ["inv.only-requested-values"]}
+}

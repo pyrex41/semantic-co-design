@@ -43,6 +43,7 @@ def order(values):
 DEFAULT_PROFILE = {
     "nodes": 1,
     "timed": True,                  # False: no delays, the clock stays at 0 (exploration)
+    "observe_states": False,        # whether node states are part of an observation
     "budget": {"crash": 0, "drop": 0, "dup": 0, "partition": 0},
     "max_steps": 200,
     # Seeded schedules only.
@@ -197,6 +198,9 @@ class World:
         things = {("rows", node, self.rows(node)) for node in range(self.n)}
         things |= {("got", v) for v in self.got} | {("dropped", v) for v in self.dropped}
         things |= {("lostw", v) for v in self.lostw}
+        if self.profile["observe_states"]:
+            things |= {("state", node, "down" if s is None else self.schema.decode_state(s))
+                       for node, s in enumerate(self.state)}
         things.add(freeze(self.workload.observe(self)))
         return frozenset(things)
 
