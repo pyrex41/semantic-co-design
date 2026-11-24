@@ -1,15 +1,12 @@
-fmod RAILWAY-MUTANT is
-  sorts Route Train State Event .
-  ops none r1 r2 : -> Route [ctor] . ops no yes : -> Train [ctor] .
-  op st : Route Train Route -> State [ctor] . ops req can ent clr : Route -> Event [ctor] .
-  op _;_ : State Event -> State [ctor] . vars R S : Route . var T : Train .
-  eq st(none,no,S) ; req(R) = st(R,no,R) .
-  eq st(R,no,S) ; can(R) = st(none,no,none) .
-  eq st(R,yes,S) ; can(R) = st(none,yes,none) . *** faulty release while occupied
-  eq st(R,no,S) ; ent(R) = st(R,yes,S) .
-  eq st(R,yes,S) ; clr(R) = st(none,no,none) .
-  eq st(R,T,S) ; req(R) = st(R,T,S) [owise] .
-  eq st(R,T,S) ; ent(S) = st(R,T,S) [owise] .
-endfm
+mod RAILWAY-MUTANT is
+  sorts Route Train State .
+  ops none r1 r2 : -> Route [ctor] .
+  ops no yes : -> Train [ctor] .
+  op st : Route Train Route -> State [ctor] .
+  rl [request-r1] : st(none,no,none) => st(r1,no,r1) .
+  rl [entry-r1] : st(r1,no,r1) => st(r1,yes,r1) .
+  *** Faulty cancellation releases the reservation while train remains.
+  rl [faulty-cancel-r1] : st(r1,yes,r1) => st(none,yes,none) .
+endm
 search [1] st(none,no,none) =>+ st(none,yes,none) .
 quit
