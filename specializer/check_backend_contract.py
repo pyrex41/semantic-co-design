@@ -11,11 +11,11 @@ from specializer.backend import normalize
 def check():
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp)
-        program = ["seq", ["set", 0, ["add", 1, 1]],
+        program = ["seq", ["set", 0, ["add", "X", 1]],
                    ["while", ["lt", ["var", 1], ["len"]],
                     ["seq", ["put", 0, ["var", 1], ["mul", ["at", ["var", 1]], ["var", 0]]],
                      ["emit", ["get", 0, ["var", 1]]], ["set", 1, ["add", ["var", 1], 1]]]]]
-        (path / "manifest.json").write_text(json.dumps(dict(entry="specialize", static_type="unit",
+        (path / "manifest.json").write_text(json.dumps(dict(entry="specialize", static_type="integer offset",
                 dynamic_type="integers", result_type="integers")))
         def term(x, language):
             if not isinstance(x, list):
@@ -27,9 +27,9 @@ def check():
                 f"var X : T . eq specialize(X) = {term(program, 'maude')} . endfm\n")
         for source in ("shen", "maude"):
             rows = [[], [3, -7, 9], [4]]
-            assert concrete("scale", source, [], rows, directory=path) == [[], [6,-14,18], [8]]
+            assert concrete("scale", source, 1, rows, directory=path) == [[], [6,-14,18], [8]]
             binary = path / source
-            assert build("scale", source, [], binary, directory=path) == normalize(program)
+            assert build("scale", source, 1, binary, directory=path) == normalize([program[0], ["set", 0, 2], program[2]])
             result = subprocess.run([binary], input="\n3 -7 9\n4\n", capture_output=True,
                                     text=True, check=True, timeout=5)
             assert result.stdout == "\n6 -14 18\n8\n"

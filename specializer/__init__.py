@@ -83,15 +83,20 @@ def _evaluate(path, source, static, rows):
     library = ROOT / f"stage.{source}"
     count = 1 if rows is None else len(rows)
     if source == "shen":
-        cmd = [os.environ.get("SHEN_JIT", "shen-jit"), "eval", "-l", str(library),
-               "-l", str(spec), "-e", "(set *maximum-print-sequence-size* 1000000)"]
-        expressions = [f"(specialize {fixed})"]
-        if rows is not None:
-            cmd += ["-e", f"(do (set *stage-program* (specialize {fixed})) 0)"]
-            expressions = [f"(stage-eval (value *stage-program*) {_term(r, source)})" for r in rows]
-        for expression in expressions:
-            cmd.extend(["-e", expression])
-        request = ""
+        expressions = ["(set *maximum-print-sequence-size* 1000000)"]
+        if rows is None:
+            expressions.append(f"(specialize {fixed})")
+        else:
+            expressions.append(f"(do (set *stage-program* (specialize {fixed})) 0)")
+            expressions.extend(f"(stage-eval (value *stage-program*) {_term(r, source)})"
+                               for r in rows)
+        # A driver file also handles rows larger than the OS argument-size limit.
+        with tempfile.TemporaryDirectory() as work:
+            driver = Path(work) / "evaluate.shen"
+            driver.write_text("\n".join(expressions) + "\n")
+            cmd = [os.environ.get("SHEN_JIT", "shen-jit"), "eval", "-l", str(library),
+                   "-l", str(spec), "-l", str(driver)]
+            proc = subprocess.run(cmd, text=True, capture_output=True, timeout=120)
     else:
         cmd = [os.environ.get("MAUDE", "maude"), "-no-banner", "-no-advise", "-batch",
                str(library), str(spec)]
@@ -99,19 +104,6 @@ def _evaluate(path, source, static, rows):
         expressions = [entry] if rows is None else [
             f"run({entry},{_term(r, source)})" for r in rows]
         request = "".join(f"red in SPEC : {e} .\n" for e in expressions) + "quit\n"
-    if source == "shen" and sum(len(x) for x in cmd) > 60000:
-        # Keep large data vectors out of platform-specific argv limits.
-        with tempfile.TemporaryDirectory() as temp:
-            driver = Path(temp) / "evaluate.shen"
-            driver.write_text("\n".join(expressions) + "\n")
-            first = len(cmd) - 2 * len(expressions)
-            # The static value can itself exceed the argument limit.
-            if rows is not None:
-                driver.write_text(cmd[first-1] + "\n" + driver.read_text())
-                first -= 2
-            cmd = cmd[:first] + ["-l", str(driver)]
-            proc = subprocess.run(cmd, text=True, capture_output=True, timeout=120)
-    else:
         proc = subprocess.run(cmd, input=request, text=True, capture_output=True, timeout=120)
     if proc.returncode or proc.stderr.strip():
         raise ValueError(f"{source} evaluation failed: {proc.stderr[-3000:]}\n{proc.stdout[-1000:]}")
