@@ -47,30 +47,46 @@ def qualify(work, args):
     reply = run(PYTHON, packages[WEB] / "policy", input=json.dumps(policy), text=True, stdout=subprocess.PIPE)
     assert json.loads(reply.stdout) == {**policy, "abi": 1}
 
+    if not (args.full or args.state_machines):
+        run(PYTHON, TRADING / "check.py", packages[TRADING])
+        run(PYTHON, ROUTER / "check.py", packages[ROUTER], "--replay-only")
+        print("Passed package and language checks.")
+        return
+
     if args.full:
         run(PYTHON, TRADING / "check.py")
         peer = ["--gobgp", args.gobgp] if args.gobgp else []
         run(PYTHON, ROUTER / "check.py", packages[ROUTER], "--compiler", WEB / "appc.py", *peer)
-        chrome = ["--chromium", args.chromium] if args.chromium else []
-        with database(work) as db:
+    else:
+        run(PYTHON, TRADING / "check_reachable.py", packages[TRADING])
+        run(PYTHON, ROUTER / "check.py", packages[ROUTER], "--state-law-only")
+
+    chrome = ["--chromium", args.chromium] if args.chromium else []
+    with database(work) as db:
+        if args.full:
             run(PYTHON, WEB / "check.py", "--database", db, "--release", packages[WEB], "--frozen-change", *chrome)
-            for mode in ([], ["--release", packages[WEB]]):
+        for mode in ([], ["--release", packages[WEB]]):
+            run(PYTHON, WEB / "check_invariants.py", "--database", db, *mode, *chrome)
+            if args.full:
                 run(PYTHON, WEB / "check_restore.py", "--database", db, *mode)
                 run(PYTHON, WEB / "check_recovery.py", "--database", db, *mode, *chrome)
-    else:
-        run(PYTHON, TRADING / "check.py", packages[TRADING])
-        run(PYTHON, ROUTER / "check.py", packages[ROUTER], "--replay-only")
-    print("Passed package and language checks" + (" plus local public-interface qualification." if args.full else "."))
+    print("Passed local public-interface qualification." if args.full else "Passed reachable-state checks for all three products.")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--full", action="store_true", help="include browser, database, socket and process-fault gates")
-    parser.add_argument("--chromium", type=Path, help="installed Chromium executable for --full")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--full", action="store_true", help="include browser, database, socket and process-fault gates")
+    mode.add_argument("--state-machines", action="store_true", help="build and check generated transition histories for all three products")
+    parser.add_argument("--chromium", type=Path, help="installed Chromium executable for browser checks")
     parser.add_argument("--gobgp", type=Path, help="directory with gobgp and gobgpd for independent peer qualification")
     args = parser.parse_args()
-    if (args.chromium or args.gobgp) and not args.full:
-        parser.error("--chromium and --gobgp apply to --full")
+    if not __debug__:
+        parser.error("qualification requires Python assertions enabled")
+    if args.gobgp and not args.full:
+        parser.error("--gobgp applies to --full")
+    if args.chromium and not (args.full or args.state_machines):
+        parser.error("--chromium requires --full or --state-machines")
     os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
     os.environ["PATH"] = str(Path(PYTHON).parent) + os.pathsep + os.environ["PATH"]
     with tempfile.TemporaryDirectory(prefix="app-check-", dir="/tmp") as directory:

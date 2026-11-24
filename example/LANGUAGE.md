@@ -25,4 +25,14 @@ App Shen is an application language with first-order Shen definition and clause 
 | Trading | Bid/ask rounding helpers return prices on the tick grid. | The two grid points enclose the input; each adjustment is strictly less than one tick. Integer prices 0–128 and ticks 1–16. |
 | Router | A recovered NAT deadline covers the saved idle and reservation deadlines. | Recovery chooses an existing deadline, preserves all other fields and row order, and a second recovery leaves the result unchanged. The gate generates empty and two-flow lists, including legacy rows without reservations. |
 
-The browser, exchange-process and packet-port suites separately exercise persistence and real driver boundaries. Their fixed histories establish concrete outcomes. A general state-machine invariant also needs an initial-state condition and preservation across reachable transitions. Comparing generated behavior with its interpreter alone cannot establish that both satisfy an independent requirement.
+## Reachable-state invariants
+
+The state-machine gates generate operation histories and apply them to the application. The invariant consumes the resulting state or durable records after each observed step. This can catch a defect shared by the reference and generated implementations, even when their outputs agree.
+
+| Application | Invariant | Observation boundary |
+|---|---|---|
+| [Approval SQL law](webapp/terminal_delivery.sql) | A pending submission has no terminal effect. A terminal submission has one matching close record and delivery intent for its tenant and submission. | Committed PostgreSQL records, including after request interruption and replay. SMTP acknowledgment is a separate external effect. |
+| [Trading App Shen laws](trading-engine/invariants.shen) | Per-asset balances agree with the ledger, and aggregate reservations agree with exposure held by individual orders. | Application transitions, including reconciliation and replay. An authorized cash adjustment must appear in the journal. |
+| [Router App Shen law](router-nlb/ownership.shen) | A packet lookup or allocated NAT tuple has a single live binding. Active and standby copies of the same binding can coexist. | Router transitions and persisted replica state under the lease assumptions in the operator guide. |
+
+Run `python example/qualify.py --state-machines` in the [qualification environment](README.md#qualification-from-a-checkout). The [approval](webapp/check_invariants.py), [trading](trading-engine/check_reachable.py) and [router](router-nlb/check.py) checks report the finite domains and fault boundaries exercised. Passing them establishes preservation along the explored paths. An unbounded inductive proof would also have to cover every permitted transition, every valid input and the contracts of the external drivers.

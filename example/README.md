@@ -24,6 +24,8 @@ python -m playwright install chromium
 python example/qualify.py --full
 ```
 
+To run just the generated state-machine histories for all three products in the same environment, use `python example/qualify.py --state-machines`. Each product checks its invariant after intermediate transitions, including failure and recovery. The full gate includes these checks. See the [invariants and coverage bounds](LANGUAGE.md#reachable-state-invariants).
+
 Pass `--chromium PATH` for an existing browser and `--gobgp DIR` for the GoBGP 3.37.0 binaries to include independent peer qualification. The runner creates and shuts down a private PostgreSQL cluster, builds to a temporary directory and uses only local test accounts and transports. Authenticated exchange operations, cross-host failure, physical networking and production load require separate infrastructure.
 
 ## What must be built in the compiler
