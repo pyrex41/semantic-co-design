@@ -1,0 +1,77 @@
+{
+  "platform": "macOS-27.2.1-arm64-arm-64bit",
+  "machine": "arm64",
+  "python": "3.9.6",
+  "sqlite_version": "3.54.0",
+  "residual_bytes": 351,
+  "residual_sha256": "1ac87063442dff1f19560d9f7ab5c9516409026e51ab85a43b31086a4119356e",
+  "generation": {
+    "median_ns": 30167,
+    "q1_ns": 29834,
+    "q3_ns": 31166
+  },
+  "injected": {
+    "first_history_ns": {
+      "interpreter": 13917,
+      "residual": 6167,
+      "direct": 11167
+    },
+    "histories_per_batch": 4000,
+    "rounds": 21,
+    "per_history": {
+      "interpreter": {
+        "median_ns": 1335,
+        "q1_ns": 1167,
+        "q3_ns": 1541
+      },
+      "residual": {
+        "median_ns": 1064,
+        "q1_ns": 981,
+        "q3_ns": 1299
+      },
+      "direct": {
+        "median_ns": 1110,
+        "q1_ns": 963,
+        "q3_ns": 1286
+      }
+    },
+    "paired_savings": {
+      "median_ns": 185,
+      "q1_ns": 15,
+      "q3_ns": 308
+    },
+    "median_break_even_histories": 163
+  },
+  "sqlite": {
+    "first_history_ns": {
+      "interpreter": 9535292,
+      "residual": 6759959,
+      "direct": 5461167
+    },
+    "histories_per_batch": 4,
+    "rounds": 21,
+    "per_history": {
+      "interpreter": {
+        "median_ns": 9851073,
+        "q1_ns": 7357760,
+        "q3_ns": 13939083
+      },
+      "residual": {
+        "median_ns": 9961448,
+        "q1_ns": 7192990,
+        "q3_ns": 18110083
+      },
+      "direct": {
+        "median_ns": 9923927,
+        "q1_ns": 7896625,
+        "q3_ns": 15463886
+      }
+    },
+    "paired_savings": {
+      "median_ns": 109719,
+      "q1_ns": -3304344,
+      "q3_ns": 2694614
+    },
+    "median_break_even_histories": 1
+  }
+}

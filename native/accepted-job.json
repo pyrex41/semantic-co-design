@@ -1,0 +1,20 @@
+{
+  "types": {"Digest": "sha256"},
+  "storage": {"effect": "keyed-state", "key": "uint32"},
+  "parameters": {"cancel": ["withdrawn", "pending"]},
+  "initial": "empty",
+  "states": {"empty": null, "pending": "Digest", "withdrawn": "Digest", "delivered": "Digest"},
+  "events": {"submit": "Digest", "cancel": null, "work": null},
+  "outputs": {"receipt": "Digest", "conflict": null, "cancelled": null, "deliver": "Digest"},
+  "rules": [
+    ["empty", "submit", "always", ["pending", "input"], ["receipt", "input"]],
+    ["pending", "submit", "equal", ["pending", "stored"], ["receipt", "stored"]],
+    ["pending", "submit", "different", ["pending", "stored"], "conflict"],
+    ["withdrawn", "submit", "equal", ["withdrawn", "stored"], ["receipt", "stored"]],
+    ["withdrawn", "submit", "different", ["withdrawn", "stored"], "conflict"],
+    ["delivered", "submit", "equal", ["delivered", "stored"], ["receipt", "stored"]],
+    ["delivered", "submit", "different", ["delivered", "stored"], "conflict"],
+    ["pending", "cancel", "always", ["$cancel", "stored"], "cancelled"],
+    ["pending", "work", "always", ["delivered", "stored"], ["deliver", "stored"]]
+  ]
+}

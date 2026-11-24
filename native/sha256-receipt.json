@@ -1,0 +1,59 @@
+{
+  "types": {
+    "Digest": "sha256"
+  },
+  "storage": {
+    "effect": "keyed-state",
+    "key": "uint32"
+  },
+  "initial": "empty",
+  "states": {
+    "empty": null,
+    "pending": "Digest"
+  },
+  "events": {
+    "submit": "Digest"
+  },
+  "outputs": {
+    "receipt": "Digest",
+    "conflict": null
+  },
+  "rules": [
+    [
+      "empty",
+      "submit",
+      "always",
+      [
+        "pending",
+        "input"
+      ],
+      [
+        "receipt",
+        "input"
+      ]
+    ],
+    [
+      "pending",
+      "submit",
+      "equal",
+      [
+        "pending",
+        "stored"
+      ],
+      [
+        "receipt",
+        "stored"
+      ]
+    ],
+    [
+      "pending",
+      "submit",
+      "different",
+      [
+        "pending",
+        "stored"
+      ],
+      "conflict"
+    ]
+  ]
+}

@@ -1,0 +1,28 @@
+fmod ACCEPTED-JOB is
+  sorts Policy Digest State Event Observation Result .
+  ops withdraw keep : -> Policy [ctor] .
+  ops a b : -> Digest [ctor] .
+  op empty : -> State [ctor] .
+  ops pending withdrawn delivered : Digest -> State [ctor] .
+  op submit : Digest -> Event [ctor] .
+  ops cancel work : -> Event [ctor] .
+  ops receipt deliver : Digest -> Observation [ctor] .
+  ops conflict cancelled ignored : -> Observation [ctor] .
+  op result : State Observation -> Result [ctor] .
+  op step : Policy State Event -> Result .
+  vars D F : Digest .
+  var P : Policy .
+  var S : State .
+  var E : Event .
+  eq step(P, empty, submit(D)) = result(pending(D), receipt(D)) .
+  eq step(P, pending(D), submit(D)) = result(pending(D), receipt(D)) .
+  eq step(P, withdrawn(D), submit(D)) = result(withdrawn(D), receipt(D)) .
+  eq step(P, delivered(D), submit(D)) = result(delivered(D), receipt(D)) .
+  ceq step(P, pending(D), submit(F)) = result(pending(D), conflict) if D =/= F .
+  ceq step(P, withdrawn(D), submit(F)) = result(withdrawn(D), conflict) if D =/= F .
+  ceq step(P, delivered(D), submit(F)) = result(delivered(D), conflict) if D =/= F .
+  eq step(withdraw, pending(D), cancel) = result(withdrawn(D), cancelled) .
+  eq step(keep, pending(D), cancel) = result(pending(D), cancelled) .
+  eq step(P, pending(D), work) = result(delivered(D), deliver(D)) .
+  eq step(P, S, E) = result(S, ignored) [owise] .
+endfm

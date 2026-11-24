@@ -1,0 +1,10 @@
+{
+  "contract": "AcceptedJob/1",
+  "mapping": "sqlite-durable-rows/1",
+  "schedule": ["submit A", "first transaction outcome", "lose reply", "restart", "retry A", "commit"],
+  "cases": [
+    {"name":"committed", "program":"submit", "outcome":"commit", "lost_reply":["ok",1], "restart":[[1,"A"]], "reply":["ok",1], "after":[[1,"A"]], "violation":null},
+    {"name":"duplicate", "program":"duplicate", "outcome":"commit", "lost_reply":["ok",1], "restart":[[1,"A"]], "reply":["ok",1], "after":[[1,"A"],[2,"A"]], "violation":"retry changed durable job rows"},
+    {"name":"rolled-back", "program":"submit", "outcome":"rollback", "lost_reply":["ok",1], "restart":[], "reply":["ok",1], "after":[[1,"A"]], "violation":null}
+  ]
+}

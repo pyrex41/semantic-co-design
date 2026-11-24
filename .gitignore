@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+/result
+/result-*
+/jobs.sqlite*
+/receipts.sqlite*
+.DS_Store

@@ -1,0 +1,258 @@
+{
+  "e1": {
+    "attempts": [
+      {
+        "file": "e1.json",
+        "result": "policy must cover exactly the public observations"
+      },
+      {
+        "file": "e1-2.json",
+        "result": "passed",
+        "worlds_passed": {
+          "dispatch": 12,
+          "voucher": 12
+        }
+      }
+    ],
+    "effort": "medium",
+    "elapsed_seconds": 53.047,
+    "model": "gpt-5.6-luna",
+    "usage": {
+      "cache_write_input_tokens": 0,
+      "cached_input_tokens": 151296,
+      "input_tokens": 164043,
+      "output_tokens": 1665,
+      "reasoning_output_tokens": 731,
+      "total_tokens": 165708
+    }
+  },
+  "e2": {
+    "attempts": [
+      {
+        "file": "e2.json",
+        "result": "policy must cover exactly the public observations"
+      },
+      {
+        "file": "e2-2.json",
+        "result": "passed",
+        "worlds_passed": {
+          "dispatch": 12,
+          "voucher": 12
+        }
+      }
+    ],
+    "effort": "medium",
+    "elapsed_seconds": 45.139,
+    "model": "gpt-5.6-luna",
+    "usage": {
+      "cache_write_input_tokens": 0,
+      "cached_input_tokens": 116224,
+      "input_tokens": 121327,
+      "output_tokens": 1471,
+      "reasoning_output_tokens": 620,
+      "total_tokens": 122798
+    }
+  },
+  "e3": {
+    "attempts": [
+      {
+        "file": "e3.json",
+        "result": "policy must cover exactly the public observations"
+      },
+      {
+        "file": "e3-2.json",
+        "result": "policy must cover exactly the public observations"
+      },
+      {
+        "file": "e3-3.json",
+        "result": "passed",
+        "worlds_passed": {
+          "dispatch": 12,
+          "voucher": 12
+        }
+      }
+    ],
+    "effort": "medium",
+    "elapsed_seconds": 106.701,
+    "model": "gpt-5.6-luna",
+    "usage": {
+      "cache_write_input_tokens": 0,
+      "cached_input_tokens": 159488,
+      "input_tokens": 165774,
+      "output_tokens": 2167,
+      "reasoning_output_tokens": 831,
+      "total_tokens": 167941
+    }
+  },
+  "i1": {
+    "attempts": [
+      {
+        "file": "i1.json",
+        "result": "policy must cover exactly the public observations"
+      },
+      {
+        "file": "i1-2.json",
+        "result": "passed",
+        "worlds_passed": {
+          "dispatch": 12,
+          "voucher": 12
+        }
+      }
+    ],
+    "effort": "medium",
+    "elapsed_seconds": 53.756,
+    "model": "gpt-5.6-luna",
+    "usage": {
+      "cache_write_input_tokens": 0,
+      "cached_input_tokens": 120448,
+      "input_tokens": 126118,
+      "output_tokens": 1489,
+      "reasoning_output_tokens": 639,
+      "total_tokens": 127607
+    }
+  },
+  "i2": {
+    "attempts": [
+      {
+        "file": "i2.json",
+        "result": "passed",
+        "worlds_passed": {
+          "dispatch": 12,
+          "voucher": 12
+        }
+      }
+    ],
+    "effort": "medium",
+    "elapsed_seconds": 21.679,
+    "model": "gpt-5.6-luna",
+    "usage": {
+      "cache_write_input_tokens": 0,
+      "cached_input_tokens": 56320,
+      "input_tokens": 60819,
+      "output_tokens": 937,
+      "reasoning_output_tokens": 496,
+      "total_tokens": 61756
+    }
+  },
+  "i3": {
+    "attempts": [
+      {
+        "file": "i3.json",
+        "result": "policy must cover exactly the public observations"
+      },
+      {
+        "file": "i3-2.json",
+        "result": "passed",
+        "worlds_passed": {
+          "dispatch": 12,
+          "voucher": 12
+        }
+      }
+    ],
+    "effort": "medium",
+    "elapsed_seconds": 46.197,
+    "model": "gpt-5.6-luna",
+    "usage": {
+      "cache_write_input_tokens": 0,
+      "cached_input_tokens": 98688,
+      "input_tokens": 104032,
+      "output_tokens": 1315,
+      "reasoning_output_tokens": 547,
+      "total_tokens": 105347
+    }
+  },
+  "library_builder": {
+    "effort": "medium",
+    "elapsed_seconds": 27.503,
+    "model": "gpt-5.6-luna",
+    "usage": {
+      "cache_write_input_tokens": 0,
+      "cached_input_tokens": 48512,
+      "input_tokens": 59216,
+      "output_tokens": 1220,
+      "reasoning_output_tokens": 148,
+      "total_tokens": 60436
+    }
+  },
+  "r1": {
+    "attempts": [
+      {
+        "file": "r1.json",
+        "result": "policy must cover exactly the public observations"
+      },
+      {
+        "file": "r1-2.json",
+        "result": "passed",
+        "worlds_passed": {
+          "dispatch": 12,
+          "voucher": 12
+        }
+      }
+    ],
+    "effort": "medium",
+    "elapsed_seconds": 60.219,
+    "model": "gpt-5.6-luna",
+    "usage": {
+      "cache_write_input_tokens": 0,
+      "cached_input_tokens": 191104,
+      "input_tokens": 198996,
+      "output_tokens": 1703,
+      "reasoning_output_tokens": 698,
+      "total_tokens": 200699
+    }
+  },
+  "r2": {
+    "attempts": [
+      {
+        "file": "r2.json",
+        "result": "policy must cover exactly the public observations"
+      },
+      {
+        "file": "r2-2.json",
+        "result": "passed",
+        "worlds_passed": {
+          "dispatch": 12,
+          "voucher": 12
+        }
+      }
+    ],
+    "effort": "medium",
+    "elapsed_seconds": 66.129,
+    "model": "gpt-5.6-luna",
+    "usage": {
+      "cache_write_input_tokens": 0,
+      "cached_input_tokens": 207616,
+      "input_tokens": 224315,
+      "output_tokens": 1807,
+      "reasoning_output_tokens": 751,
+      "total_tokens": 226122
+    }
+  },
+  "r3": {
+    "attempts": [
+      {
+        "file": "r3.json",
+        "result": "policy must cover exactly the public observations"
+      },
+      {
+        "file": "r3-2.json",
+        "result": "passed",
+        "worlds_passed": {
+          "dispatch": 12,
+          "voucher": 12
+        }
+      }
+    ],
+    "effort": "medium",
+    "elapsed_seconds": 57.907,
+    "model": "gpt-5.6-luna",
+    "usage": {
+      "cache_write_input_tokens": 0,
+      "cached_input_tokens": 212480,
+      "input_tokens": 220674,
+      "output_tokens": 1722,
+      "reasoning_output_tokens": 630,
+      "total_tokens": 222396
+    }
+  }
+}

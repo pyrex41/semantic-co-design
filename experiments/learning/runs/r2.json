@@ -1,0 +1,36 @@
+{
+  "voucher": {
+    "2": {
+      "applied": "settle",
+      "absent": "retry",
+      "unavailable": "retry"
+    },
+    "3": {
+      "applied": "settle",
+      "absent": "retry",
+      "unavailable": "hold"
+    },
+    "4": {
+      "applied": "settle",
+      "absent": "retry",
+      "unavailable": "hold"
+    }
+  },
+  "dispatch": {
+    "2": {
+      "applied": "settle",
+      "absent": "retry",
+      "unavailable": "hold"
+    },
+    "3": {
+      "applied": "settle",
+      "absent": "retry",
+      "unavailable": "hold"
+    },
+    "4": {
+      "applied": "settle",
+      "absent": "retry",
+      "unavailable": "hold"
+    }
+  }
+}

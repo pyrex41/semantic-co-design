@@ -1,0 +1,62 @@
+{
+  "initial": "empty",
+  "states": [
+    "empty",
+    "pending",
+    "withdrawn",
+    "delivered"
+  ],
+  "events": [
+    "submit",
+    "cancel",
+    "work"
+  ],
+  "rules": [
+    [
+      "empty",
+      "submit",
+      "pending",
+      "accepted"
+    ],
+    [
+      "pending",
+      "submit",
+      "pending",
+      "replayed"
+    ],
+    [
+      "pending",
+      "cancel",
+      "$cancel",
+      "cancelled"
+    ],
+    [
+      "pending",
+      "work",
+      "delivered",
+      "deliver"
+    ],
+    [
+      "withdrawn",
+      "submit",
+      "withdrawn",
+      "replayed"
+    ],
+    [
+      "delivered",
+      "submit",
+      "delivered",
+      "replayed"
+    ]
+  ],
+  "parameters": {
+    "cancel": [
+      "withdrawn",
+      "pending"
+    ]
+  },
+  "storage": {
+    "effect": "keyed-state",
+    "key": "uint32"
+  }
+}
