@@ -20,6 +20,7 @@ Signed intermediate results must fit in 64 bits. Division truncates toward zero 
 | `["set", slot, expr]`, `["put", bank, index, expr]` | Write a scalar or scratch element |
 | `["emit", expr]` | Append an output integer |
 | `["if", cond, then, else]`, `["while", cond, body]` | Structured control flow |
+| `["trap"]` | Abandon the row: the source has no defined result here |
 
 Slot and bank IDs are integer literals in 0–1023, and scratch indexes are in 0–65535. Each new input row starts with zeroed storage. Source programs must terminate and keep input reads within the row. The native driver reads a line of up to 65,536 whitespace-separated integers and emits up to 65,536 integers on a line. An empty line represents an empty vector. Input framing, widths and other domain preconditions are described by each example.
 

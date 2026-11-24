@@ -1,0 +1,29 @@
+{
+  "name": "kernel",
+  "spec": "spec.shen",
+  "step": "k.step",
+  "init": "k.init",
+  "symbols": ["idle", "held", "empty", "full"],
+  "state": ["sym", "num", "bool", {"capacity": 2, "of": ["sym", "num", "num"]}],
+  "events": {
+    "put": {"role": "request", "fields": ["num", "num"]},
+    "get": {"role": "request", "fields": ["num"]},
+    "lock": {"role": "request", "fields": ["num"]},
+    "unlock": {"role": "request", "fields": ["num"]},
+    "math": {"role": "request", "fields": ["num", "num"]},
+    "flag": {"role": "request", "fields": ["bool"]}
+  },
+  "effects": {
+    "rejected": {"role": "output", "fields": ["num"]},
+    "stored": {"role": "output", "fields": ["num", "num"]},
+    "found": {"role": "output", "fields": ["num", "num"]},
+    "missing": {"role": "output", "fields": ["num"]},
+    "granted": {"role": "output", "fields": ["num"]},
+    "denied": {"role": "output", "fields": ["num", "num"]},
+    "released": {"role": "output", "fields": ["num"]},
+    "note": {"role": "output", "fields": ["num", "num"]},
+    "total": {"role": "output", "fields": ["num"]},
+    "same": {"role": "output"}
+  },
+  "max_effects": 3
+}
