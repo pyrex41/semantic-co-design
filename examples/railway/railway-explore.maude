@@ -1,0 +1,19 @@
+fmod RAILWAY-EXPLORE is
+  sorts Route Train State Event .
+  ops none r1 r2 : -> Route [ctor] .
+  ops no yes : -> Train [ctor] .
+  op st : Route Train Route -> State [ctor] .
+  ops req can ent clr : Route -> Event [ctor] .
+  op _;_ : State Event -> State [ctor] .
+  vars R S : Route . var T : Train .
+  eq st(none,no,S) ; req(R) = st(R,no,R) .
+  eq st(R,no,S) ; can(R) = st(none,no,none) .
+  eq st(R,no,S) ; ent(R) = st(R,yes,S) .
+  eq st(R,yes,S) ; clr(R) = st(none,no,none) .
+  eq st(R,T,S) ; req(R) = st(R,T,S) [owise] .
+  eq st(R,T,S) ; can(S) = st(R,T,S) [owise] .
+  eq st(R,T,S) ; ent(S) = st(R,T,S) [owise] .
+  eq st(R,T,S) ; clr(S) = st(R,T,S) [owise] .
+endfm
+search [1000] st(none,no,none) =>+ S:State .
+quit
