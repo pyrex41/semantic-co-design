@@ -3,15 +3,16 @@
 One Raft server written as an ordinary Shen step function ([spec.shen](spec.shen)), compiled to native code by `tool/`, run in 3-server and 5-server clusters under the deterministic simulator, judged by invariants written in Shen ([invariants.shen](invariants.shen)) and by an independent linearizability checker ([lin.py](lin.py)), searched exhaustively in small bounds by Maude, and set beside TLC on the published `raft.tla`.
 
 ```sh
-nix develop -c python3 -m tool check raft                    # the specification, about 4.5 minutes here
+nix develop -c python3 -m tool check raft                    # the specification, about 5 minutes here
 nix develop -c python3 -m targets.raft.check mutants         # the teeth of every check, about 4.5 minutes here
-nix develop -c nix shell --inputs-from . 'nixpkgs#tlaplus' -c python3 -m targets.raft.tla.check   # about 6.5 minutes here
+nix develop -c nix shell --inputs-from . 'nixpkgs#tlaplus' -c python3 -m targets.raft.tla.check   # about 6 minutes here
 nix develop -c python3 -m tool compile raft /tmp/raft        # IR, C, library, executable
 nix develop -c python3 -m targets.raft.check story local-get three     # a retained failing trace, readable
-nix develop -c python3 -m targets.raft.check hunt <mutant> [three|five] [--from=N] [--seeds=M] [--only=CHECK|paper]
+nix develop -c python3 -m targets.raft.check story commit-by-counting churn paper   # Figure 8, as a seed found it
+nix develop -c python3 -m targets.raft.check hunt <mutant> [three|five|churn|amnesia|late ...] [--from=N] [--seeds=M] [--only=CHECK|paper]
 ```
 
-The retained check is the first two commands together. It is two commands so that each stays well under ten minutes. The numbers below are the output of these commands on the commit that last changed this file.
+The retained check is the first two commands together. It is two commands so that each stays well under ten minutes, and `nix flake check` runs them as `checks.<system>.raft` and `checks.<system>.raft-mutants`. Run alone they took 5 minutes 14 seconds and 4 minutes 24 seconds here; built side by side as flake checks, 5 minutes 54 seconds and 4 minutes 53 seconds. The numbers below are the output of these commands on the commit that last changed this file.
 
 ## 1. The node
 
@@ -75,13 +76,41 @@ The first version of these profiles had three faults of shape that its reviewers
 | An acknowledgement of an earlier term reached a leader | 16 | 9 |
 | AppendEntries of an earlier term reached a server; of those, with an entry | 1,127; 346 | 391; 58 |
 | AppendEntries handled after a later one from the same leader | 351 | 237 |
+| Runs in which two servers held different entries at one index | 10 | 4 |
 | Runs with: a leader change, a conflicting suffix cut, a log recovered from disk, an entry committed on 3 servers, a `full` answer, a retried put skipped | 142, 10, 149, 142, 1, 40 | 58, 4, 59, 60, 0, 14 |
 | Runs by operations answered, 0 to 5 of 5 | 2, 3, 5, 3, 9, 128 | 0, 1, 3, 2, 4, 50 |
 | Traces replayed and re-run from their seed | 15 | 6 |
 
-The fourteen invariants of section 4 hold on all 210 traces and all 210 client histories are linearizable. The native step equals shen-jit on the 57,538 distinct `(state, event)` pairs of these runs.
+The fourteen invariants of section 4 hold on all 210 traces and all 210 client histories are linearizable.
 
-Every run is checked as it is produced: it must end at its step bound with no trap; every step changed the disk queue and the outputs in flight by exactly its applied effects (`check.effects_applied`); the invariants and the linearizability check below hold; every tenth trace is replayed step by step from its recorded actions and draws and re-run from its seed, byte for byte. Every distinct `(state, event)` pair the native step was run on is then evaluated by shen-jit on `spec.shen` and compared. The check fails if any of the five histories from "a disk held part of a step's writes" to "AppendEntries of an earlier term with an entry" never occurs in the two campaigns together.
+Every run is checked as it is produced: it must end at its step bound with no trap; every step changed the disk queue and the outputs in flight by exactly its applied effects (`check.effects_applied`); the invariants and the linearizability check below hold; every tenth trace is replayed step by step from its recorded actions and draws and re-run from its seed, byte for byte. Every distinct `(state, event)` pair the native step was run on is then evaluated by shen-jit on `spec.shen` and compared: 104,783 pairs over these runs and the biased runs below. The check fails if any of the five histories from "a disk held part of a step's writes" to "AppendEntries of an earlier term with an entry" never occurs in the two campaigns together.
+
+### Biased profiles
+
+`three` and `five` spread a little of every fault over a run. In hundreds of seeds they did not produce the histories in which several mutants violate a published property (section 5): Figure 8 and a vote lost in a crash among them. `BIASED` in `check.py` holds three more seeded profiles of three servers, each made for one kind of history. They were written after the fact, knowing which consequences were missing. They name no server, term or step: what is found under them is found by a seed, in a fault model chosen to make it likely.
+
+| | `churn` | `amnesia` | `late` |
+|---|---|---|---|
+| What it is for | leaders cut off while they hold entries nobody else has, and replaced | a crash between a reply and the write it depends on | answers of earlier terms; acknowledgements that overtake the disk of the server counting them |
+| Faults per run | up to 12 partitions, 2 crashes, a fault tried on 3% of the steps | up to 40 crashes, on 4% of the steps; a down server restarts on half of the steps | up to 20 crashes and 20 partitions, on 4% of the steps |
+| Delays | messages 1 to 20, disk 1 to 5 | messages and disk 1 to 40 | messages and disk 1 to 40; a quarter of the messages 100 to 600, a quarter of the disk operations 40 to 300 |
+| Clients | act on 2% of the steps, three sends per operation, 150 apart | as in `three` | three sends per operation, 150 apart |
+| Seeds, steps | 40, 40,000 | 40, 40,000 | 40, 40,000 |
+| Crashes, restarts, partitions, heals | 80, 80, 463, 459 | 1,536, 1,536, 0, 0 | 800, 800, 400, 379 |
+| Step index of the faults that must be spread: quartiles of 1,000 | partitions: 270, 447, 654 | crashes: 238, 456, 712 | crashes and partitions: 208, 458, 676 |
+| Runs with such a fault in their second half | 40 of 40 | 40 of 40 | 40 of 40 |
+| Issued writes that never reached the disk | 4 | 119 | 135 |
+| A disk held part of a step's writes after a crash | 0 | 18 | 16 |
+| A granted vote of an earlier term reached a candidate | 0 | 0 | 62 |
+| An acknowledgement of an earlier term reached a leader | 0 | 0 | 14 |
+| Runs in which two servers held different entries at one index | 16 | 13 | 13 |
+| Histories the campaign requires of it | two servers with different entries at one index | a write that never reached the disk; part of a step's writes on a disk after a crash | a vote and an acknowledgement of an earlier term; a write that never reached the disk |
+| Runs by operations answered, 0 to 5 of 5 | 0, 0, 0, 0, 2, 38 | 5, 7, 4, 3, 6, 15 | 7, 4, 9, 8, 6, 6 |
+| Runs with a `full` answer | 0 | 0 | 20 |
+
+The specification is held to the same checks under them as under `three` and `five`: all fourteen invariants, linearizability, no trap, effects applied, every tenth trace replayed, every pair compared with shen-jit. It passes on all 120 runs. The two crashes of `churn` fall early (its partitions are what is spread), and in half of the runs of `late` the log of eight entries fills up, after which no request is taken: both limit what those profiles can show late in a run. The teeth of the requirement on histories (`check mutants`): 10 runs of three servers with no faults and nothing slow show none of them.
+
+A one-off run, not retained: the specification also passes every check on seeds 0 to 299 of each of the three. The first draft of `amnesia` and `late` spent their crashes in the first fifth of a run, the fault the reviewers had found in `three`; the budgets were raised until the faults last the whole run, the campaign requires it, and every result in this file is from the profiles as they are in the tree.
 
 **Messages from non-members** are not something the simulator produces: it fills in the true sender. The check therefore hands them to the step directly: 75 messages of all four kinds under the ids -1, 0 (the receiver itself), 3, 4 and 5, to server 0 of 3 as follower, as candidate and as leader, change nothing and cause no effect, natively and in shen-jit. In the first version a vote under id 4 made a candidate of a 3-server cluster the leader; a node edited back to that is the mutant of this check.
 
@@ -117,49 +146,51 @@ Linearizability of the client-visible history is checked by `lin.py`, a Wing and
 
 ## 5. Mutants
 
-Each mutant is one textual edit of `spec.shen` (`MUTANTS` in `check.py`), compiled like the specification. `hunt` runs seeds 0, 1, 2, ... of a profile until a check fails, shrinks the failing trace by delta debugging on the schedule ([shrink.py](shrink.py)), and retains seed, check, digests and the short schedule in [mutants.json](mutants.json). `--only=paper` searches for a failure of a published property (the five of Figure 3, linearizability, no trap) and retains it separately. `check mutants` rebuilds every mutant, re-runs its seed, replays its short trace and requires the named check to reject both. It requires the specification to pass every check on the same seed and on the same short schedule: of the 27 short schedules it runs 8 exactly as recorded and 19 with the actions it does not enable skipped (136 of their 1,636 actions). It also requires every one of the fourteen invariants to reject at least one retained mutant.
+Each mutant is one textual edit of `spec.shen` (`MUTANTS` in `check.py`), compiled like the specification. `hunt` runs seeds 0, 1, 2, ... of a profile until a check fails, shrinks the failing trace by delta debugging on the schedule ([shrink.py](shrink.py)), and retains seed, check, digests and the short schedule in [mutants.json](mutants.json). `--only=paper` searches for a failure of a published property (the five of Figure 3, linearizability, no trap) and retains it separately. `check mutants` rebuilds every mutant, re-runs its seed, replays its short trace and requires the named check to reject both. It requires the specification to pass every check on the same seed and on the same short schedule: of the 35 short schedules it runs 8 exactly as recorded and 27 with the actions it does not enable skipped (617 of their 3,401 actions). It also requires every one of the fourteen invariants to reject at least one retained mutant, and a retained seed on which a published property rejects each of the four required mutants.
 
 The first eight are the author's; the first four were required. Thirteen of the other fourteen are edits made by the reviewers of the first version, reproduced on that version before anything here was changed: ten survive every one of its checks on seeds 0 to 149 of `three` (as does a second way of forgetting the vote, which is not retained separately); `ack-old-term` fails only the commit rule there, on seed 132; `leader-overwrites-last` and `no-prev-term-check` fail Leader Append-Only on seed 0 and Log Matching on seed 3, which no retained mutant showed. `recovery-never-completes` was added here as the mutant of `inv.recovery-completes` and of the second clause of the liveness check.
 
-"Seeds" is the number of seeds tried up to and including the first failure. "Published property" says whether the seeded search also found a failure of one, and "directed" names a hand-written schedule of section 6.
+"Seeds" is the number of seeds tried up to and including the first failure. The third column is the first failure of any check on `three`. The fourth says whether a seed also shows a published property failing: on `three`, or else under one of the biased profiles of section 3. "Directed" names a hand-written schedule of section 6.
 
-| Mutant | The edit | `three`: first check to fail, seeds, steps after shrinking | Published property on seeds of `three` | Directed |
+| Mutant | The edit | `three`: first check to fail, seeds, steps after shrinking | A published property fails on a seed | Directed |
 |---|---|---|---|---|
-| `vote-without-log-check` (required, 1) | grants a vote without the up-to-date check (5.4.1) | Leader Completeness, seed 1 (2 seeds), 194 steps | yes: the first check to fail is one | none |
-| `commit-by-counting` (required, 2) | commits an entry of an earlier term by counting replicas (Figure 8) | `inv.commit-rule`, seed 0 (1 seed), 69 steps | **not found in 800 seeds** | figure 8 |
-| `vote-before-durable` (required, 3) | answers a vote request before votedFor is durable | `inv.replies-are-durable`, seed 0 (1 seed), 9 steps | **not found in 400 seeds** | lost vote |
-| `local-get` (required, 4) | a leader answers a get from its own state without confirming leadership | linearizability, seed 161 (162 seeds), 54 steps | yes: the first check to fail is one | none |
-| `votes-twice` | grants a vote in a term in which it already voted for another server | `inv.one-vote-per-term`, seed 1 (2 seeds), 13 steps | yes: Election Safety, seed 5 (6 seeds), 135 steps | none |
-| `ack-before-durable` | answers AppendEntries before the entry is durable | `inv.replies-are-durable`, seed 0 (1 seed), 15 steps | **not found in 150 seeds** | lost acknowledgement |
-| `commit-unchecked-suffix` | a follower commits up to its own last entry, not the last one the leader confirmed | Leader Completeness, seed 48 (49 seeds), 108 steps | yes: the first check to fail is one | none |
-| `put-twice` | executes every copy of a put that a client's retries left in the log | State Machine Safety, seed 12 (13 seeds), 57 steps | yes: the first check to fail is one | none |
-| `leader-overwrites-last` | a leader puts a new entry in the place of its last one | Leader Append-Only, seed 0 (1 seed), 26 steps | yes: the first check to fail is one | none |
-| `no-prev-term-check` | a follower accepts AppendEntries without comparing prevLogTerm | Log Matching, seed 48 (49 seeds), 147 steps | yes: the first check to fail is one | none |
-| `accept-stale-leader` | a follower treats AppendEntries of an earlier term as coming from its leader | Leader Completeness, seed 119 (120 seeds), 56 steps | yes: the first check to fail is one | stale leader |
-| `ack-old-term` | a follower stores the entry of an AppendEntries of an earlier term | `inv.commit-rule`, seed 61 (62 seeds), 149 steps | yes: Leader Completeness, seed 119 (120 seeds), 56 steps | stale leader |
-| `stale-vote-counted` | a candidate counts a vote that was granted in an earlier term | `inv.leaders-are-elected`, seed 42 (43 seeds), 207 steps | **not found in 150 seeds** | stale vote |
-| `stale-ack-counted` | a leader counts an acknowledgement that was given in an earlier term | **not found in 400 seeds** | **not found in 400 seeds** | stale acknowledgement |
-| `recovery-forgets-vote` | a restarted server has no vote, whatever its disk says | `inv.recovery-restores-the-disk`, seed 0 (1 seed), 54 steps | **not found in 150 seeds** | forgotten vote |
+| `vote-without-log-check` (required, 1) | grants a vote without the up-to-date check (5.4.1) | Leader Completeness, seed 1 (2 seeds), 194 steps | `three`: the first check to fail is one | none |
+| `commit-by-counting` (required, 2) | commits an entry of an earlier term by counting replicas (Figure 8) | `inv.commit-rule`, seed 0 (1 seed), 69 steps | `churn`: Leader Completeness, seed 4 (5 seeds), 153 steps. `three`: **not found in 800 seeds** | figure 8 |
+| `vote-before-durable` (required, 3) | answers a vote request before votedFor is durable | `inv.replies-are-durable`, seed 0 (1 seed), 9 steps | `amnesia`: Election Safety, seed 59 (60 seeds), 117 steps. `three`: **not found in 400 seeds** | lost vote |
+| `local-get` (required, 4) | a leader answers a get from its own state without confirming leadership | linearizability, seed 161 (162 seeds), 54 steps | `three`: the first check to fail is one | none |
+| `votes-twice` | grants a vote in a term in which it already voted for another server | `inv.one-vote-per-term`, seed 1 (2 seeds), 13 steps | `three`: Election Safety, seed 5 (6 seeds), 135 steps | none |
+| `ack-before-durable` | answers AppendEntries before the entry is durable | `inv.replies-are-durable`, seed 0 (1 seed), 15 steps | `late`: Leader Completeness, seed 2 (3 seeds), 109 steps. `three`: not found in 150 seeds | lost acknowledgement |
+| `commit-unchecked-suffix` | a follower commits up to its own last entry, not the last one the leader confirmed | Leader Completeness, seed 48 (49 seeds), 108 steps | `three`: the first check to fail is one | none |
+| `put-twice` | executes every copy of a put that a client's retries left in the log | State Machine Safety, seed 12 (13 seeds), 57 steps | `three`: the first check to fail is one | none |
+| `leader-overwrites-last` | a leader puts a new entry in the place of its last one | Leader Append-Only, seed 0 (1 seed), 26 steps | `three`: the first check to fail is one | none |
+| `no-prev-term-check` | a follower accepts AppendEntries without comparing prevLogTerm | Log Matching, seed 48 (49 seeds), 147 steps | `three`: the first check to fail is one | none |
+| `accept-stale-leader` | a follower treats AppendEntries of an earlier term as coming from its leader | Leader Completeness, seed 119 (120 seeds), 56 steps | `three`: the first check to fail is one | stale leader |
+| `ack-old-term` | a follower stores the entry of an AppendEntries of an earlier term | `inv.commit-rule`, seed 61 (62 seeds), 149 steps | `three`: Leader Completeness, seed 119 (120 seeds), 56 steps | stale leader |
+| `stale-vote-counted` | a candidate counts a vote that was granted in an earlier term | `inv.leaders-are-elected`, seed 42 (43 seeds), 207 steps | `late`: Election Safety, seed 12 (13 seeds), 460 steps. `three`: not found in 150 seeds | stale vote |
+| `stale-ack-counted` | a leader counts an acknowledgement that was given in an earlier term | **no check fails in 400 seeds**. `late`: `inv.commits-are-durable`, seed 643 (644 seeds), 132 steps | **not found**: `late`, 400 seeds | stale acknowledgement |
+| `recovery-forgets-vote` | a restarted server has no vote, whatever its disk says | `inv.recovery-restores-the-disk`, seed 0 (1 seed), 54 steps | `late`: Election Safety, seed 50 (51 seeds), 338 steps. `three`: not found in 150 seeds | forgotten vote |
 | `recovery-never-completes` | a server that restarts with entries on its disk reads past the last one | `inv.recovery-completes`, seed 0 (1 seed), 55 steps | not searched: the consequence is not a safety violation | none |
-| `candidate-asks-before-durable` | a candidate asks for votes before its vote for itself is durable | `inv.replies-are-durable`, seed 4 (5 seeds), 82 steps | **not found in 150 seeds** | unwritten candidacy |
-| `leader-counts-undurable-self` | a leader counts its own copy of an entry the moment it appends it | `inv.match-is-durable`, seed 0 (1 seed), 14 steps | **not found in 150 seeds** | slow disk |
-| `self-counts-before-durable` | a leader counts its whole log, durable or not, when an acknowledgement arrives | `inv.commits-are-durable`, seed 2 (3 seeds), 19 steps | **not found in 150 seeds** | slow disk |
+| `candidate-asks-before-durable` | a candidate asks for votes before its vote for itself is durable | `inv.replies-are-durable`, seed 4 (5 seeds), 82 steps | **not found**: `three` 150 seeds, `amnesia` 400, `late` 400 | unwritten candidacy |
+| `leader-counts-undurable-self` | a leader counts its own copy of an entry the moment it appends it | `inv.match-is-durable`, seed 0 (1 seed), 14 steps | `late`: Leader Completeness, seed 22 (23 seeds), 240 steps. `three`: not found in 150 seeds | slow disk |
+| `self-counts-before-durable` | a leader counts its whole log, durable or not, when an acknowledgement arrives | `inv.commits-are-durable`, seed 2 (3 seeds), 19 steps | `late`: Leader Completeness, seed 22 (23 seeds), 240 steps. `three`: not found in 150 seeds | slow disk |
 | `length-before-entry` | a leader writes the new length before the entry it covers | `inv.disk-is-a-held-state`, seed 0 (1 seed), 15 steps | not searched: the consequence is not a safety violation | torn append, leader |
 | `follower-length-before-entry` | a follower writes the new length before the entry it covers | `inv.disk-is-a-held-state`, seed 0 (1 seed), 16 steps | not searched: the consequence is not a safety violation | torn append, follower |
-| `entry-before-cut` | a follower writes the replacing entry before it cuts the conflicting suffix | `inv.disk-is-a-held-state`, seed 32 (33 seeds), 83 steps | **not found in 150 seeds** | torn cut |
+| `entry-before-cut` | a follower writes the replacing entry before it cuts the conflicting suffix | `inv.disk-is-a-held-state`, seed 32 (33 seeds), 83 steps | **not found**: `three` 150 seeds, `amnesia` 400, `late` 400 | torn cut |
 
-`five` was run for the four required mutants: `vote-without-log-check`: Leader Completeness, seed 1 (2 seeds), 263 steps. `commit-by-counting`: `inv.commit-rule`, seed 0 (1 seed), 88 steps; no published property fails in 200 seeds. `vote-before-durable`: `inv.replies-are-durable`, seed 0 (1 seed), 11 steps; no published property fails in 200 seeds. `local-get`: linearizability, seed 48 (49 seeds), 79 steps.
+`five` was run for the four required mutants: `vote-without-log-check`: Leader Completeness, seed 1 (2 seeds), 263 steps. `commit-by-counting`: `inv.commit-rule`, seed 0 (1 seed), 88 steps; no published property fails in 200 seeds. `vote-before-durable`: `inv.replies-are-durable`, seed 0 (1 seed), 11 steps; no published property fails in 200 seeds. `local-get`: linearizability, seed 48 (49 seeds), 79 steps. `stale-ack-counted` fails no check in 200 seeds of `five`. There is no biased profile of five servers.
 
 What the columns say, plainly:
 
-* **Every mutant but one is rejected on a retained seed.** `stale-ack-counted` is not: no check fails on seeds 0 to 399 of `three` or 0 to 199 of `five`. A late acknowledgement of an earlier term reaches a leader 25 times in the two campaigns, but it only matters when the follower's log has been rewritten in between and the leader has been deposed and re-elected. Its consequence is shown by a directed schedule only.
-* **For eleven mutants besides Figure 8 the seeded search found the broken rule and no broken published property.** Eight were searched for one: `vote-before-durable` (400 seeds), and `ack-before-durable`, `stale-vote-counted`, `recovery-forgets-vote`, `candidate-asks-before-durable`, `leader-counts-undurable-self`, `self-counts-before-durable` and `entry-before-cut` (150 seeds each). For each of those eight a directed schedule shows the consequence for a published property. Three were not searched, `recovery-never-completes` and the two `length-before-entry` mutants, because their consequence is a server that never comes back: an availability failure, which `inv.recovery-completes` and the liveness check of section 9 report and no safety property can.
-* **Figure 8 was not found by the seeded search**, as before: the published properties accept `commit-by-counting` on seeds 0 to 799 of `three` and 0 to 199 of `five`. `inv.commit-rule` rejects it on the first seed, which shows that the mutant misbehaves on ordinary runs, not that safety is violated. The directed schedule shows the violation.
+* **Figure 8 is found by a seed, under `churn` and not under the general profiles.** On seed 4 of `churn` the published properties reject `commit-by-counting`: Leader Completeness first, State Machine Safety later in the same run. `story commit-by-counting churn paper` prints the shrunk trace. Server 0 is elected in term 9 while server 1 still believes it leads term 8, and server 1 takes a get and appends it at index 4 with term 8. Server 1 is elected again in term 11 while server 0 still believes it leads term 9, and server 0 takes a put and appends it at index 4 with term 9. Server 1 sends its term-8 entry to server 2, counts two copies, commits it and answers the client. Server 2 then elects server 0 in term 12: its last entry is of term 9, and it does not have the committed one. The general profiles still do not find it: the published properties accept the mutant on seeds 0 to 799 of `three` and 0 to 199 of `five`, where `inv.commit-rule` rejects it on the first seed.
+* **The lost vote is found by a seed, under `amnesia` and not under the general profiles.** On seed 59 of `amnesia` Election Safety rejects `vote-before-durable`: two leaders in one term. On `three` and `five` only `inv.replies-are-durable` rejects it (400 and 200 seeds).
+* **Every mutant is rejected on a retained seed.** For `stale-ack-counted` that seed is the 644th of `late`, where `inv.commits-are-durable` fails (and `inv.match-is-durable` on the same trace). No check fails on seeds 0 to 399 of `three` or 0 to 199 of `five`, although in the campaigns of the specification under those two profiles an acknowledgement of an earlier term reaches a leader 25 times: it only matters when the follower's log has been rewritten in between and the leader has been deposed and re-elected.
+* **For three mutants a seed shows the broken rule and no broken published property**: `stale-ack-counted`, `candidate-asks-before-durable` and `entry-before-cut`, on the seeds listed. For each a directed schedule shows the consequence. Three more were not searched, `recovery-never-completes` and the two `length-before-entry` mutants, because their consequence is a server that never comes back: an availability failure, which `inv.recovery-completes` and the liveness check of section 9 report and no safety property can.
+* **A biased profile is evidence of a different kind from a general one.** That a published property rejects five mutants within the first 51 seeds of `late` says that the checks reject those histories when the fault model produces them, and that a fault model can be chosen to produce them. It does not say that the profile is a fair sample of anything: each was written, and its rates adjusted, with the missing histories in view.
 * The shrunk traces are not minimal: the shrinker removes steps of a timed schedule, and a history that elects two leaders needs some tens of steps for each. `story` prints one.
 
 ## 6. Directed schedules
 
-[figure8.py](figure8.py) and [directed.py](directed.py): twelve schedules written by hand, most of them by the reviewers, each a program that picks one enabled action at a time in an untimed profile. They are not found by a seed and are labelled so in the output. Each is an ordinary scripted trace that replays. On the specification every check passes on every one of them; on the mutant the listed checks must all fail.
+[figure8.py](figure8.py) and [directed.py](directed.py): twelve schedules written by hand, most of them by the reviewers, each a program that picks one enabled action at a time in an untimed profile. They are not found by a seed and are labelled so in the output. For nine of the fourteen rows below a seed now shows a published property failing too, seven of them under a biased profile (section 5); the schedules stay, because they are short and say which history is meant. Each is an ordinary scripted trace that replays. On the specification every check passes on every one of them; on the mutant the listed checks must all fail.
 
 | Schedule | Steps on the specification | Mutant | Checks that reject the mutant on it |
 |---|---|---|---|
@@ -203,7 +234,7 @@ Teeth (`check mutants`): each of these mutants is searched in one of the bounds,
 | `candidate-asks-before-durable` | 2 servers, 2 timers, a put | 3,880 | 234 | server 0 leads term 2 with 1 durable votes |
 | `stale-vote-counted` | 2 servers, 2 timers, a put | 3,196 | 652 | server 0 leads term 2 with 1 durable votes |
 
-The native step equals shen-jit on the 1,524 pairs the searches executed. The Maude translation of `spec.shen` reduces those pairs and 1,515 pairs sampled from the seeded runs to the native result, and the translation of `commit-by-counting` does not.
+The native step equals shen-jit on the 1,524 pairs the searches executed. The Maude translation of `spec.shen` reduces those pairs and 1,519 pairs sampled from the seeded runs to the native result, and the translation of `commit-by-counting` does not.
 
 Larger bounds are out of reach for both searchers. While this target was written, 3 servers with one election and a put, and 3 servers with two timer events, each ran past 250,000 states, and 2 servers with a put and a duplicate was left out for time. Those runs were not retained and no command in the tree reproduces their sizes. The eight mutants above are the ones searched. The other fourteen were not searched by the retained check, and nothing is claimed about what these bounds would show of them; the reviewers ran `accept-stale-leader` and `ack-old-term` in them and found every observation safe.
 
@@ -258,16 +289,18 @@ History, not a result of any retained command: the first draft of the node faile
 Established, by `tool check raft` and `targets.raft.check mutants` unless another command is named:
 
 * The node compiles whole; the native step equals shen-jit on every `(state, event)` pair the simulations and the bounded searches reached, on the messages from non-members, and on the initial state of every server; a library compiled from an edited specification is rejected by the same comparison.
-* On the seeds and profiles of section 3, with every fault kind occurring and with the crashes spread over the runs, the fourteen invariants hold and every client history is linearizable.
-* Each of the 22 mutants is rejected on a retained seed with a shrunk trace, except `stale-ack-counted`, which is rejected on a directed schedule only. Every invariant rejects at least one of them. On each retained seed and schedule the specification passes.
+* On the seeds and the five profiles of section 3, with every fault kind occurring and with the faults spread over the runs, the fourteen invariants hold and every client history is linearizable.
+* Each of the 22 mutants is rejected on a retained seed with a shrunk trace. Every invariant rejects at least one of them. On each retained seed and schedule the specification passes.
+* Figure 8 (`commit-by-counting`) and the lost vote (`vote-before-durable`) each violate a published property on a retained seed of a biased profile, as do five further mutants.
 * In the bounds of section 7, Maude on the translated Shen and the simulator on the native code reach the same observations, all of them safe, and eight mutants are each unsafe in one of them.
 * After faults stop, the pending put is answered and the cluster is whole within the declared bound on every seed tried.
 * By the TLC command: the published `raft.tla` satisfies Election Safety, Leader Append-Only, Log Matching and State Machine Safety in the bound of section 8, at which each of the four rejects an edit of it; Leader Completeness rejects an edit at a larger bound.
 
 Not established:
 
-* **The consequences of most durability and staleness edits by search.** Section 5 lists the mutants for which seeds found the broken rule only. For those, and for Figure 8, a violation of a published property is shown by hand-written schedules only. A hand-written schedule shows that the checks reject the history when it occurs; it says nothing about how likely the simulator is to produce it.
-* **`stale-ack-counted` on any seed.** See section 5.
+* **Figure 8 and the lost vote under the general profiles.** `three` and `five` do not produce them: 800 and 200 seeds for the first, 400 and 200 for the second. They are found under `churn` and `amnesia`, which were written to produce them. Whether an untuned fault model of this simulator would find them in any practical number of seeds is not known.
+* **The consequences of three edits by search.** For `stale-ack-counted`, `candidate-asks-before-durable` and `entry-before-cut` seeds found the broken rule only (section 5). A violation of a published property is shown for them by hand-written schedules only. A hand-written schedule shows that the checks reject the history when it occurs; it says nothing about how likely the simulator is to produce it.
+* **Biased profiles of five servers.** There is none; on five servers the two required consequences are not found.
 * **Anything beyond the seeds, bounds and pairs listed.** The evidence is differential and sampled. Nothing proves that the compiler preserves meaning, that the node is safe on schedules not run, or that the liveness bound holds in general.
 * **Faults the simulator does not have.** A paused node (a process that stops for longer than an election timeout and resumes with its memory) is not a fault kind; late messages and a stalled disk are the nearest things. A lost or unreadable row on a disk that otherwise works is outside the environment rules; the node's answer to it is the role `failed`, which no run of the specification in the campaigns reaches and which is exercised only through the two `length-before-entry` mutants and `recovery-never-completes`.
 * **Replay and determinism for every trace.** Every tenth trace is replayed and re-run; the others are produced once.
@@ -278,5 +311,5 @@ Not established:
 * **Defence against a stale completion.** The node relies on the rule that no acknowledgement, read result or timer crosses a crash, as AcceptedJob does; the simulator has no profile in which one arrives.
 * **Client behaviour.** The simulated clients send to servers that believe they lead, which the workload reads from the simulator's state. A real client learns that from redirects, which this node does not send; a request to a server that is not a leader is dropped silently.
 * **Capacity.** With a log of 8 entries and no compaction a cluster stops taking requests after 8 entries; a `full` answer occurred in 1 of 150 and 0 of 60 runs.
-* **The flake check.** Neither command is added to `checks.sim-tool` in `flake.nix`: they take several minutes and that line is shared.
+* **TLC in the flake check.** The two retained commands are `checks.<system>.raft` and `checks.<system>.raft-mutants`. The TLC command is not a flake check: it took 6 minutes 11 seconds run alone and 10 minutes 8 seconds beside eight other jobs, which is over the ten-minute bound, and TLC is not in the development shell.
 * **Solo5.** Not attempted.

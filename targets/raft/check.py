@@ -4,11 +4,13 @@
     nix develop -c python3 -m targets.raft.check mutants    the teeth of every check
 
     python3 -m targets.raft.check                    the specification (same as the first)
-    python3 -m targets.raft.check hunt <mutant> [three|five] [--from=N] [--seeds=M] [--only=CHECK]
+    python3 -m targets.raft.check hunt <mutant> [PROFILE ...] [--from=N] [--seeds=M] [--only=CHECK]
                                                      search seeds for one mutant, shrink the
                                                      failing trace and retain it in mutants.json;
-                                                     CHECK is a check's name, or `paper`
-    python3 -m targets.raft.check story <mutant> [three|five] [CHECK]
+                                                     CHECK is a check's name, or `paper`;
+                                                     PROFILE is three, five (the default pair),
+                                                     churn, amnesia or late
+    python3 -m targets.raft.check story <mutant> [PROFILE] [CHECK]
                                                      print a retained trace, one step per line
 """
 import collections
@@ -55,6 +57,61 @@ BUNCHED = sim.profile(nodes=3, max_steps=1000, timer_rate=[100, 90, 115],
 SEEDS = {"three": 150, "five": 60}
 REPLAY_EVERY = 10
 HUNT_BUDGET = 400               # seeds tried per profile before a mutant counts as not found
+
+# Three more seeded profiles of three servers, each biased towards one kind of history that
+# `three` and `five` produce too rarely for a mutant's consequence to show. They were written
+# after the fact, knowing which consequences the general profiles had not exposed in
+# hundreds of seeds; what is found inside them is still found by a seed and nothing in them
+# names a server, a term or a step. Each has the clients it is run with, the histories its
+# campaign must show (`needs`, counted by `shape`) and the fault kinds that must be spread
+# over its runs (`spread`), so that none of them repeats the fault of the first version,
+# whose runs were quiet after their first tenth.
+#
+#   churn     Partitions and little else, twelve of them, and clients that send slowly and
+#             retry: leaders are cut off holding entries nobody else has, and are replaced.
+#             Its two crashes fall early; its partitions are what is spread.
+#   amnesia   Up to forty crashes, quick restarts, and a disk and a network slow enough
+#             (1 to 40) for a crash to fall between a reply and the write it depends on.
+#   late      A quarter of the messages 100 to 600 late and a quarter of the disk operations
+#             40 to 300, with up to twenty crashes and twenty partitions: answers of
+#             earlier terms arrive, and acknowledgements overtake the disk of the server
+#             that counts them.
+BIASED = {
+    "churn": {
+        "profile": sim.profile(nodes=3, max_steps=1000, timer_rate=[100, 90, 115],
+                               budget={"crash": 2, "partition": 12}, fault_rate=0.03,
+                               crash_mid_rate=0.0, restart_rate=0.05, client_rate=0.02,
+                               delay={"timer": [80, 120]}),
+        "clients": {"sends": 3, "patience": 150},
+        "needs": ["divergent"], "spread": ("partition",)},
+    "amnesia": {
+        "profile": sim.profile(nodes=3, max_steps=1000, timer_rate=[100, 90, 115],
+                               budget={"crash": 40}, fault_rate=0.04, crash_mid_rate=0.0,
+                               restart_rate=0.5,
+                               delay={"timer": [80, 120], "net": [1, 40], "disk": [1, 40]}),
+        "clients": {},
+        "needs": ["lost-writes", "torn"], "spread": ("crash",)},
+    "late": {
+        "profile": sim.profile(nodes=3, max_steps=1000, timer_rate=[100, 90, 115],
+                               budget={"crash": 20, "partition": 20}, fault_rate=0.04,
+                               crash_mid_rate=0.0, restart_rate=0.3,
+                               delay={"timer": [80, 120], "net": [1, 40], "disk": [1, 40],
+                                      "net-slow": [100, 600], "disk-slow": [40, 300]},
+                               slow={"net": 25, "disk": 25}),
+        "clients": {"sends": 3, "patience": 150},
+        "needs": ["stale-vote", "stale-ack", "lost-writes"], "spread": ("crash", "partition")},
+}
+BIASED_SEEDS = 40
+# The same three servers with no faults and nothing slow: none of the histories a biased
+# profile is required to show occurs. Kept as the mutant of that requirement.
+QUIET = sim.profile(nodes=3, max_steps=1000, timer_rate=[100, 90, 115], delay={"timer": [80, 120]})
+
+
+def setting(label):
+    """(profile, clients) of a seeded search by name."""
+    if label in PROFILES:
+        return PROFILES[label], Clients(OPS)
+    return BIASED[label]["profile"], Clients(OPS, **BIASED[label]["clients"])
 
 # Liveness: at virtual time CALM_AT the client ends all faults and starts sending one more
 # put. LIVENESS_BOUND is the declared bound on the virtual time from then until its `ok`
@@ -299,11 +356,18 @@ def shape(trace):
     overtaken     AppendEntries handled after one that the same leader sent later in the same
                   term (reordering, or a late duplicate): a leader's commit index never
                   decreases within its term, so a smaller leaderCommit was sent earlier
+    divergent     1 if two running servers ever held different entries at one index
+    lost-writes   issued writes that a crash kept from the disk
     """
     counts, crashes, newest = collections.Counter(), [], {}
     pending = collections.defaultdict(list)     # per node: (position in its step, writes of the step)
     for step in trace["steps"]:
         node, event = step.get("node"), step.get("event") or []
+        counts["lost-writes"] += step.get("lost_writes", 0)
+        if not counts["divergent"] and step["kind"] in KEEP:
+            logs = [state[6][:state[5]] for state in step["world"]["states"]
+                    if state is not None and state[2] not in ("loading", "failed")]
+            counts["divergent"] = int(any(x != y for a in logs for b in logs for x, y in zip(a, b)))
         if "effects" in step:
             issued = sum(e[0] == "write" for e in step["effects"])
             done = sum(e[0] == "write" for e in step["effects"][:step["applied"]])
@@ -349,10 +413,17 @@ def spread(crashes, late, runs, steps):
 
 def campaign(schema, native, label, seeds, report, *, replay=True):
     """Seeded runs of one profile, each checked as it is produced. Returns the pairs seen
-    and the counts of `shape` over all runs."""
-    prof, workload = PROFILES[label], Clients(OPS)
+    and the counts of `shape` over all runs.
+
+    Every fault kind the profile has a budget for must occur, and the faults must be spread
+    over the runs: the crashes of `three` and `five`, the kinds a biased profile names. A
+    biased profile must also show the histories it is for.
+    """
+    prof, workload = setting(label)
+    general = label in PROFILES
+    spreads = ("crash",) if general else BIASED[label]["spread"]
     pairs, kinds, seen = {}, collections.Counter(), [0] * len(WITNESSES)
-    answered, steps, replayed, cuts, lost = collections.Counter(), 0, 0, 0, 0
+    answered, steps, replayed, cuts = collections.Counter(), 0, 0, 0
     shapes, crashes, late = collections.Counter(), [], 0
     started = time.time()
     for first in range(0, seeds, 10):
@@ -365,9 +436,11 @@ def campaign(schema, native, label, seeds, report, *, replay=True):
             steps += len(trace["steps"])
             kinds.update(s["kind"] for s in trace["steps"])
             kinds.update("mid-step crash" for s in trace["steps"] if "before_crash" in s)
-            lost += sum(s.get("lost_writes", 0) for s in trace["steps"])
             counts, where = shape(trace)
             shapes.update(counts)
+            if "partition" in spreads:
+                where = (where if "crash" in spreads else []) + [
+                    s["i"] for s in trace["steps"] if s["kind"] == "partition"]
             crashes += where
             late += any(index >= prof["max_steps"] // 2 for index in where)
             answered[sum(op["returned"] is not None for op in lin.history(trace)[0])] += 1
@@ -379,29 +452,41 @@ def campaign(schema, native, label, seeds, report, *, replay=True):
             seen = [a + b for a, b in zip(seen, witnessed)]
         for key, value in check.step_pairs(batch).items():
             require(pairs.setdefault(key, value) == value, "the native step gave two results")
-    needed = ("crash", "restart", "drop", "dup", "partition", "oneway", "heal", "lost",
-              "mid-step crash")
-    require(all(kinds[k] for k in needed) and lost and shapes["overtaken"],
-            f"{label}: a fault kind never happened: {dict(kinds)}, {lost} writes lost, "
-            f"{shapes['overtaken']} messages overtaken")
+    budget, lost = prof["budget"], shapes["lost-writes"]
+    cut = budget.get("partition") or budget.get("oneway")
+    needed = [kind for kind, wanted in (
+        ("crash", budget["crash"]), ("restart", budget["crash"]), ("drop", budget["drop"]),
+        ("dup", budget["dup"]), ("partition", budget["partition"]),
+        ("oneway", budget.get("oneway")), ("heal", cut), ("lost", budget["crash"]),
+        ("mid-step crash", budget["crash"] and prof["crash_mid_rate"])) if wanted]
+    require(all(kinds[k] for k in needed),
+            f"{label}: a fault kind never happened: {dict(kinds)}")
     where, spread_out = spread(crashes, late, seeds, prof["max_steps"])
-    require(spread_out, f"{label}: crashes are bunched at the start: quartiles of the step "
-                        f"index {where}, {late} of {seeds} runs with a crash in their second half")
+    what = " and ".join({"crash": "crashes", "partition": "partitions"}[kind] for kind in spreads)
+    require(spread_out, f"{label}: the {what} are bunched at the start: quartiles of the step "
+                        f"index {where}, {late} of {seeds} runs with one in their second half")
+    if general:
+        require(lost and shapes["overtaken"], f"{label}: {lost} writes lost, "
+                                              f"{shapes['overtaken']} messages overtaken")
+    else:
+        missing = [history for history in BIASED[label]["needs"] if not shapes[history]]
+        require(not missing, f"{label}: the histories this profile is for never happened: {missing}")
     report(f"{label}: {prof['nodes']} servers, {seeds} seeds, {steps} steps, "
            f"{time.time() - started:.0f}s; every run ends max_steps with no trap; "
            f"{replayed} traces replayed step by step and re-run from their seed, byte-identical")
     report(f"  faults: " + ", ".join(f"{kinds[k]} {k}" for k in needed)
            + f"; {lost} issued writes never reached the disk; timers skewed 80-120% on clocks at "
              f"{prof['timer_rate']}%")
-    report(f"  where the crashes fell: step index quartiles {where} of {prof['max_steps']}; "
-           f"{late} of {seeds} runs have a crash in their second half")
+    report(f"  where the {what} fell: step index quartiles {where} of {prof['max_steps']}; "
+           f"{late} of {seeds} runs have one in their second half")
     report(f"  histories that occurred: a disk held part of a step's writes after a sync "
            f"{shapes['half-synced']} times and after a crash {shapes['torn']} times; a granted "
            f"vote of an earlier term reached a candidate {shapes['stale-vote']} times; an "
            f"acknowledgement of an earlier term reached a leader {shapes['stale-ack']} times; "
            f"AppendEntries of an earlier term reached a server {shapes['stale-append']} times, "
            f"{shapes['stale-append-entry']} with an entry; {shapes['overtaken']} AppendEntries "
-           f"arrived after a later one from the same leader")
+           f"arrived after a later one from the same leader; in {shapes['divergent']} runs two "
+           f"servers held different entries at one index")
     report(f"  the {len(schema.invariants['trace'])} invariants hold on every trace and every "
            f"history is linearizable; operations "
            f"answered per run {dict(sorted(answered.items()))}; witnesses "
@@ -412,7 +497,7 @@ def campaign(schema, native, label, seeds, report, *, replay=True):
 def hunt(schema, native, label, names, budget, *, start=0, batch=10):
     """The first seed of a profile, from `start`, on which one of `names` fails (None: any
     check). Returns (seed, trace, check, detail) or None when seed `budget` is reached."""
-    prof, workload = PROFILES[label], Clients(OPS)
+    prof, workload = setting(label)
     for first in range(start, budget, batch):
         traces = [sim.run(native, workload, prof, seed) for seed in range(first, min(first + batch, budget))]
         for trace, (failures, _) in zip(traces, judge(schema, traces)):
@@ -478,7 +563,7 @@ def record_mutant(schema, directory, name, report, labels=("three", "five"), *, 
             seed, trace, failed, detail = found
             report(f"{name} on {label}: {failed} fails on seed {seed} after {seed + 1} seeds "
                    f"({time.time() - started:.0f}s); shrinking {len(trace['steps'])} steps")
-            workload = Clients(OPS)
+            workload = setting(label)[1]
             fails = lambda t: any(f[0] == failed for f in judge(schema, [t], names=[failed])[0][0])
             short, candidates = shrink(native, workload, trace, fails)
             sim.replay(native, workload, short)
@@ -508,8 +593,8 @@ def check_mutants(schema, native, directory, report):
     require(set(kept) == set(MUTANTS), "mutants.json does not cover the declared mutants: "
                                        "run `python3 -m targets.raft.check hunt <name>`: "
                                        f"{sorted(set(kept) ^ set(MUTANTS))}")
-    workload, natives, alike = Clients(OPS), {}, collections.Counter()
-    rejecting = collections.Counter()
+    natives, alike = {}, collections.Counter()
+    rejecting, published = collections.Counter(), collections.defaultdict(list)
     for name in MUTANTS:
         entry = kept[name]
         broken = build(schema, Path(directory) / name, mutate(schema.source, name), executable=False)
@@ -518,7 +603,7 @@ def check_mutants(schema, native, directory, report):
         notes, evidence = [], 0
         for prefix, slot in groups:
             for label, found in sorted(slot.get("found", {}).items()):
-                prof, script = PROFILES[label], json.loads(found["script"])
+                (prof, workload), script = setting(label), json.loads(found["script"])
                 trace = sim.run(broken, workload, prof, found["seed"])
                 require(sim.digest(trace) == found["digest"],
                         f"{name}: seed {found['seed']} of {label} no longer gives the retained trace")
@@ -549,12 +634,17 @@ def check_mutants(schema, native, directory, report):
                         f"or on the short schedule")
                 evidence += 1
                 rejecting[found["check"]] += 1
+                if found["check"] in paper(schema):
+                    published[name].append(label)
                 notes.append(f"{prefix}{label} seed {found['seed']}, {found['seeds_tried']} seeds, "
                              f"{found['check']}, shrunk to {found['short_steps']} steps")
             for label, missing in sorted(slot.get("not_found", {}).items()):
                 notes.append(f"{prefix}{label} NOT FOUND in {missing['seeds_tried']} seeds")
         require(name not in REQUIRED or evidence,
                 f"{name} is required and no evidence against it is retained")
+        require(name not in REQUIRED or published[name],
+                f"{name} is required and no seed is retained on which a published property "
+                f"rejects it")
         report(f"  {name}: " + "; ".join(notes))
     report(f"  on the specification each of those seeds passes every check, and so does each "
            f"short schedule: {alike['exactly']} run exactly as recorded, {alike['skipping']} "
@@ -879,6 +969,10 @@ def main(report=print, record=False):
             shapes.update(counts)
         for history in ("half-synced", "torn", "stale-vote", "stale-ack", "stale-append-entry"):
             require(shapes[history], f"no seeded run contains the history `{history}`")
+        report("biased profiles (three servers; each is for one kind of history, see BIASED):")
+        for label in BIASED:
+            found, _ = campaign(schema, native, label, BIASED_SEEDS, report)
+            pairs.update(found)
         started = time.time()
         items = list(pairs.items())
         for first in range(0, len(items), 20000):
@@ -952,6 +1046,16 @@ def mutants(report=print):
                f"runs of `three` fall at step index quartiles {where} of {BUNCHED['max_steps']} "
                f"and {late} runs have one in their second half; the spread requirement of the "
                f"campaign rejects that")
+        wanted = sorted({history for entry in BIASED.values() for history in entry["needs"]})
+        calm = collections.Counter()
+        for seed in range(10):
+            calm.update(shape(sim.run(native, Clients(OPS), QUIET, seed))[0])
+        require(not any(calm[history] for history in wanted),
+                f"a profile without faults shows the histories the biased profiles are for: "
+                f"{ {history: calm[history] for history in wanted} }")
+        report(f"biased profiles, teeth: on 10 runs of three servers with no faults and nothing "
+               f"slow none of the histories those profiles must show occurs "
+               f"({', '.join(wanted)}); the requirement rejects such a profile")
         late, partial, _, _ = liveness(schema, natives[LIVE_DEGRADED], "three", 20)
         only = [seed for seed in partial if seed not in late]
         require(len(only) >= 5, f"the liveness check sees {LIVE_DEGRADED} on seeds {only} only")
@@ -983,7 +1087,8 @@ def cli(argv):
         found = slot["found"][label]
         with TemporaryDirectory() as tmp:
             native = build(schema, Path(tmp) / "m", mutate(schema.source, argv[1]), executable=False)
-            trace = sim.script(native, Clients(OPS), PROFILES[label], json.loads(found["script"]))
+            prof, workload = setting(label)
+            trace = sim.script(native, workload, prof, json.loads(found["script"]))
         print(f"{argv[1]} on {label}: {found['check']}: {found['detail']}")
         print("\n".join(story(trace)))
     else:
