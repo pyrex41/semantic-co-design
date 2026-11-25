@@ -108,16 +108,20 @@ The return value is the number of integers written, or `-1` when the specificati
 from tool.sim import hegel
 found = hegel.falsify(native, workload, profile, inits, invariants=["inv.ok-is-durable"],
                       cases=200, seed=0)
+found["failure"]    # None, or the invariant (or "sim.error") that failed
 found["trace"]      # None, or the shrunk failing trace
+hegel.replay(native, workload, inits, found["trace"], found["trap"])
 ```
 
 * **Where it comes from.** The official Python frontend, `hegeltest` 0.5.2 on PyPI, which bundles the libhegel 0.53.2 engine. [nix/hegel.nix](../nix/hegel.nix) fetches the published cp314 wheel by hash for each of the flake's systems; nothing is compiled. The core simulator does not import it.
 * **Questions.** `pick` asks what `sim.pick` asks, at the same profile rates: a fault, a restart, the workload, otherwise whatever is due first. It adds a small chance that any queued item overtakes the one that is due, as it may in a scripted trace. `HegelDraw` answers `choose` and `delay`. Each step is one Hegel span that starts with the decision to go on, so the shrinker can delete a step whole.
 * **Simplest answers.** Every question is put so that false, 0 or the lowest value is the quiet answer: stop, no fault, no crash inside the step, nothing persisted, the shortest delay. Shrinking moves a failure toward a short fault-free schedule in time order.
-* **Failures.** A case fails when a named Shen invariant is violated or the run ends in a `SimError` (reported as `sim.error`). Invariants see neither times nor draws, so verdicts are cached by step sequence: thousands of shrinking runs cost a few hundred shen-jit calls.
-* **Reproducible.** With a fixed `seed` and the example database off (the default) the same arguments give the same shrunk trace. The step under test may be the shared library or, with `NODE_TARGET=wasm`, the wasm module; both give the same traces.
+* **Failures.** A case fails when a named Shen invariant is violated or the run ends in a `SimError` (the failure `sim.error`; `traps=False` leaves those out and counts them in `trapped`). The first failing case fixes the failure that is pursued, and from then on a run fails only by that one. Otherwise Hegel sees one failure where there may be several and its shrinker moves between them: on a specification with two faults the first trace and the shrunk one were different bugs. Invariants see neither times nor draws, so verdicts are cached by step sequence: thousands of shrinking runs cost a few hundred shen-jit calls.
+* **Traps.** A `sim-trace/1` record has no step for an action that raised a `SimError`, so a trace that ends `error: ...` holds only the steps before the trap, and `sim.replay` takes its `end` on trust. `falsify` therefore returns the trapping `[action, draws]` beside the trace, and `hegel.replay` applies it after the recorded steps and requires the recorded error.
+* **Reproducible.** The result is a function of the arguments, wall time aside. `falsify` gives Hegel every one of its settings (`PINNED`, the seed, the case count, the phases) and refuses to run if a Hegel version has a setting it does not give, because Hegel takes an unset setting from `HEGEL_*` variables, a `hegel.toml` or CI detection. It uses no example database: nothing is saved and no earlier failure is replayed. The step under test may be the shared library or, with `NODE_TARGET=wasm`, the wasm module; on this machine both give the same traces.
+* **Coverage.** A run that finds nothing and stops short of `cases`, because Hegel ran out of distinct schedules, returns `exhausted`. `cases` below 1 is an error.
 
-`check accepted_job` ends with this section: 200 generated schedules of the specification hold every invariant, and each of the three mutants is found, shrunk, replayed and found again identically. Seed 0, 200 cases:
+`check accepted_job` ends with this section. 200 generated schedules of the specification hold every invariant. Each of the three mutants is found; the result must be shorter than the first failure, no longer than the length retained in `HEGEL_SHRUNK`, and reached by runs after the first failure; it replays byte for byte on the mutant, is rejected on the unedited binary, still violates the named invariant, and a second run gives the same bytes. Seed 0, 200 cases, aarch64-darwin (the Linux wheels are fetched by hash but the check has not been run on Linux):
 
 | Mutant | Found at case | Hegel shrinks to | Hand shrinker, same failure | Hand shrinker, retained seed |
 |---|---|---|---|---|
@@ -127,6 +131,13 @@ found["trace"]      # None, or the shrunk failing trace
 
 Neither shrinker dominates. `check.shrink` only deletes steps and stops at a 1-minimal trace; Hegel also changes choices, and stops where its passes find nothing smaller. Over seeds 0 to 5 Hegel's result is 5 steps every time for the first mutant, 10 to 17 for the second and 12 to 20 for the third.
 
-A fourth mutant, used here only, deletes the conflict clause of `job.decide`, so a second digest for a stored key has no result. Hegel finds the trap and shrinks the schedule that reaches it. A trace that ends in an error stops before the step that trapped, so replay confirms the steps that led there and the trace's `end` names the state and event.
+A fourth mutant, used here only, deletes the conflict clause of `job.decide`, so a second digest for a stored key has no result. Hegel finds the trap and shrinks the schedule that reaches it from 18 steps to 9. Those 9 steps also replay on the unedited binary, so the check replays the trapping step: it must raise the recorded error on the mutant, and the unedited binary, a rewritten `end` and a missing trapping step must each be rejected.
+
+Seeded faults the section must reject, all of which passed before they were retained:
+
+* Hegel's shrink phase off (`shrink=False`): the first failure comes back unshrunk and the three shrinking conditions say so.
+* `HEGEL_PHASES`, `HEGEL_BACKEND`, `HEGEL_STOP_ON_FIRST_FAILURE`, `HEGEL_REPORT_MULTIPLE_FAILURES`, `HEGEL_SEED`, `HEGEL_TEST_CASES`, `HEGEL_DERANDOMIZE`, `HEGEL_DATABASE` and `CI` set against the run: the same bytes in the same number of runs, and no database directory.
+* Two faults in one binary. A trap with `reply-before-ack`, asked for `inv.ok-is-durable`: the trap comes first and stays the failure; with `traps=False` the first and the shrunk trace both violate the invariant. `reply-before-ack` with `insert-without-key-check`: the invariant pursued is violated by the first and by the shrunk trace.
+* A profile with one schedule and 100 cases asked for returns `exhausted`; zero cases is refused.
 
 Flake checks: `hegel-step` runs `check accepted_job` on the host target and `wasm-step` runs it on the wasm module.
