@@ -42,6 +42,13 @@
           python3 -m tool check kernel sim accepted_job gossip
           touch "$out"
         '';
+        # A gate of its own rather than one more name on the line above: the check takes
+        # about six minutes, and other targets are being added next to it.
+        workflow = nixpkgs.legacyPackages.${system}.runCommand "workflow" (environment system) ''
+          cd ${self}
+          python3 -m tool check workflow
+          touch "$out"
+        '';
         native-replay = nixpkgs.legacyPackages.${system}.runCommand "native-replay" (environment system) ''
           python3 ${self}/logic/check.py
           python3 ${self}/native/check_accepted_job.py
