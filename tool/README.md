@@ -187,6 +187,7 @@ Every step has `i`, `t` (virtual time), `kind`, `action`, `draws` and the `world
 
 * One step function per world. Nodes differ only by state.
 * The disk is a keyed row store with in-order sync. There is no corruption, no torn row, no full disk and no failed read.
+* A `sync` is an action of its own, so no write becomes durable between two effects of one step, and a step that writes a row and then reads it always reads the old row. A device whose writes are synchronous would hand back the new one. Simulation is therefore not a superset of such a device for that one pattern; the Solo5 shim refuses the read for this reason ([solo5/README.md](solo5/README.md#a-read-of-a-row-the-same-step-wrote)). Lifting the limit means a draw inside `World.step` and a matching nondeterministic choice in the Maude environment's `app`.
 * Local events (acknowledgements, read results, timers, clock readings) are never dropped, duplicated or delayed past a crash. There is no profile in which a stale completion arrives, so a specification's own defence against one could not be tested here. A partition discards at send time; messages already in flight still arrive.
 * There is no source of randomness for a node. A specification that needs a random number needs a new effect role for it (see extension points).
 * The seeded schedule is one random policy. What it covers is whatever the seeds reach; the checks report how many seeds show each required history.
