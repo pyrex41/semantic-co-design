@@ -1,4 +1,4 @@
-"""python3 -m tool check <kernel | sim | example>   run the retained checks
+"""python3 -m tool check <kernel | sim | example | target>   run the retained checks
 python3 -m tool record <example>             regenerate an example's retained evidence
 python3 -m tool compile <example> <dir>      write IR, C, shared library and executable"""
 import importlib
@@ -15,8 +15,11 @@ def main(argv):
             elif name == "sim":
                 from .sim_check import main as run
                 run()
-            else:
+            elif (Path(__file__).parent / "examples" / name).is_dir():
                 module = importlib.import_module(f".examples.{name}.check", __package__)
+                module.main(record=argv[0] == "record")
+            else:       # a target outside the kernel: targets/<name>/check.py
+                module = importlib.import_module(f"targets.{name}.check")
                 module.main(record=argv[0] == "record")
         return 0
     if len(argv) == 3 and argv[0] == "compile":

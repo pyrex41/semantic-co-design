@@ -30,23 +30,23 @@ enum { LIMIT = 65536, SLOTS = /* SLOTS */, INIT_SLOTS = /* INIT SLOTS */ };
 static const int64_t *input;
 static int64_t *output;
 static int64_t emitted, capacity;
-static jmp_buf failure;
+static sigjmp_buf failure;      /* jumped to without the signal mask, see run() */
 /* BANKS */
 
-#define TRAP() longjmp(failure, 1)
+#define TRAP() siglongjmp(failure, 1)
 
 static int64_t read_at(const int64_t *values, int64_t length, int64_t index) {
-    if (index < 0 || index >= length) longjmp(failure, 2);
+    if (index < 0 || index >= length) siglongjmp(failure, 2);
     return values[index];
 }
 
 static void write_at(int64_t *values, int64_t index, int64_t value) {
-    if (index < 0 || index >= LIMIT) longjmp(failure, 2);
+    if (index < 0 || index >= LIMIT) siglongjmp(failure, 2);
     values[index] = value;
 }
 
 static void emit(int64_t value) {
-    if (emitted == capacity) longjmp(failure, 3);
+    if (emitted == capacity) siglongjmp(failure, 3);
     output[emitted++] = value;
 }
 
@@ -115,7 +115,9 @@ static int64_t run(void (*program)(int64_t), const int64_t *in, int64_t count, i
     output = out;
     emitted = 0;
     capacity = limit;
-    int code = setjmp(failure);
+    /* A trap unwinds to here. The signal mask is not saved: setjmp saves it on macOS,
+       which is a system call on every step (measured: about 215 ns of a 240 ns step). */
+    int code = sigsetjmp(failure, 0);
     if (code) return -code;
     program(count);
     return emitted;

@@ -1,0 +1,170 @@
+{
+  "branch-inverted": {
+    "invariant": "completed-is-whole",
+    "minimal_sha256": "36fb71e26c29b6d6984adae37c8142987c924fac18819f6beb6202a110696e01",
+    "minimal_steps": 43,
+    "seed": 3,
+    "sha256": "6c091426f1a89f64f024134c8ef5f626a6c453d4abe51d558142b6dbbffb3fb7",
+    "steps": 53
+  },
+  "cancel-after-finish": {
+    "invariant": "terminal-is-final",
+    "minimal_sha256": "7a6a3dab248693781d1d845b04d01b10e44a1dfba2253f6b8609d91c64381e71",
+    "minimal_steps": 24,
+    "seed": 2,
+    "sha256": "3da08a71647eae5fe3bae89336169f64fc8b0248a1c2f51c9a63e25050ca0ba3",
+    "steps": 69
+  },
+  "cancel-skips-compensation": {
+    "invariant": "memory-is-replay",
+    "minimal_sha256": "98856ac1667037d5cf133105b7ea64a01fdf14c3603c866dffd1717316449d9b",
+    "minimal_steps": 36,
+    "seed": 3,
+    "sha256": "54effb8541dd2310f6a9378c66664e3f869cfb7264ebdb54c471cbe2fa9729a2",
+    "steps": 44
+  },
+  "completion-of-another-key": {
+    "invariant": "history-follows-definition",
+    "minimal_sha256": "0714d5cf59ea46ceb6d3c72ee419d946aacafd997d53f776a29cb150ced28a4a",
+    "minimal_steps": 29,
+    "seed": 28,
+    "sha256": "627c0faf36243129ae7221763194eef910e050e5fe6cbde9dfeb26c9ab2bebe0",
+    "steps": 49
+  },
+  "extra-attempt": {
+    "invariant": "history-follows-definition",
+    "minimal_sha256": "702dec8bb71fd3f76cd40b1fc538924fce1570c72c5a57de613064e4981834c8",
+    "minimal_steps": 36,
+    "seed": 1,
+    "sha256": "030228d193e9107b5ca9e07d3f5b0a5396c4eace5945be4213a124ed7b55d040",
+    "steps": 105
+  },
+  "fail-ignored": {
+    "invariant": "completed-is-whole",
+    "minimal_sha256": "f9348ea0f3aed2f9feb94b7a372ecd42d8de6bbd1a035b2a1031445791a94a5e",
+    "minimal_steps": 61,
+    "seed": 13,
+    "sha256": "77f60e94841e05834d35eaca9f8840fd4683e0fd4e4d254a0fac014090cce822",
+    "steps": 71
+  },
+  "forward-compensation": {
+    "invariant": "compensation-matches",
+    "minimal_sha256": "aaec30bed83669fb1e2da74d73128dd6e659ea125a8f953cb3373e368dc28c0b",
+    "minimal_steps": 39,
+    "seed": 1,
+    "sha256": "76bad5d7174357abfba008a619b1196dfb2add1af63d78519d84578061378470",
+    "steps": 68
+  },
+  "gives-up-early": {
+    "invariant": "history-follows-definition",
+    "minimal_sha256": "b8ee749496d1058afcbee31391fe430c702f6c842aba3265912d22173c870340",
+    "minimal_steps": 35,
+    "seed": 1,
+    "sha256": "654e21fdf820375afeb71b34e6a7936b55926d725ca2a23818a72ae06f45381b",
+    "steps": 54
+  },
+  "in-doubt-not-undone": {
+    "invariant": "compensation-matches",
+    "minimal_sha256": "3fb5dc682c7aeb56f4e00a3a445ca95d89a7f66c045c28c554dde1dd828b2882",
+    "minimal_steps": 39,
+    "seed": 1,
+    "sha256": "f53e3683f8732ec581d48436b780b277b3d0d6127ebfb161c43f1ecef79b1fdb",
+    "steps": 61
+  },
+  "key-dropped-on-retry": {
+    "invariant": "one-effect-per-activity",
+    "minimal_sha256": "9cce00bd3cb06d2f38d233ed351dccedf79ec82e6b0221e4d1aa0bb2129f0666",
+    "minimal_steps": 21,
+    "seed": 5,
+    "sha256": "cf3c5e1ba9ed30f094bdbe584bae63846be575c9049a7a2bebb78f552632444f",
+    "steps": 39
+  },
+  "never-reports": {
+    "invariant": "inv.client-is-told",
+    "minimal_sha256": "606c63dbb279364a5d13e783018c85f076f5bd093bba6950afac8977b6cb2ab5",
+    "minimal_steps": 27,
+    "seed": 2,
+    "sha256": "c13ebe2da5f26a11c9ceb7d56896ea8dd39e331c9b719083920a633024cf4cd9",
+    "steps": 27
+  },
+  "no-backoff": {
+    "invariant": "inv.backs-off",
+    "minimal_sha256": "9d4a9b7a08e7edbecce1780f485653bb5e7cab84fd4557e9827b1ae29e8a415b",
+    "minimal_steps": 9,
+    "seed": 0,
+    "sha256": "580576b81155e31463071daed50a949c55efb5498cabc51d0d9bb3f79baa5344",
+    "steps": 52
+  },
+  "no-resume": {
+    "invariant": "inv.settles",
+    "minimal_sha256": "8a7dd5f4a501fb53e2eec52fbcd17074ea2d667370a658c9d89e51ab4d3c1350",
+    "minimal_steps": 11,
+    "seed": 1,
+    "sha256": "baf231e8e285b8020ff78b3b50a55058396244f527f54bfd9b925cdaadd64319",
+    "steps": 13
+  },
+  "old-timer-accepted": {
+    "invariant": "inv.backs-off",
+    "minimal_sha256": "24ae54f9c7735b3946090d2eb77564846e62e138c6803395c9b811d915e36f00",
+    "minimal_steps": 15,
+    "seed": 4,
+    "sha256": "4c9ce856cf5da330991abc9dcd48bcd287f4c53effd7171a8af89238b46f82fd",
+    "steps": 56
+  },
+  "report-before-durable": {
+    "invariant": "reports-are-true",
+    "minimal_sha256": "cfc9ce23fc5e2477d0720f23c8403fe0507b2f267f8499249d9213b9934d883e",
+    "minimal_steps": 27,
+    "seed": 16,
+    "sha256": "981bfaadfc8bf543d5aa3d5589b876a2a18a5cd9010dbc375fd942d2551f41b6",
+    "steps": 35
+  },
+  "report-lies": {
+    "invariant": "reports-are-true",
+    "minimal_sha256": "48931f460b2667128d3689d4b6b7fbcdd9abd363ac83c1ffdffbdfd88d884e47",
+    "minimal_steps": 50,
+    "seed": 1,
+    "sha256": "8a8107d04b965625a11aa1125e5bc37d16fb4d1c57142ecabc029144a405175e",
+    "steps": 68
+  },
+  "restart-without-replay": {
+    "invariant": "memory-is-replay",
+    "minimal_sha256": "db1e2a594bf65db6f5f6b5a5ced0f10781eef4a0eeb63592beb888a993d42e91",
+    "minimal_steps": 15,
+    "seed": 0,
+    "sha256": "7a7e6877203aa9b32102dfe59035426cf44fc5717e1d2de65606462e16eea52b",
+    "steps": 70
+  },
+  "run-before-intent": {
+    "invariant": "history-is-true",
+    "minimal_sha256": "4010fb598ef3f8fa13518c08f18f99c0163096c3ba88e6e8fe862942d5fa485e",
+    "minimal_steps": 3,
+    "seed": 2,
+    "sha256": "74c616df87adccc6654575efaa3aec0399726d46808fc01b2c7b15286d58809d",
+    "steps": 58
+  },
+  "sequence-restarts": {
+    "invariant": "history-is-a-log",
+    "minimal_sha256": "af855034ddc5696ae21b80332667a6760de5828f90107d434553109f6c18e683",
+    "minimal_steps": 20,
+    "seed": 0,
+    "sha256": "91b2a47781c0fa6feb1413695ccc7c91d9e6d27f9f002adfaecabd8dd6907caf",
+    "steps": 52
+  },
+  "stale-attempt-accepted": {
+    "invariant": "history-is-true",
+    "minimal_sha256": "7a9d10771ab4e3df0f27ed794a6f1baab3257fb67ed399f2b79b0777a5e6037d",
+    "minimal_steps": 32,
+    "seed": 277,
+    "sha256": "cc1173066b5ec07551e209ef757e82b1508da86c4bc0edd17949599f296a8505",
+    "steps": 76
+  },
+  "undo-not-awaited": {
+    "invariant": "inv.stuck-needs-a-fault",
+    "minimal_sha256": "f02534dda168429627f7faba84c4a28b71ca73b45d3ca0d1ea370f948568ecfd",
+    "minimal_steps": 25,
+    "seed": 15,
+    "sha256": "b76208778d1abc37e095f0f08ac8c1a59c236b70477d9483461e6c0e8accd1ce",
+    "steps": 38
+  }
+}

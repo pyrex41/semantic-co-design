@@ -1,0 +1,11 @@
+{
+  "name": "leak",
+  "spec": "spec.shen",
+  "step": "leak.step",
+  "init": "leak.init",
+  "symbols": ["idle"],
+  "state": ["num", "num", "sym"],
+  "events": {"tick": {"role": "request"}},
+  "effects": {},
+  "max_effects": 0
+}

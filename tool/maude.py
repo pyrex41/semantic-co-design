@@ -265,7 +265,7 @@ ENVIRONMENT = """mod ENV is
   rl [lost] : { ev(I, E) down(I) R } => { down(I) R } .
   rl [sync] : { node(I, S) disk(I, Rows, cons(cons(T, W), PW)) R }
            => { node(I, S) disk(I, put(W, Rows), PW) %ACK% R } .
-  rl [output] : { out(V) R } => { got(V) R } .
+%OUTPUT%
   rl [drop-out] : { out(V) budget('drop, s(N)) R } => { dropped(V) budget('drop, N) R } .
   rl [drop-ev] : { ev(I, E) budget('drop, s(N)) R } => { dropped(E) budget('drop, N) R } .
   rl [dup-out] : { out(V) budget('dup, s(N)) R } => { out(V) out(V) budget('dup, N) R } .
@@ -294,11 +294,16 @@ endm
 """
 
 
+OUTPUT = "  rl [output] : { out(V) R } => { got(V) R } ."
+
+
 def environment_module(schema, prof, workload):
     """Instantiate the environment for a manifest, an untimed profile and workload rules.
 
     `workload` is Maude text: declarations and rules over `{ ... }`, plus the equation-free
-    term for its initial things under the name given as `workload["init"]`.
+    term for its initial things under the name given as `workload["init"]`. A workload that
+    reacts to outputs (`Workload.deliver` in the simulator) gives its own rules for the
+    delivery of an output as `workload["output"]`; they replace the rule that only records it.
     """
     if prof["timed"]:
         raise ValueError("the Maude environment models the untimed profile only")
@@ -386,6 +391,7 @@ def environment_module(schema, prof, workload):
     out = ENVIRONMENT
     for marker, text in (("EFFECTS", "\n".join(effects)), ("STEPS", "\n".join(steps)),
                          ("ACK", ack), ("MISSING", missing), ("BOOT", boot),
+                         ("OUTPUT", workload.get("output", OUTPUT)),
                          ("SEEN", "state(I, S)" if prof["observe_states"] else "none"),
                          ("UNSEEN", "state(I, q('down))" if prof["observe_states"] else "none"),
                          ("WORKLOAD", workload["rules"]), ("INIT", soup)):
