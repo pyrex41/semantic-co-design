@@ -6,8 +6,7 @@
   "symbols": ["unknown", "free", "stored", "idle", "writing", "ok", "conflict", "full"],
   "state": [
     {"capacity": 2, "of": ["sym", "num", "num"]},
-    ["sym", "num", "num", "num", "num", "num"],
-    "num"
+    ["sym", "num", "num", "num", "num"]
   ],
   "events": {
     "restart": {"role": "restart"},
@@ -24,6 +23,7 @@
   "invariants": {
     "file": "invariants.shen",
     "state": ["inv.one-row-per-key"],
-    "trace": ["inv.ok-is-durable", "inv.conflict-is-real", "inv.rows-are-immutable"]
+    "trace": ["inv.ok-is-durable", "inv.conflict-is-real", "inv.full-is-real",
+              "inv.rows-are-immutable"]
   }
 }

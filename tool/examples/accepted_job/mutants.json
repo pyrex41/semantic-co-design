@@ -1,26 +1,66 @@
 {
+  "conflict-for-same-digest": {
+    "invariant": "inv.conflict-is-real",
+    "minimal_sha256": "06e92119cbb879a86fe8e13d0c9cf6e6a43d6d182c58573f0e5796621e830959",
+    "minimal_steps": 20,
+    "seed": 0,
+    "sha256": "c2c49c4d9adaa7bee12db90ccd967ef9d4627f136a3de859794d0d33cd2fadac",
+    "steps": 35
+  },
+  "find-ignores-key": {
+    "invariant": "inv.ok-is-durable",
+    "minimal_sha256": "50ea5f50838b6b705ca236d53f0a042538de313256391e6962f54128f4620248",
+    "minimal_steps": 12,
+    "seed": 0,
+    "sha256": "571e661e4fc10d2685ba044cb8f56eb5ab2323e605a1358580a1db3377eb5f71",
+    "steps": 29
+  },
+  "full-instead-of-second-receipt": {
+    "invariant": "inv.full-is-real",
+    "minimal_sha256": "aff10dfd8f3f3ec1af3e8ac6b3e36bd7ccf57ac234f6cc9d4daa18b30e5f913e",
+    "minimal_steps": 9,
+    "seed": 0,
+    "sha256": "e0e3ebcbe0dac3862f32248429b6ddb7eb6369d3d39927b188216ec6b7228342",
+    "steps": 29
+  },
   "insert-without-key-check": {
     "invariant": "inv.one-row-per-key",
-    "minimal_sha256": "9b021269d6d84a31c222ee6b54f60ba3827cf46163eaea49e2b11ec22f417c71",
+    "minimal_sha256": "70e3c9419f8b7a73d13dd30639b0478768648f719fd81fb70a0cdabef944e73e",
+    "minimal_steps": 10,
+    "seed": 3,
+    "sha256": "adface510630056bbce5bf1c2fdd7a12b359f7440a92dc0fcbea5f913aae13a0",
+    "steps": 35
+  },
+  "ok-for-other-digest": {
+    "invariant": "inv.ok-is-durable",
+    "minimal_sha256": "788b5af84b1c0bdebd72384735a26b0a11350af7da45a69eef4aa341a14ce73a",
     "minimal_steps": 10,
     "seed": 0,
-    "sha256": "e329a8336c407a77c8896979613e8452df9ea9e35208ca7d6016aeda303dcae0",
-    "steps": 27
+    "sha256": "9675e66caf7fe6d6ea6ac2a0e70da152403b463982c642cd77ed590851cd1bc9",
+    "steps": 35
   },
   "reload-ignores-durable-row": {
     "invariant": "inv.rows-are-immutable",
-    "minimal_sha256": "7ffd5802b33a8a1e7649ecda78e59390df81e0ace576639139c2b659adb8431a",
-    "minimal_steps": 14,
-    "seed": 1,
-    "sha256": "acc962f52f1dddb29b69e1adf41e3ff6ccedf10c9cb9952d68fb0d683985b65f",
-    "steps": 28
+    "minimal_sha256": "d57e5e5be88e3892954ba12cafe137234dd34c5ec4fa91d396de1e93379667a6",
+    "minimal_steps": 21,
+    "seed": 0,
+    "sha256": "4515a8d5768721810558908519382cd8dbf418807272a78643ccb9e228a7fd98",
+    "steps": 39
   },
   "reply-before-ack": {
     "invariant": "inv.ok-is-durable",
-    "minimal_sha256": "19dbc06e3c4ea36c22d7c308de821cae9f9187e9722eb5ac1395fc48800e16a7",
+    "minimal_sha256": "7cb589d0ee545b61c618f3649918405e56fde93f771aba773fae8a0bf7dbce29",
     "minimal_steps": 5,
     "seed": 0,
-    "sha256": "261b1413f529c208cf382fbcbf2a9c42fa8e2de4d739f4fa4b9d2c70e0488feb",
-    "steps": 24
+    "sha256": "ff640794f3a00b3c40e3d8857f6d7a7837666cddd3ae3cae9b84a0412b623160",
+    "steps": 33
+  },
+  "reply-names-receipt-0": {
+    "invariant": "inv.ok-is-durable",
+    "minimal_sha256": "3fbd48994313f84a08849f29988960a5a6e00a6bc6c78746a9c3c02162cc2fdb",
+    "minimal_steps": 11,
+    "seed": 0,
+    "sha256": "8450995982f49424a402dbb650ed1ba0e091e3214410d82e6a0943dc1cf38adb",
+    "steps": 35
   }
 }
