@@ -39,12 +39,14 @@ DESCRIBED = {}
 
 
 def describe(name):
-    """Keys and activity names of a definition, computed from it by shen-jit."""
+    """Keys, activity names and length of a definition, computed from it by shen-jit."""
     if name not in DESCRIBED:
-        keys, names = shen.evaluate([ENGINE, HERE / "defs" / f"{name}.shen", INVARIANTS], [
-            f"(wf.keys (wf.program ({name}.definition)))",
-            f"(inv.names (wf.program ({name}.definition)))"])
-        DESCRIBED[name] = list(keys), list(dict.fromkeys(names))
+        keys, names, length = shen.evaluate(
+            [ENGINE, HERE / "defs" / f"{name}.shen", INVARIANTS],
+            [f"(wf.keys (wf.program ({name}.definition)))",
+             f"(inv.names (wf.program ({name}.definition)))",
+             f"(length (wf.program ({name}.definition)))"])
+        DESCRIBED[name] = list(keys), list(dict.fromkeys(names)), length
     return DESCRIBED[name]
 
 
@@ -86,7 +88,7 @@ class Definition:
     def __init__(self, name, directory, *, engine=None, extra_symbols=()):
         self.name, self.directory = name, Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
-        self.keys, self.names = describe(name)
+        self.keys, self.names, self.length = describe(name)
         self.text = source(name, engine)
         (self.directory / "spec.shen").write_text(self.text)
         self.schema = Schema(manifest(name, self.keys, self.names, extra_symbols), self.directory)

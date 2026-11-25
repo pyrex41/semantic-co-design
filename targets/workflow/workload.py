@@ -30,10 +30,12 @@ def last(ledger, key):
 
 
 class Workers(Workload):
-    def __init__(self, keys, outcomes, cancels=1):
+    def __init__(self, keys, outcomes, cancels=1, *, careless=False):
         """`outcomes[name]` lists the results an execution of that activity may have; 0 is
-        a failure. A seeded run draws one uniformly, so repeating a result weights it."""
+        a failure. A seeded run draws one uniformly, so repeating a result weights it.
+        Careless workers ignore the idempotency key of a `run`: they run it every time."""
         self.keys, self.outcomes, self.cancels = tuple(keys), dict(outcomes), cancels
+        self.careless = careless
 
     def initial(self, profile):
         return ((), self.cancels)                   # ledger, cancels the client may still send
@@ -52,7 +54,7 @@ class Workers(Workload):
         tag = payload[0]
         if tag == "run":
             _, name, key, attempt = payload
-            known = last(ledger, key) if key in self.keys else None
+            known = last(ledger, key) if key in self.keys and not self.careless else None
             if known is None:
                 results = self.outcomes[name]
                 result = results[draw.choose("outcome", len(results))]

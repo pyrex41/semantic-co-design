@@ -13,8 +13,9 @@ from tool.check import CheckFailure, require
 from tool.compile import build, run_lines, specialize
 from tool.pe import Specializer, Unsupported
 from tool.schema import Schema
+from tool.sim import mutants as worlds
 
-from .model import HERE, INVARIANTS, SYNTAX, TERMINAL, Definition
+from .model import HERE, INVARIANTS, SYNTAX, TERMINAL, Definition, manifest
 from .workload import Workers, maude as maude_workers
 
 SEEDS = 400
@@ -32,14 +33,21 @@ STATE = ["one-effect-per-key", "history-is-true", "history-is-a-log", "memory-is
 TRACE = ["inv.append-only", "inv.recovery-reproduces", "inv.never-regresses"]
 LIVE = "inv.settles"
 
-# The exhaustive bounds, all on defs/small.shen: (fault budget, cancels, outcomes).
+# The exhaustive bounds: (definition, fault budget, cancels, outcomes). In an untimed search
+# a timer may fire at any moment, so timeouts, late timers and every order of timers and
+# completions are in each of them.
 FLAKY = {"hold": (1, 0), "pay": (1,)}
 BOUNDS = {
-    "cancel": ({"crash": 0, "drop": 0, "dup": 0}, 1, {"hold": (1, 0), "pay": (1, 0)}),
-    "drop": ({"crash": 0, "drop": 1, "dup": 0}, 0, FLAKY),
-    "duplicate": ({"crash": 0, "drop": 0, "dup": 1}, 0, FLAKY),
-    "crash": ({"crash": 1, "drop": 0, "dup": 0}, 0, FLAKY),
+    "cancel": ("small", {"crash": 0, "drop": 0, "dup": 0}, 1, {"hold": (1, 0), "pay": (1, 0)}),
+    "drop": ("small", {"crash": 0, "drop": 1, "dup": 0}, 0, FLAKY),
+    "duplicate": ("small", {"crash": 0, "drop": 0, "dup": 1}, 0, FLAKY),
+    "crash": ("small", {"crash": 1, "drop": 0, "dup": 0}, 0, FLAKY),
+    # A second crash can hit the recovery from the first one.
+    "two crashes": ("single", {"crash": 2, "drop": 0, "dup": 0}, 0, {"hold": (1,)}),
 }
+# An engine that takes any acknowledgement for the write in flight. Under the environment's
+# rule that no completion crosses a crash it cannot be told from the real one.
+BLIND = [("  Def [live Seq Row Pos] [written Seq] ->", "  Def [live Seq Row Pos] [written _] ->")]
 
 # Each mutant is an edit of engine.shen, the invariant that must reject it, and the
 # exhaustive bound in which a violation must also be reachable.
@@ -98,12 +106,12 @@ MUTANTS = {
 }
 
 
-def workers(definition, cancels=1):
-    return Workers(definition.keys, OUTCOMES[definition.name], cancels)
+def workers(definition, cancels=1, **options):
+    return Workers(definition.keys, OUTCOMES[definition.name], cancels, **options)
 
 
-def seeded(native, definition, seeds):
-    return [sim.run(native, workers(definition), SEEDED, seed) for seed in seeds]
+def seeded(native, definition, seeds, **options):
+    return [sim.run(native, workers(definition, **options), SEEDED, seed) for seed in seeds]
 
 
 # ---- what the invariants see
@@ -181,10 +189,46 @@ def constants(tree, out):
     return out
 
 
+def tested(tree, leaf, out):
+    """The constants a residual program compares input `leaf` with."""
+    if isinstance(tree, list):
+        if tree[0] == "eq" and tree[1] == ["at", leaf] and type(tree[2]) is int:
+            out.add(tree[2])
+        for child in tree[1:]:
+            tested(child, leaf, out)
+    return out
+
+
+PC = 6          # the input index of Pc: [Mode Seq [Kind A B] [Phase Pc ...]]
+
+
+def unspecialized(definition):
+    """Try to compile the engine with its definition as runtime data: the definition's
+    leaves become part of the state and only its list structure stays static. Returns the
+    compiler's refusal, or None if it compiled."""
+    name = definition.name
+    value, = shen.evaluate(definition.files, [f"({name}.definition)"])
+    shape = lambda v: [shape(x) for x in v] if isinstance(v, tuple) else (
+        "sym" if type(v) is str else "num")
+    described = manifest(name, definition.keys, definition.names, SYNTAX)
+    described.update(state=[shape(value), described["state"]], step="generic.step",
+                     init="generic.init")
+    source = definition.text + f"""
+(define generic.init _ _ -> [({name}.definition) (wf.init ({name}.definition))])
+(define generic.step [Def State] Event -> (generic.pair Def (wf.step Def State Event)))
+(define generic.pair Def [State Effects] -> [[Def State] Effects])
+"""
+    try:
+        specialize(Schema(described, definition.directory), source)
+    except Unsupported as error:
+        return str(error)
+    return None
+
+
 def specialization(work, report):
     engine = (HERE / "engine.shen").read_bytes()
     built = {}
-    for name in ("order", "docs", "small"):
+    for name in ("order", "docs", "small", "single"):
         definition = Definition(name, work / name)
         native = build(definition.schema, work / name / "build")
         built[name] = (definition, native)
@@ -198,21 +242,34 @@ def specialization(work, report):
         require(not used_declared & set(SYNTAX),
                 f"{name}: the residual program uses definition syntax: {used_declared & set(SYNTAX)}")
         require(plain == declared, f"{name}: declaring the syntax changed the residual program")
+        # What is left of the definition's structure is its positions: Pc is runtime data,
+        # and the residual program compares it with each index of the program.
+        positions = tested(json.loads(plain), PC, set())
+        require(positions == set(range(definition.length)),
+                f"{name}: the residual program tests Pc against {sorted(positions)}")
         report(f"specialized engine.shen to {name}: {native.stats}; residual symbols "
                f"{len(used)}, none of {'/'.join(SYNTAX)}; the residual program is identical "
-               f"when those words are given integer codes")
+               f"when those words are given integer codes; it tests Pc against exactly the "
+               f"{definition.length} positions of the program")
     require((HERE / "engine.shen").read_bytes() == engine, "the engine changed between builds")
     trees = {name: (work / name / "build" / "node.ir.json").read_text() for name in built}
-    require(len(set(trees.values())) == 3, "two definitions gave the same residual program")
+    require(len(set(trees.values())) == len(built), "two definitions gave the same residual program")
     keys = {name: set(built[name][0].keys) for name in built}
     for name, tree in trees.items():
         seen = constants(json.loads(tree), set())
         others = set().union(*(keys[other] for other in keys if other != name))
         require(keys[name] <= seen and not others & seen,
                 f"{name}: the residual program does not hold exactly its own keys")
-    report(f"one engine (sha256 {hashlib.sha256(engine).hexdigest()[:16]}), one compiler, three "
+    report(f"one engine (sha256 {hashlib.sha256(engine).hexdigest()[:16]}), one compiler, four "
            f"different residual programs; each contains the idempotency keys of its own "
            f"definition as constants and none of another's")
+
+    # There is no unspecialized native engine to measure against: the compiler refuses it.
+    refusals = {name: unspecialized(built[name][0]) for name in ("single", "order")}
+    require(all(refusals.values()), f"the engine compiled with a runtime definition: {refusals}")
+    report(f"the engine with its definition as runtime data (leaves in the state, list "
+           f"structure static) is refused by the compiler, for single and for order: "
+           f"{refusals['single']}")
 
     # Teeth for the residual check: an interpreter that looks an instruction up as a value
     # and only then asks what it is. With its opcodes undeclared the specializer has to keep
@@ -390,11 +447,11 @@ def simulation(definition, native, report):
 
 # ---- 3. bounded search
 
-def graph(native, workload, prof, max_states=400000):
+def graph(native, workload, prof, max_states=400000, world=sim.World):
     """Every reachable world of an untimed profile, as sim.explore visits them, with the
     edges kept. Returns observations, executed pairs, and per state its situation, whether
     anything but a fault can still happen there, and its successors."""
-    world = sim.World(native, workload, prof)
+    world = world(native, workload, prof)
     pairs, records = {}, []
 
     def note(rec, cuttable):
@@ -511,11 +568,11 @@ def maude_violation(definition, modules, wanted=None):
     return [bound("NS:Val", "down"), bound("RW:Val"), pending, bound("LG:Val")]
 
 
-def bounded(definition, native, report):
-    name, schema = definition.name, definition.schema
-    limit, = shen.evaluate(definition.files, [f"({name}.settles-within)"])
+def bounded(built, report):
     everything, results = {}, {}
-    for label, (budget, cancels, outcomes) in BOUNDS.items():
+    for label, (name, budget, cancels, outcomes) in BOUNDS.items():
+        definition, native = built[name]
+        limit, = shen.evaluate(definition.files, [f"({name}.settles-within)"])
         prof = sim.profile(timed=False, observe_states=True, budget=budget)
         mine, pairs, records, sits, idle, edges = graph(
             native, Workers(definition.keys, outcomes, cancels), prof)
@@ -563,9 +620,9 @@ def bounded(definition, native, report):
         cuts = boundaries(records)
         require(budget["crash"] == 0 or all(all(counts) for counts in cuts.values()),
                 f"bound '{label}': an effect boundary was never crashed at: {cuts}")
-        everything.update(pairs)
+        everything.setdefault(name, {}).update(pairs)
         results[label] = (prof, cancels, outcomes, mine)
-        report(f"bounded search '{label}' (budget {budget}, cancels {cancels}, outcomes "
+        report(f"bounded search '{label}' ({name}, budget {budget}, cancels {cancels}, outcomes "
                f"{outcomes}): Maude {states} states, simulator {len(sits)}; the same "
                f"{len(reached)} observations; no state violates a state invariant (Maude search "
                f"over the translated Shen, and shen-jit on the {len(distinct)} distinct "
@@ -574,11 +631,56 @@ def bounded(definition, native, report):
                f"{len(resting)} situations where nothing is left to happen are at rest"
                + (f"; the node died at every boundary of all {len(cuts)} step shapes"
                   if budget["crash"] else ""))
-    count = check.refinement(schema, native, everything)
-    check.maude_refinement(maude.step_module(definition.text), schema, everything)
+    count = 0
+    for name, pairs in everything.items():
+        definition, native = built[name]
+        count += check.refinement(definition.schema, native, pairs)
+        check.maude_refinement(maude.step_module(definition.text), definition.schema, pairs)
     report(f"bounded search: native, shen-jit and the Maude translation agree on all {count} "
-           f"(state, event) pairs the four searches executed")
-    return everything, results
+           f"(state, event) pairs the {len(BOUNDS)} searches executed")
+    return everything["small"], results
+
+
+# ---- what the guarantees rest on
+
+def reliance(order, order_native, small, small_native, report):
+    # The workers' side of "one effect per key". With workers that ignore the key, the
+    # same engine binary runs an activity twice, and the invariant says so: it counts
+    # executions in the environment, not what the engine believes.
+    careless = seeded(order_native, order, range(100), careless=True)
+    doubled = sum("one-effect-per-key" in found for found in judge(order, careless))
+    require(doubled, "one-effect-per-key holds even with workers that ignore the key")
+    report(f"reliance on the workers: with workers that run every request they receive, the "
+           f"unedited engine violates one-effect-per-key on {doubled} of 100 seeds")
+
+    # The environment's rule that no completion crosses a crash. The engine does not lean
+    # on it: it checks the number of an acknowledgement and of a read result itself. In a
+    # simulator that keeps completions across a crash it is still safe, and an engine
+    # without the check is not, although the standard simulator cannot tell the two apart.
+    prof = sim.profile(timed=False, observe_states=True, budget={"crash": 1, "drop": 0, "dup": 0})
+    outcomes = {"hold": (1,), "pay": (1,)}
+    blind = small.mutant("ack-token-ignored", BLIND)
+    blind_native = build(blind.schema, blind.directory / "build")
+    found = {}
+    for label, definition, native, world in (
+            ("the engine, completions kept", small, small_native, worlds.KeepsCompletions),
+            ("no token check, standard", blind, blind_native, sim.World),
+            ("no token check, completions kept", blind, blind_native, worlds.KeepsCompletions)):
+        sits = graph(native, Workers(small.keys, outcomes, 0), prof, world=world)[3]
+        distinct = list(dict.fromkeys(sits))
+        verdicts = shen.evaluate(definition.files, [
+            f"(inv.verdict (small.definition) {shen.term(sit)})" for sit in distinct], timeout=540)
+        found[label] = (len(sits), sum(v != () for v in verdicts),
+                        sorted({name for v in verdicts if v != shen.TRAP for name in v}))
+    require(not found["the engine, completions kept"][1] and not found["no token check, standard"][1]
+            and "history-is-true" in found["no token check, completions kept"][2],
+            f"stale completions: {found}")
+    report(f"reliance on the environment (small, one crash, searched exhaustively): in a "
+           f"simulator that delivers acknowledgements, read results and timers across a crash "
+           f"the engine still satisfies every state invariant ({found['the engine, completions kept'][0]} "
+           f"states); an engine that ignores the number of an acknowledgement is not caught by "
+           f"the standard simulator ({found['no token check, standard'][0]} states) and violates "
+           f"{found['no token check, completions kept'][2]} in the other")
 
 
 # ---- 4. mutants
@@ -673,9 +775,9 @@ def main(report=print, record=False):
     with TemporaryDirectory() as tmp:
         work = Path(tmp)
         built = specialization(work, report)
-        pairs = {}
         for name in ("order", "docs"):
-            pairs[name] = simulation(*built[name], report)
-        searched = bounded(*built["small"], report)
+            simulation(*built[name], report)
+        searched = bounded(built, report)
+        reliance(*built["order"], *built["small"], report)
         mutants(work, *built["order"], built["small"][0], searched, report, record)
     report("workflow: ok")
