@@ -1,0 +1,25 @@
+# two boots with --completion real; first difference: import call 4556
+    4544 = A clock_time_get(1,1,1455248)=0 1840360000
+    4545 = A wasm_driver_block_submit(15274864)=1 dev0 op0 sector4194304 bytes4096
+    4546 = A wasm_driver_block_submit(15277232)=1 dev0 op0 sector4194424 bytes4096
+    4547 = A wasm_driver_block_submit(15270128)=1 dev0 op0 sector4104 bytes4096
+    4548 = A wasm_driver_block_submit(15272496)=1 dev0 op0 sector4224 bytes4096
+    4549 = A clock_time_get(1,1,1455248)=0 1840361000
+    4550 = A clock_time_get(1,1,1455248)=0 1840362000
+    4551 = A wasm_switch_to(16034432,730880,0,0)=P
+    4552 = A clock_time_get(1,1,1455248)=0 1840363000
+    4553 = A clock_time_get(1,1,1455248)=0 1840364000
+    4554 = A poll_oneoff(1455312,1455408,2,1455472)=P
+    4555 = A clock_time_get(1,1,1455248)=0 1840365000
+    4556 ! A wasm_driver_block_reap()=15277232
+    4556 ! B wasm_driver_block_reap()=15272496
+    4557 = A clock_time_get(1,1,1455248)=0 1840366000
+    4558 ! A clock_time_get(1,1,1455248)=0 1840367000
+    4558 ! B wasm_driver_block_reap()=0
+    4559 ! A clock_time_get(1,1,1455248)=0 1840368000
+    4559 ! B clock_time_get(1,1,1455248)=0 1840367000
+    4560 ! A wasm_driver_block_reap()=0
+    4560 ! B clock_time_get(1,1,1455248)=0 1840368000
+    4561 = A clock_time_get(1,1,1455248)=0 1840369000
+    4562 ! A clock_time_get(1,1,1455248)=0 1840370000
+    4562 ! B poll_oneoff(1455312,1455408,2,1455472)=P

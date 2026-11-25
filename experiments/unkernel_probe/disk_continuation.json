@@ -1,0 +1,2 @@
+[[1000, "wait; sync; ls /mnt; sha256sum /mnt/a /mnt/r /mnt/z /mnt/d/log\n"],
+ [4000, "echo after-restore > /mnt/n; umount /mnt && echo unmounted; dd if=/dev/wda bs=4k count=16 2>/dev/null | sha256sum; date -u\n"]]

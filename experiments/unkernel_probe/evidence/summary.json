@@ -2,7 +2,7 @@
  "unkernel": "0.2.0-261124-75694e2",
  "kernel_wasm_sha256": "46dcb7263dbfb8d3dc593c3985616e99b3fa4ad967b960a034116f92544125b3",
  "sources": {
-  "host.mjs": "d237f264d1ce077f31dca1472b0cece9e84db0800999eb6d79fc05d5382cb048",
+  "host.mjs": "f87d896910c5066b69222d54496f29086d0b170d11d76281548c5ecf4a8696a8",
   "run.mjs": "dcccd8d94a6308ce96853f5151273e5f46461f7c1c65cf64f2da177b818c59dc",
   "check.py": "fafdd850f61260a96405046e8e7f884ebda35b6f368ac68406b448acc2dee8b0",
   "workload.json": "4e369fc4618b43360849a1fa9ed87b755ff354af4b216a38dde28f6d9df38c6c",
@@ -18,11 +18,11 @@
  "stock": {
   "runs": [
    {
-    "memory": "e214f37a271147ad901d49c696c3d23da55d3c7f5f88b5320e4979fc09bfcb13",
-    "console": "28dcb1a6b9a3a66c080919ea57164fb14727ba4bf5cd03e5365458a96e4e3e80",
-    "imports": "a534f3004a2493bd8e295294f22218c5ad95989cb886e167f19fb6f16091e1a3",
-    "importCalls": 24561,
-    "icount": 382760386,
+    "memory": "e4e27fcc329ee94536550059ce4af5b0f23d82a4edc00427f553a399fa6b3932",
+    "console": "2410ef596189c4a99c77358e3c08fd1ebd13151612262fe857f48edf3e25e5f0",
+    "imports": "350d40f9ed4bb2659a5d285598e10019098c7af0e6b7ec09b641795e898273ec",
+    "importCalls": 24128,
+    "icount": 382759374,
     "why": "end time",
     "mode": "stock",
     "jit": false,
@@ -31,7 +31,7 @@
     "nsPerInsn": 0,
     "memoryBytes": 134217728,
     "consoleBytes": 5742,
-    "importSequence": "8e2fedcf63a7583feec0417578bdc19efba5c82762d45ffabf495ceb0c777b04",
+    "importSequence": "c35f1e3915594c5954025f5fd988c52c899c4f0422dfa18812562ac32dd134c3",
     "idles": 0,
     "capturedTimers": 0,
     "realTimers": 0,
@@ -50,9 +50,9 @@
      "fd_read": 33,
      "fd_close": 1,
      "random_get": 1,
-     "clock_time_get": 20312,
+     "clock_time_get": 20100,
      "fd_write": 839,
-     "wasm_switch_to": 1361,
+     "wasm_switch_to": 1343,
      "kw_host_jit_caps": 1,
      "wasm_driver_fb_init": 1,
      "wasm_driver_virtio_init": 1,
@@ -62,14 +62,14 @@
      "wasm_driver_input_init": 1,
      "wasm_driver_sound_init": 1,
      "wasm_driver_vsock_init": 1,
-     "wasm_driver_console_size": 432,
-     "poll_oneoff": 1475,
-     "sched_yield": 93
+     "wasm_driver_console_size": 420,
+     "poll_oneoff": 1274,
+     "sched_yield": 103
     },
     "kernelStats": {
-     "switches": 1361,
-     "idles": 958,
-     "yields": 93
+     "switches": 1343,
+     "idles": 759,
+     "yields": 103
     },
     "jitStats": {
      "compiled": 0,
@@ -81,11 +81,11 @@
     "node": "v24.19.0"
    },
    {
-    "memory": "60da2f04344af8b081b0618fb70f861db2a6024330fafc9e336e664c604ec890",
-    "console": "6ea98c67c3797477d23dd2283fbeae9527d5af2fe39e8e2a49f1f3de40d77e7c",
-    "imports": "4341e76e5553979614fe722c97bf13ebcc087110356f1b36a8a087cfbf6e0de4",
-    "importCalls": 24423,
-    "icount": 382760200,
+    "memory": "ee17a6a8fbf8f526e2fedbf0beaf1a609b52482882cfc672868df0d54a111d5c",
+    "console": "fba96e56da6c4b8c0b758bff3fc1db4354a6b60559bf94467d6eb2cd713bcee7",
+    "imports": "6c80054cd1479e60be6b71b6aa5dd39de78595c5a7c747732e71fa9c91baeaa9",
+    "importCalls": 24265,
+    "icount": 382759455,
     "why": "end time",
     "mode": "stock",
     "jit": false,
@@ -94,7 +94,7 @@
     "nsPerInsn": 0,
     "memoryBytes": 134217728,
     "consoleBytes": 5742,
-    "importSequence": "27b422a510824245223fbc5019a34d5f6f869974903e404940b470b79311f13e",
+    "importSequence": "611b49278e6c16f1c0e1f7beb8ff3a95c6609af306f05500fa5ee0379441da27",
     "idles": 0,
     "capturedTimers": 0,
     "realTimers": 0,
@@ -113,9 +113,9 @@
      "fd_read": 33,
      "fd_close": 1,
      "random_get": 1,
-     "clock_time_get": 20217,
+     "clock_time_get": 20236,
      "fd_write": 839,
-     "wasm_switch_to": 1364,
+     "wasm_switch_to": 1345,
      "kw_host_jit_caps": 1,
      "wasm_driver_fb_init": 1,
      "wasm_driver_virtio_init": 1,
@@ -125,14 +125,14 @@
      "wasm_driver_input_init": 1,
      "wasm_driver_sound_init": 1,
      "wasm_driver_vsock_init": 1,
-     "wasm_driver_console_size": 432,
-     "poll_oneoff": 1429,
-     "sched_yield": 93
+     "wasm_driver_console_size": 417,
+     "poll_oneoff": 1278,
+     "sched_yield": 101
     },
     "kernelStats": {
-     "switches": 1364,
-     "idles": 912,
-     "yields": 93
+     "switches": 1345,
+     "idles": 768,
+     "yields": 101
     },
     "jitStats": {
      "compiled": 0,
@@ -152,15 +152,19 @@
    "icount"
   ],
   "memory_diff": {
-   "pages": 2317,
+   "pages": 2206,
    "of_pages": 32768,
-   "bytes": 4448972,
+   "bytes": 4382690,
    "of_bytes": 134217728,
-   "runs": 137,
+   "runs": 152,
    "first_runs": [
     [
      "0x10000",
      "0x16000"
+    ],
+    [
+     "0xaf000",
+     "0xb0000"
     ],
     [
      "0xb2000",
@@ -172,7 +176,7 @@
     ],
     [
      "0xbe000",
-     "0xbf000"
+     "0xc0000"
     ],
     [
      "0xc2000",
@@ -183,22 +187,18 @@
      "0xdd000"
     ],
     [
-     "0x135000",
-     "0x13a000"
-    ],
-    [
-     "0x13d000",
-     "0x13e000"
+     "0x133000",
+     "0x134000"
     ]
    ]
   },
   "log_diff": {
    "calls": [
-    24561,
-    24423
+    24128,
+    24265
    ],
    "first_value_difference": 7,
-   "first_call_difference": 301
+   "first_call_difference": 464
   }
  },
  "controlled": {
@@ -2114,7 +2114,6 @@
     "differ on memory",
     "differ on console",
     "differ on imports",
-    "differ on importCalls",
     "differ on icount"
    ]
   },
