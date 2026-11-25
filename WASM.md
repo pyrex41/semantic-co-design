@@ -20,7 +20,7 @@ Rungs 1 to 4 run the same module and ask the same two questions of it: does it r
 | Base | `e4e7899` (`wasm-target`: the wasm module and `wasm-step`), which is one commit on `cf5cf74` of `sim-tool` |
 | Merged | `wasm/hegel` at `cd78e2e`, `wasm/realkernel` at `0130d3a`, `wasm/unkernel` at `aa2ddd2`, each with `git merge --no-ff` |
 | Conflicts | `flake.nix` (three lanes each added checks; all kept, and the two `packages` attributes made one) and `tool/README.md` (two lanes each wrote a section 3; Hegel is section 3, the real host 4, the three tiers 5). `tool/examples/accepted_job/check.py` merged without conflict: only the Hegel lane changed it |
-| Evidence commit | `c029b57`. Everything below was run at that commit on 2026-11-24. The commits after it change this file and nothing else |
+| Evidence commit | `c029b57`. Everything below was run at that commit on 2026-11-24. The commits after it change this file and a comment in `flake.nix`. The script that made the first runs left `NODE_TARGET=wasm`, `HEGEL_PHASES` and `HEGEL_BACKEND` set for its later steps, so the hostile-variable run, the six seeded Hegel faults, and the loopback and unkernel steps were not run as the commands below read. An independent audit reran each from a clean clone of `29418cf` in a clean environment; those reruns are the evidence for them. The logs were kept only in session scratch space, so rungs 1 to 3 are evidenced by rerunning the commands; only rung 5 keeps its record in the repository |
 | Machine | aarch64-darwin, macOS 27.2.1. nixpkgs `34ab990` through the flake lock: Python 3.14.7, clang 21.1.8, Node v24.19.0, Maude 3.5.1, hegeltest 0.5.2 with libhegel 0.53.2 |
 
 **Not reconciled with `sim-tool`.** That branch has moved since `cf5cf74`: at the time of writing it is `021f5fa`, eight commits and 41 files on, among them a second trace format, changes to `tool/sim/__init__.py`, `tool/pe.py` and `tool/maude.py`, and an AcceptedJob specification without its acknowledgement token. Six files are changed on both sides: `flake.nix`, `tool/README.md`, `tool/__main__.py`, `tool/abi.c.in`, `tool/compile.py` and `tool/examples/accepted_job/check.py`. The Hegel lane reads the simulator's internals and writes `sim-trace/1`; the real host packs and judges the AcceptedJob that `cf5cf74` has. That merge was not attempted here. Every number in this file is about the tree on `cf5cf74`, and none of it carries over to the merged tree until the checks are run there.
@@ -53,7 +53,7 @@ nix flake check                  # every check for this system
 | `unkernel-probe` | 5 | `experiments/unkernel_probe/check.py --no-stock` | all |
 | `staged-examples`, `native-replay` | | the checks the repository had before `tool/` | all |
 
-The default shell is the tool's environment (clang, `wasm-ld`, Python with wasmtime and hegeltest, Maude, shen-jit) plus Node 24 and `UNKERNEL`, the pinned package. `devShells.unkernel` is the probe's inputs alone. `unkernel-probe` is a flake check because it needs no network while it runs (the package is a fixed-output fetch of the npm tarball, by hash) and costs about a minute and a half of one core. The seven Darwin checks build together in 107 s:
+The default shell is the tool's environment (clang, `wasm-ld`, Python with wasmtime and hegeltest, Maude, shen-jit) plus Node 24 and `UNKERNEL`, the pinned package. `devShells.unkernel` is the probe's inputs alone. `unkernel-probe` is a flake check because it needs no network while it runs (the package is a fixed-output fetch of the npm tarball, by hash) and took 56 s on its own here. The seven Darwin checks build together in 107 s:
 
 ```sh
 nix build --no-link --max-jobs 2 -L .#checks.aarch64-darwin.{wasm-step,hegel-step,real-host,packed-node,unkernel-probe,native-replay,staged-examples}
@@ -102,7 +102,7 @@ HEGEL_PHASES=generate HEGEL_BACKEND=urandom nix develop -c python3 -m tool check
 
 exits 0 and prints the same Hegel lines as the native and wasm runs (sha256 of those lines with times removed begins `f7ad43cbdd4f` in all three).
 
-Six faults seeded into a scratch copy of `hegel.py`, one at a time, each make `check accepted_job` exit 1: shrinker always off ("not shrunk: 28 steps, the first failure had 28"), backend unpinned (rejected in both runs made here, once as "HEGEL_* variables changed the run" and once as "the same seed gave a different shrunk trace"), trapping step not replayed, target not fixed, `exhausted` always false, zero cases allowed.
+Six faults seeded into a scratch copy of `hegel.py`, one at a time, each make `check accepted_job` exit 1: shrinker always off ("not shrunk: 28 steps, the first failure had 28"), backend unpinned ("HEGEL_* variables changed the run"; with `HEGEL_BACKEND=urandom` already in the environment the same fault is reported as "the same seed gave a different shrunk trace"), trapping step not replayed, target not fixed, `exhausted` always false, zero cases allowed.
 
 UNKNOWN or open:
 
@@ -127,7 +127,7 @@ Exit 0. The counts depend on the moment of each kill and differ from run to run;
 * short write: with `events.log` limited to 803 bytes the host stops at record 5, half written, and its reply never reaches the client.
 * the three mutants, run as real processes, are each rejected twice on run 0: by refinement against `spec.shen` and by their named invariant.
 
-`real-host` is the same command in the Nix sandbox (992 and 515 events in that run). `packed-node` drives the packages a machine would deploy: 79 events in 5 segments conform and the 62 outputs the client received are all in the log; one forged output, the outputs received twice over and a directory with no log are rejected; the packaged `reply-before-ack` is rejected both ways; a package for two nodes refuses to start as one; two heartbeat nodes, 109 events in 3 segments, conform.
+`real-host` is the same command in the Nix sandbox (992 and 515 events in that run). `packed-node` drives the packages a machine would deploy: 79 events in 5 segments conform and the 62 outputs the client received are all in the log; one forged output, the outputs received twice over and a directory with no log are rejected; the packaged `reply-before-ack` is rejected both ways; a package for two nodes refuses to start as one; two heartbeat nodes, 109 events in 3 segments in that run (128 in another; the count varies), conform.
 
 Nine faults seeded into a scratch copy of `tool/`, each undoing one repair: eight make `tool real` exit non-zero (clock not reset at boot, no 64-bit bound, a sender never dropped, a short write ignored, an empty log accepted, `--received` as membership only, and two unchecked record forms). One survives: without the host's `RecursionError` catch the check still passes, because a line is at most 64 KiB and 65535 brackets do not overflow this Python's parser. That catch is unexercised.
 
@@ -137,7 +137,7 @@ UNKNOWN: Linux. The `RLIMIT_FSIZE` and hostile-input teeth were observed on Darw
 
 ## Rung 4: NixOS machines
 
-**UNKNOWN. `real-vm` and `real-vm-mutant` have never been built or booted, here or anywhere.** The exact failure is the platform mismatch quoted above; `nix build .#checks.aarch64-linux.real-vm` reports 64 derivations to build and 766 paths to fetch, then stops at the first Linux derivation.
+**UNKNOWN. `real-vm` and `real-vm-mutant` have never been built or booted, here or anywhere.** The exact failure is the platform mismatch quoted above; `nix build .#checks.aarch64-linux.real-vm` reports 64 derivations to build and several hundred paths to fetch (700 in the retained run; the number depends on the local store), then stops at the first Linux derivation.
 
 What was observed, and it is not a run:
 
@@ -210,7 +210,7 @@ The node's step is already deterministic: it imports nothing, and rungs 1 and 2 
 
 **Recommendation: carry unkernel forward as the candidate for whole-system determinism, and do not start on Solo5 for that purpose.** Keep it a research rung: no result on rungs 1 to 4 should come to depend on it while its verdict covers one CPU and a console. The next things to establish, in order, are a block device and a network device whose completions arrive at virtual times, with the same two-boot comparison and a seeded fault for each; a frame crossing between two guests under one clock; and whether the node's host can run in the guest at all. Until the first of those is shown, "whole-system determinism" is a claim about a shell on a console.
 
-This is about determinism only. It says nothing about Solo5 as a place to deploy the node, a small guest behind a narrow interface, which is a different purpose and one that nothing here measures.
+This is about determinism only. It says nothing about Solo5 as a place to deploy the node, a small guest behind a narrow interface, which is a different purpose and one that nothing here measures. The research plan gives Solo5 that other purpose: "Solo5 becomes a portability test after host behavior agrees" (`RESEARCH.md`).
 
 ## What is open, in one place
 

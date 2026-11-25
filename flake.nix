@@ -99,7 +99,7 @@
           touch "$out"
         '';
         # Rung 5: two boots of Linux-as-wasm under a controlled host must reach the same memory, byte for byte.
-        # About a minute and a half of one core; the package is a fixed-output fetch, so nothing is fetched while it runs.
+        # About a minute of one core; the package is a fixed-output fetch, so nothing is fetched while it runs.
         unkernel-probe = nixpkgs.legacyPackages.${system}.runCommand "unkernel-probe" (unkernel system) ''
           export HOME=$TMPDIR
           python3 ${self}/experiments/unkernel_probe/check.py --no-stock
