@@ -1,0 +1,3 @@
+[[3000, "echo synced-1 > /data/s1; sync; echo did-sync\n"],
+ [4000, "echo fsynced-2 > /data/s2; fsync /data/s2; echo unsynced-3 > /data/u3; dd if=/dev/zero of=/data/big bs=4k count=512 2>/dev/null; ls /data\n"],
+ [8000, "sync; echo late-sync\n"]]

@@ -1,0 +1,44 @@
+{
+ "guests": [
+  {
+   "script": [
+    [
+     1000,
+     "ip addr add 10.9.0.11/24 dev eth0; ip link set eth0 up; echo up-a\n"
+    ],
+    [
+     2000,
+     "i=0; while [ $i -lt 20000 ]; do i=$((i+1)); done; echo loop=$i; cat /proc/net/dev\n"
+    ],
+    [
+     5000,
+     "echo hello-from-a | nc -w 2 10.9.0.13 7007; echo tcp=$?\n"
+    ]
+   ]
+  },
+  {
+   "script": [
+    [
+     1000,
+     "ip addr add 10.9.0.12/24 dev eth0; ip link set eth0 up; echo up-b\n"
+    ],
+    [
+     2100,
+     "ping -c 5 -i 0.2 10.9.0.11; echo ping=$?\n"
+    ]
+   ]
+  },
+  {
+   "script": [
+    [
+     1000,
+     "ip addr add 10.9.0.13/24 dev eth0; ip link set eth0 up; echo up-c\n"
+    ],
+    [
+     1500,
+     "echo reply-from-c | nc -l -p 7007 >/tmp/got; echo served=$?; cat /tmp/got\n"
+    ]
+   ]
+  }
+ ]
+}

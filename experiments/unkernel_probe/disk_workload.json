@@ -1,0 +1,7 @@
+[[3000, "grep wda /proc/mounts; blkid /dev/wda; cat /sys/block/wda/queue/write_cache\n"],
+ [4000, "for f in a b c; do echo file-$f > /data/$f; done; dd if=/dev/urandom of=/data/r bs=4k count=64 2>/dev/null; sync; sha256sum /data/a /data/r\n"],
+ [6000, "mkdir /data/d; i=0; while [ $i -lt 40 ]; do echo line $i >> /data/d/log; i=$((i+1)); done; fsync /data/d/log; ls -l /data/d\n"],
+ [8000, "umount /data && mkdir -p /mnt && mount -t ext4 /dev/wda /mnt && sha256sum /mnt/a /mnt/r /mnt/d/log\n"],
+ [10000, "(dd if=/dev/zero of=/mnt/z bs=64k count=32 2>/dev/null; sync; echo wrote) & (i=0; while [ $i -lt 3000 ]; do i=$((i+1)); done; echo spun $i) & wait; rm /mnt/b; sync; ls /mnt\n"],
+ [14000, "echo 3 > /proc/sys/vm/drop_caches; sha256sum /mnt/r /mnt/z; cat /proc/uptime; cat /sys/block/wda/stat\n"],
+ [17000, "echo unsynced > /mnt/u; umount /mnt && echo unmounted; dd if=/dev/wda bs=4k count=16 2>/dev/null | sha256sum; date -u\n"]]

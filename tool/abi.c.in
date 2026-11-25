@@ -1,0 +1,122 @@
+/* Native ABI of a compiled node step.
+
+   int64_t node_step(const int64_t *in, int64_t count, int64_t *out, int64_t capacity)
+
+   in:  state leaves, event tag, event fields (zero padded); `count` integers.
+   out: new state leaves, effect count, then tag and fields of each effect.
+   Returns the number of integers written, or a negative code: -1 the
+   specification has no result for this state and event, -2 a read outside the
+   input, -3 more output than `capacity`. The function keeps no state between
+   calls. Built with -DNODE_MAIN the same code is a line-oriented executable. */
+#define _POSIX_C_SOURCE 200809L   /* getline and ssize_t under -std=c11 with glibc */
+#include <stdint.h>
+
+enum { LIMIT = 65536, SLOTS = /* SLOTS */ };
+static const int64_t *input;
+static int64_t *output;
+static int64_t emitted, capacity;
+
+#ifdef __wasm__
+/* Freestanding WebAssembly: no libc and no imports. A failure records its code
+   and executes `unreachable`; the embedder reads node_failure() and discards
+   the instance. See tool/wasm.py for the exported memory protocol. */
+static int32_t failed;
+#define longjmp(target, code) (failed = (code), __builtin_trap())
+#else
+#include <ctype.h>
+#include <errno.h>
+#include <inttypes.h>
+#include <setjmp.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+static jmp_buf failure;
+#endif
+/* BANKS */
+
+#define TRAP() longjmp(failure, 1)
+
+static int64_t read_at(const int64_t *values, int64_t length, int64_t index) {
+    if (index < 0 || index >= length) longjmp(failure, 2);
+    return values[index];
+}
+
+static void write_at(int64_t *values, int64_t index, int64_t value) {
+    if (index < 0 || index >= LIMIT) longjmp(failure, 2);
+    values[index] = value;
+}
+
+static void emit(int64_t value) {
+    if (emitted == capacity) longjmp(failure, 3);
+    output[emitted++] = value;
+}
+
+static void evaluate(int64_t count) {
+    int64_t slots[SLOTS] = {0};
+    (void)write_at;
+/* PROGRAM */
+}
+
+int64_t node_step(const int64_t *in, int64_t count, int64_t *out, int64_t limit) {
+    input = in;
+    output = out;
+    emitted = 0;
+    capacity = limit;
+#ifndef __wasm__
+    int code = setjmp(failure);
+    if (code) return -code;
+#endif
+    evaluate(count);
+    return emitted;
+}
+
+#ifdef __wasm__
+static int64_t wasm_in[LIMIT], wasm_out[LIMIT];
+__attribute__((export_name("node_in"))) int64_t *node_in(void) { return wasm_in; }
+__attribute__((export_name("node_out"))) int64_t *node_out(void) { return wasm_out; }
+__attribute__((export_name("node_failure"))) int32_t node_failure(void) { return failed; }
+__attribute__((export_name("node_call"))) int64_t node_call(int64_t count) {
+    failed = 0;
+    if (count < 0 || count > LIMIT) return -2;
+    return node_step(wasm_in, count, wasm_out, LIMIT);
+}
+#endif
+
+#ifdef NODE_MAIN
+static int64_t row[LIMIT], result[LIMIT];
+
+int main(void) {
+    char *line = NULL;
+    size_t size = 0;
+    ssize_t bytes;
+    while ((bytes = getline(&line, &size, stdin)) >= 0) {
+        int64_t count = 0;
+        char *cursor = line;
+        if (memchr(line, '\0', (size_t)bytes)) return 2;
+        while (*cursor) {
+            while (isspace((unsigned char)*cursor)) ++cursor;
+            if (!*cursor) break;
+            char *end;
+            errno = 0;
+            intmax_t value = strtoimax(cursor, &end, 10);
+            if (end == cursor || errno || count == LIMIT ||
+                (*end && !isspace((unsigned char)*end))) return 2;
+            row[count++] = value;
+            cursor = end;
+        }
+        int64_t written = node_step(row, count, result, LIMIT);
+        if (written < 0) {
+            printf("trap %" PRId64 "\n", -written);
+        } else {
+            for (int64_t i = 0; i < written; ++i) {
+                if (i) putchar(' ');
+                printf("%" PRId64, result[i]);
+            }
+            putchar('\n');
+        }
+        if (fflush(stdout) != 0) return 2;
+    }
+    free(line);
+    return ferror(stdin) ? 2 : 0;
+}
+#endif

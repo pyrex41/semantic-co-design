@@ -1,0 +1,5 @@
+[[1000, "ip addr add 10.9.0.2/24 dev eth0; ip link set eth0 up; echo net-up\n"],
+ [2000, "ping -c 3 10.9.0.1; echo ping=$?\n"],
+ [6000, "echo hello-udp | nc -u -w 1 10.9.0.1 7; echo udp=$?\n"],
+ [9000, "echo hello-tcp | nc -w 2 10.9.0.1 7007; echo tcp=$?\n"],
+ [12000, "ip neigh; cat /proc/net/dev; cat /proc/uptime; echo done\n"]]

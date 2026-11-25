@@ -1,0 +1,26 @@
+# first value difference: call 7
+       4 = A fd_filestat_get(4,69840)=0 
+       5 = A fd_read(4,1455232,1,1455240)=0 9fefba07b32d258d
+       6 = A fd_close(4)=0 
+       7 ! A random_get(67472,32)=0 cf5d1efe34316ffe
+       7 ! B random_get(67472,32)=0 98a2be4e9274ff3a
+       8 = A clock_time_get(0,1,1455248)=0 1795574075049000000
+       9 ! A clock_time_get(1,1,1455248)=0 316185500
+       9 ! B clock_time_get(1,1,1455248)=0 316853667
+      10 ! A clock_time_get(1,1,1455248)=0 316206584
+      10 ! B clock_time_get(1,1,1455248)=0 316900917
+# first call difference: call 834
+     831 ! A clock_time_get(1,1,1455248)=0 340886834
+     831 ! B clock_time_get(1,1,1455248)=0 334521208
+     832 ! A clock_time_get(1,1,1455248)=0 340888125
+     832 ! B clock_time_get(1,1,1455248)=0 334522375
+     833 ! A clock_time_get(1,1,1455248)=0 340889917
+     833 ! B clock_time_get(1,1,1455248)=0 334524833
+     834 ! A wasm_switch_to(12853760,12849408,0,0)=P 
+     834 ! B wasm_switch_to(12853760,13240448,0,0)=P 
+     835 ! A clock_time_get(1,1,1455248)=0 340899375
+     835 ! B clock_time_get(1,1,1455248)=0 334529167
+     836 ! A clock_time_get(1,1,1455248)=0 340901334
+     836 ! B clock_time_get(1,1,1455248)=0 334531125
+     837 ! A wasm_switch_to(12849408,13240448,0,0)=P 
+     837 ! B wasm_switch_to(13240448,12849408,0,0)=P 

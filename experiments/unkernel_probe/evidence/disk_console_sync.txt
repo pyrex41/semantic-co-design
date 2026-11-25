@@ -1,0 +1,113 @@
+[    0.000000] Linux version 7.3.4+ (unkernel@unkernel) (Ubuntu clang version 22.1.8 (++20260714014902+ca7933e47d3a-1~exp1~20260714135019.80), LLD 22.1.8 (https://github.com/llvm/llvm-project.git 7e959b5dadcfdde3162f33655eb8ee05d0817873)) #61333373f687 Tue Nov 24 17:43:08 UTC 2026
+[    0.000000] random: crng init done
+[    0.000000] Zone ranges:
+[    0.000000]   Normal   [mem 0x0000000000010000-0x0000000007ffffff]
+[    0.000000] Movable zone start for each node
+[    0.000000] Early memory node ranges
+[    0.000000]   node   0: [mem 0x0000000000010000-0x0000000007ffffff]
+[    0.000000] Initmem setup node 0 [mem 0x0000000000010000-0x0000000007ffffff]
+[    0.000000] On node 0, zone Normal: 16 pages in unavailable ranges
+[    0.000000] Kernel command line: console=hvc0 rdinit=/init
+[    0.000000] printk: log buffer data + meta data: 131072 + 458752 = 589824 bytes
+[    0.000000] Dentry cache hash table entries: 16384 (order: 5, 131072 bytes, linear)
+[    0.000000] Inode-cache hash table entries: 8192 (order: 4, 65536 bytes, linear)
+[    0.000000] Built 1 zonelists, mobility grouping on.  Total pages: 32752
+[    0.000000] mem auto-init: stack:all(zero), heap alloc:off, heap free:off
+[    0.000000] SLUB: HWalign=64, Order=0-3, MinObjects=0, CPUs=1, Nodes=1
+[    0.000000] NR_IRQS: 32
+[    0.000000] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 19112604462750000 ns
+[    0.000001] sched_clock: 64 bits at 1000MHz, resolution 1ns, wraps every 4398046511103ns
+[    0.000002] clocksource: wasm_clock: mask: 0xffffffffffffffff max_cycles: 0x1cd42e4dffb, max_idle_ns: 881590591483 ns
+[    0.000004] printk: legacy console [hvc0] enabled
+[    0.000006] pid_max: default: 32768 minimum: 301
+[    0.000007] Mount-cache hash table entries: 512 (order: 0, 4096 bytes, linear)
+[    0.000008] Mountpoint-cache hash table entries: 512 (order: 0, 4096 bytes, linear)
+[    0.000009] VFS: Finished mounting rootfs on nullfs
+[    0.000144] kwemu: features fp asimd aes pmull sha1 sha2 crc32 atomics cpuid sha3 sha512 (kwemu implements 0xff, enabled 0xff)
+[    0.000179] Memory: 116172K/131008K available (0K kernel code, 645K rwdata, 600K rodata, 24K init, 9515K bss, 14268K reserved, 0K cma-reserved)
+[    0.000226] devtmpfs: initialized
+[    0.000244] posixtimers hash table entries: 512 (order: 0, 4096 bytes, linear)
+[    0.000245] futex hash table entries: 256 (6144 bytes on 1 NUMA nodes, total 6 KiB, linear).
+[    0.000246] NET: Registered PF_NETLINK/PF_ROUTE protocol family
+[    0.000339] Advanced Linux Sound Architecture Driver Initialized.
+[    0.000341] clocksource: Switched to clocksource wasm_clock
+[    0.000448] NET: Registered PF_INET protocol family
+[    0.000451] IP idents hash table entries: 2048 (order: 2, 16384 bytes, linear)
+[    0.000452] tcp_listen_portaddr_hash hash table entries: 512 (order: 0, 4096 bytes, linear)
+[    0.000453] Table-perturb hash table entries: 65536 (order: 6, 262144 bytes, linear)
+[    0.000454] TCP established hash table entries: 1024 (order: 1, 8192 bytes, linear)
+[    0.000455] TCP bind hash table entries: 1024 (order: 2, 16384 bytes, linear)
+[    0.000456] TCP: Hash tables configured (established 1024 bind 1024)
+[    0.000457] UDP hash table entries: 256 (order: 2, 16384 bytes, linear)
+[    0.000459] NET: Registered PF_UNIX/PF_LOCAL protocol family
+[    0.000503] Unpacking initramfs...
+[    0.000510] Freeing initrd memory: 1456K
+[    0.000567] workingset: timestamp_bits=62 (anon: 57) max_order=15 bucket_order=0 (anon: 0)
+[    0.000598] fuse: init (API version 7.46)
+[    0.000609] 9p: Installing v9fs 9p2000 file system support
+[    0.000637] io scheduler mq-deadline registered
+[    0.000639] io scheduler kyber registered
+[    0.000641] kwfb: no host display
+[    0.000787] kwblk: wda: 4096 MiB, flush
+[    0.000796] loop: module loaded
+[    0.000798] kwshm: no host shm
+[    0.000814] kwnet: no host network
+[    0.000817] tun: Universal TUN/TAP device driver, 1.6
+[    0.000832] kwinput: no host input
+[    0.000836] kwsnd: no host audio
+[    0.000846] NET: Registered PF_PACKET protocol family
+[    0.000849] 9pnet: Installing 9P2000 support
+[    0.000860] NET: Registered PF_VSOCK protocol family
+[    0.000863] kwvsock: no host vsock
+[    0.000878] registered taskstats version 1
+[    0.000908] ALSA device list:
+[    0.000909]   No soundcards found.
+[    0.000915] Freeing unused kernel image (initmem) memory: 24K
+[    0.000916] This architecture does not have kernel memory protection.
+[    0.000917] Run /init as init process
+[    0.001303] EXT4-fs (wda): mounted filesystem 6b776461-7461-4000-8000-000000000001 r/w with ordered data mode. Quota mode: disabled.
+unkernel base shell (base-1e4d04a997c88463): no distro image (no disk labelled kwroot)
+/data is mounted: kw-overlay status [NAME] shows a distro's changes.
+[33mbase[0m ~ # [6ngrep wda /proc/mounts; blkid /dev/wda; cat /sys/block/wda/queue/write_cache
+grep wda /proc/mounts; blkid /dev/wda; cat /sys/block/wda/queue/write_c
+ache
+/dev/wda /data ext4 rw,noatime,commit=1 0 0
+/dev/wda: LABEL="kwdata" UUID="6b776461-7461-4000-8000-000000000001" TYPE="ext4"
+write back
+[33mbase[0m ~ # [6nfor f in a b c; do echo file-$f > /data/$f; done; dd if=/dev/urandom of
+=/data/r bs=4k count=64 2>/dev/null; sync; sha256sum /data/a /data/r
+cd89316081dd0c7242e4d9897cdb6283abde2cbf412265393aced6e2015d30b3  /data/a
+adf01631c8c7cfe657bf50db5d739587400275144f854825f3ee3cb54ba29044  /data/r
+[33mbase[0m ~ # [6nmkdir /data/d; i=0; while [ $i -lt 40 ]; do echo line $i >> /data/d/log
+; i=$((i+1)); done; fsync /data/d/log; ls -l /data/d
+total 4
+-rw-r--r--    1 root     root           310 Jan  1 00:00 [0;0mlog[m
+[33mbase[0m ~ # [6numount /data && mkdir -p /mnt && mount -t ext4 /dev/wda /mnt && sha256s
+um /mnt/a /mnt/r /mnt/d/log
+[    8.020124] EXT4-fs (wda): unmounting filesystem 6b776461-7461-4000-8000-000000000001.
+[    8.020476] EXT4-fs (wda): mounted filesystem 6b776461-7461-4000-8000-000000000001 r/w with ordered data mode. Quota mode: disabled.
+cd89316081dd0c7242e4d9897cdb6283abde2cbf412265393aced6e2015d30b3  /mnt/a
+adf01631c8c7cfe657bf50db5d739587400275144f854825f3ee3cb54ba29044  /mnt/r
+6cada91b2ae9296f3aa2472a3e544e10425ed1b32f20eebb7940787274b6b838  /mnt/d/log
+[33mbase[0m ~ # [6n(dd if=/dev/zero of=/mnt/z bs=64k count=32 2>/dev/null; sync; echo wrot
+e) & (i=0; while [ $i -lt 3000 ]; do i=$((i+1)); done; echo spun $i) & wait; rm 
+/mnt/b; sync; ls /mnt
+spun 3000
+wrote
+[0;0ma[m           [0;0mc[m           [1;34md[m           [1;34mlost+found[m  [0;0mr[m           [0;0mz[m
+[2]+  Done                       (; while [ ${i} -lt 3000 ]; do ; done; echo spun ${i})
+[1]+  Done                       (dd if=/dev/zero of=/mnt/z bs=64k count=32 2>/dev/null; sync; echo wrote)
+[33mbase[0m ~ # [6necho 3 > /proc/sys/vm/drop_caches; sha256sum /mnt/r /mnt/z; cat /proc/u
+ptime; cat /sys/block/wda/stat
+[   14.020096] sh (76): drop_caches: 3
+adf01631c8c7cfe657bf50db5d739587400275144f854825f3ee3cb54ba29044  /mnt/r
+5647f05ec18958947d32874eeb788fa396a05d0bab7c1b71f112ceb7e9b31eee  /mnt/z
+14.02 14.09
+      67        1     5764        0       51       33     5216        0        0        0        0        0        0        0        0       18        0
+[33mbase[0m ~ # [6necho unsynced > /mnt/u; umount /mnt && echo unmounted; dd if=/dev/wda b
+s=4k count=16 2>/dev/null | sha256sum; date -u
+[   17.020170] EXT4-fs (wda): unmounting filesystem 6b776461-7461-4000-8000-000000000001.
+unmounted
+b0dd7e3ecd023033d852bfc9dd2950e98f9507f74d8cb522c9f4b64aec8015f8  -
+Thu Jan  1 00:00:17 UTC 2026
+[33mbase[0m ~ # [6n

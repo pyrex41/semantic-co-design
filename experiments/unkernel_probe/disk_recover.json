@@ -1,0 +1,2 @@
+[[3000, "dmesg | grep -E 'EXT4|JBD|recover'; ls -l /data; cat /data/s1 /data/s2 /data/u3; sha256sum /data/big\n"],
+ [5000, "echo after-crash > /data/n; sync; umount /data && echo unmounted\n"]]

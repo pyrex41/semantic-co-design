@@ -1,0 +1,3 @@
+[[500, "echo resumed; ls /tmp | wc -l; cat /proc/uptime; date -u\n"],
+ [2000, "head -c 16 /dev/urandom | od -An -x; (sleep 0.2; echo bg1) & (sleep 0.1; echo bg2) & wait\n"],
+ [4000, "i=0; while [ $i -lt 5000 ]; do i=$((i+1)); done; echo busy $i; sha256sum /bin/busybox\n"]]

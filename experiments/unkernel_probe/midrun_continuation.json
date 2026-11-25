@@ -1,0 +1,2 @@
+[[100, "echo typed-after-restore\n"],
+ [6000, "echo settled; ls /tmp | wc -l; cat /proc/uptime\n"]]

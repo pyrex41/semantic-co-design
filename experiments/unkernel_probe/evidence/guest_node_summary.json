@@ -1,0 +1,726 @@
+{
+ "build": {
+  "command": "$ZIG cc -target aarch64-linux-musl -std=c11 -O2 -fbracket-depth=8000 -static -mcpu=generic -s -Wl,--build-id=none -ffile-prefix-map=OUT=. -DNODE_MAIN OUT/node.c -o OUT/node.aarch64",
+  "distinct_rows": 163,
+  "expected_sha256": "272390725463ed2ab27d86be0c5dffa9e1e18d1bc99185bf8eacc6c625305321",
+  "history_aarch64_bytes": 37912,
+  "history_aarch64_sha256": "6eaa071bab42e535c35b7a6696c99b9c8748662d0179a4163522c7f22470ca0c",
+  "history_expected_sha256": "0cb4cfad75debab80b854a207b444541e6a7402b1d3898de57fe5d6cfd30d4e4",
+  "history_sha256": "38069e17b4743d45ec3efcd116e1d354888092bc5232d27dada2c1540acaa15e",
+  "history_state_lines": 976,
+  "history_steps": 5913,
+  "history_traces": 500,
+  "history_traces_digest": "4c7d5468b1d480d615baaa33d77daaf7de1d1c82310d122c837bccbc7706b078",
+  "mutant": "reply-before-ack",
+  "mutant_expected_sha256": "2c570112e9daed418a1072262e0e6d6070e20b6cc9a8ff3879ae5753fa95c799",
+  "mutant_native_lines_differing": 12,
+  "mutant_node_aarch64_sha256": "458d2fbca876f2fa74da5a80200e079cab4dc096d28646f6889abdd3ec2a585c",
+  "mutant_node_c_sha256": "4cb93ff9b0bf5f8f8e12f38b868baa5f7e8c9e0e3ac855c72bb051b60ccbd1f1",
+  "native_trap_lines": 6,
+  "native_trap_lines_among_distinct": 0,
+  "node_aarch64_bytes": 37728,
+  "node_aarch64_second_build_sha256": "3df8629145a460d6b70323c83a7da07ec48c1489257091f02858ef061d7f01d7",
+  "node_aarch64_sha256": "3df8629145a460d6b70323c83a7da07ec48c1489257091f02858ef061d7f01d7",
+  "node_c_lines": 420,
+  "node_c_sha256": "771cb20f0eb3a467d2cf059bb3ed95be1acd6de2ce4a0c1633fe7f3f87c82f38",
+  "perf_rows": 32600,
+  "perf_sha256": "77bee5ffd3e8ff8b21983ced6db871c53a96921165b37779052f57285e5ac20a",
+  "rows": 169,
+  "seeds": 500,
+  "simulated_steps": 12800,
+  "target": "aarch64-linux-musl",
+  "trap_rows": 6,
+  "vectors_sha256": "e5f60a289ca31844296eef70ef8cd73242bbaeeca556254554adc90e7d61277d",
+  "wasm_bytes": 6357,
+  "wasm_sha256": "1c78a41bcdb1cb4693b6e6d1b2582141df3ee011f6eee65a4d4d019ba8be8878",
+  "zig": "0.16.0",
+  "zig_path": "/nix/store/j3fyiv1i1hb713k2p5q0pxmnv4bral9w-zig-0.16.0/bin/zig"
+ },
+ "controlled": {
+  "jit_off": {
+   "capturedTimers": 999,
+   "console": "450a710ce95893624f7e0b47edf7cb227f60972ec32573c5f7428236c6404b9c",
+   "consoleBytes": 227744,
+   "counts": {
+    "args_get": 1,
+    "args_sizes_get": 1,
+    "clock_time_get": 21530,
+    "fd_close": 1,
+    "fd_filestat_get": 1,
+    "fd_prestat_get": 1,
+    "fd_read": 22,
+    "fd_write": 12883,
+    "kw_host_jit_caps": 1,
+    "path_open": 1,
+    "poll_oneoff": 1450,
+    "random_get": 1,
+    "sched_yield": 8,
+    "wasm_driver_block_info": 1,
+    "wasm_driver_console_size": 450,
+    "wasm_driver_fb_init": 1,
+    "wasm_driver_input_init": 1,
+    "wasm_driver_net_init": 1,
+    "wasm_driver_shm_init": 1,
+    "wasm_driver_sound_init": 1,
+    "wasm_driver_virtio_init": 1,
+    "wasm_driver_vsock_init": 1,
+    "wasm_switch_to": 1723
+   },
+   "deliver": "initrd",
+   "deliveredFrom": {
+    "clock": 0,
+    "jump": 5,
+    "poll": 0
+   },
+   "files": [
+    {
+     "bytes": 37728,
+     "path": "/node/node",
+     "sha256": "3df8629145a460d6b70323c83a7da07ec48c1489257091f02858ef061d7f01d7"
+    },
+    {
+     "bytes": 37912,
+     "path": "/node/history",
+     "sha256": "6eaa071bab42e535c35b7a6696c99b9c8748662d0179a4163522c7f22470ca0c"
+    },
+    {
+     "bytes": 7128,
+     "path": "/node/vectors.txt",
+     "sha256": "e5f60a289ca31844296eef70ef8cd73242bbaeeca556254554adc90e7d61277d"
+    },
+    {
+     "bytes": 117803,
+     "path": "/node/history.txt",
+     "sha256": "38069e17b4743d45ec3efcd116e1d354888092bc5232d27dada2c1540acaa15e"
+    }
+   ],
+   "filesDigest": "fd975d2b5d08631abdc22a8add774fde6c90e5e43214b4ce06a8e1372aa8394a",
+   "hostTimers": null,
+   "icount": 195301657,
+   "idles": 999,
+   "importCalls": 38082,
+   "importSequence": "43010ed9683b72e766917142fc6415c2738054c3821d06337240542edf04b1d2",
+   "imports": "d510dcc465eba624c7c695ca2b3fa10e5d5cacf2067f2d396d3dc5f6efc42d5b",
+   "initrd": {
+    "base": "9fefba07b32d258de48e3bdb51fcb4b0be50effadfe90de902f45ee9a825dcc9",
+    "baseBytes": 1494448,
+    "cmdline": "console=hvc0 rdinit=/init",
+    "total": "a9ae40b59079f414a6cff1ffe6ec40ed4bf03bddf76c1f7c405fe3c6a040dfc8",
+    "totalBytes": 1696176
+   },
+   "inputsDelivered": 5,
+   "jit": false,
+   "jitStats": {
+    "bytes": 0,
+    "compiled": 0,
+    "failed": 0,
+    "freed": 0,
+    "refused": 0
+   },
+   "kernelStats": {
+    "idles": 999,
+    "switches": 1723,
+    "yields": 0
+   },
+   "memory": "444366e2f7a4e517005b23dfe3f22c523fe16afe6fa92c3c760011db0d0fd603",
+   "memoryBytes": 134217728,
+   "mode": "controlled",
+   "mountDir": null,
+   "node": "v24.19.0",
+   "nsPerInsn": 0,
+   "realTimers": 0,
+   "seed": 1,
+   "stepNs": 1000,
+   "virtualNs": 40000000000,
+   "why": "end time"
+  },
+  "jit_on": {
+   "capturedTimers": 999,
+   "console": "450a710ce95893624f7e0b47edf7cb227f60972ec32573c5f7428236c6404b9c",
+   "consoleBytes": 227744,
+   "counts": {
+    "args_get": 1,
+    "args_sizes_get": 1,
+    "clock_time_get": 21530,
+    "fd_close": 1,
+    "fd_filestat_get": 1,
+    "fd_prestat_get": 1,
+    "fd_read": 22,
+    "fd_write": 12883,
+    "kw_host_jit_caps": 1,
+    "kw_host_jit_compile": 41,
+    "kw_host_jit_free": 10,
+    "path_open": 1,
+    "poll_oneoff": 1450,
+    "random_get": 1,
+    "sched_yield": 8,
+    "wasm_driver_block_info": 1,
+    "wasm_driver_console_size": 450,
+    "wasm_driver_fb_init": 1,
+    "wasm_driver_input_init": 1,
+    "wasm_driver_net_init": 1,
+    "wasm_driver_shm_init": 1,
+    "wasm_driver_sound_init": 1,
+    "wasm_driver_virtio_init": 1,
+    "wasm_driver_vsock_init": 1,
+    "wasm_switch_to": 1723
+   },
+   "deliver": "initrd",
+   "deliveredFrom": {
+    "clock": 0,
+    "jump": 5,
+    "poll": 0
+   },
+   "files": [
+    {
+     "bytes": 37728,
+     "path": "/node/node",
+     "sha256": "3df8629145a460d6b70323c83a7da07ec48c1489257091f02858ef061d7f01d7"
+    },
+    {
+     "bytes": 37912,
+     "path": "/node/history",
+     "sha256": "6eaa071bab42e535c35b7a6696c99b9c8748662d0179a4163522c7f22470ca0c"
+    },
+    {
+     "bytes": 7128,
+     "path": "/node/vectors.txt",
+     "sha256": "e5f60a289ca31844296eef70ef8cd73242bbaeeca556254554adc90e7d61277d"
+    },
+    {
+     "bytes": 117803,
+     "path": "/node/history.txt",
+     "sha256": "38069e17b4743d45ec3efcd116e1d354888092bc5232d27dada2c1540acaa15e"
+    }
+   ],
+   "filesDigest": "fd975d2b5d08631abdc22a8add774fde6c90e5e43214b4ce06a8e1372aa8394a",
+   "hostTimers": null,
+   "icount": 195301657,
+   "idles": 999,
+   "importCalls": 38133,
+   "importSequence": "ecdbd6cf2cebf2434c17b3ca44b02f516ad018665bf5e60b769b5e78e0f41ee8",
+   "imports": "dad293fd72755aee691bf0b85c8bf3c448feeaa49531e4313f9ccf7f6f99ec04",
+   "initrd": {
+    "base": "9fefba07b32d258de48e3bdb51fcb4b0be50effadfe90de902f45ee9a825dcc9",
+    "baseBytes": 1494448,
+    "cmdline": "console=hvc0 rdinit=/init",
+    "total": "a9ae40b59079f414a6cff1ffe6ec40ed4bf03bddf76c1f7c405fe3c6a040dfc8",
+    "totalBytes": 1696176
+   },
+   "inputsDelivered": 5,
+   "jit": true,
+   "jitStats": {
+    "bytes": 367760,
+    "compiled": 41,
+    "failed": 0,
+    "freed": 10,
+    "refused": 0
+   },
+   "kernelStats": {
+    "idles": 999,
+    "switches": 1723,
+    "yields": 0
+   },
+   "memory": "576c54726a70d8cbb0770830c33ce1c283cf2ebfd6c99fc12b6f95c12abb13f3",
+   "memoryBytes": 134217728,
+   "mode": "controlled",
+   "mountDir": null,
+   "node": "v24.19.0",
+   "nsPerInsn": 0,
+   "realTimers": 0,
+   "seed": 1,
+   "stepNs": 1000,
+   "virtualNs": 40000000000,
+   "why": "end time"
+  },
+  "ns_per_insn_5": {
+   "capturedTimers": 633,
+   "console": "450a710ce95893624f7e0b47edf7cb227f60972ec32573c5f7428236c6404b9c",
+   "consoleBytes": 227744,
+   "counts": {
+    "args_get": 1,
+    "args_sizes_get": 1,
+    "clock_time_get": 68732,
+    "fd_close": 1,
+    "fd_filestat_get": 1,
+    "fd_prestat_get": 1,
+    "fd_read": 22,
+    "fd_write": 12883,
+    "kw_host_jit_caps": 1,
+    "path_open": 1,
+    "poll_oneoff": 6670,
+    "random_get": 1,
+    "sched_yield": 57,
+    "wasm_driver_block_info": 1,
+    "wasm_driver_console_size": 5987,
+    "wasm_driver_fb_init": 1,
+    "wasm_driver_input_init": 1,
+    "wasm_driver_net_init": 1,
+    "wasm_driver_shm_init": 1,
+    "wasm_driver_sound_init": 1,
+    "wasm_driver_virtio_init": 1,
+    "wasm_driver_vsock_init": 1,
+    "wasm_switch_to": 22188
+   },
+   "deliver": "initrd",
+   "deliveredFrom": {
+    "clock": 0,
+    "jump": 5,
+    "poll": 0
+   },
+   "files": [
+    {
+     "bytes": 37728,
+     "path": "/node/node",
+     "sha256": "3df8629145a460d6b70323c83a7da07ec48c1489257091f02858ef061d7f01d7"
+    },
+    {
+     "bytes": 37912,
+     "path": "/node/history",
+     "sha256": "6eaa071bab42e535c35b7a6696c99b9c8748662d0179a4163522c7f22470ca0c"
+    },
+    {
+     "bytes": 7128,
+     "path": "/node/vectors.txt",
+     "sha256": "e5f60a289ca31844296eef70ef8cd73242bbaeeca556254554adc90e7d61277d"
+    },
+    {
+     "bytes": 117803,
+     "path": "/node/history.txt",
+     "sha256": "38069e17b4743d45ec3efcd116e1d354888092bc5232d27dada2c1540acaa15e"
+    }
+   ],
+   "filesDigest": "fd975d2b5d08631abdc22a8add774fde6c90e5e43214b4ce06a8e1372aa8394a",
+   "hostTimers": null,
+   "icount": 195751999,
+   "idles": 633,
+   "importCalls": 116555,
+   "importSequence": "415e717c881f0f9cdc1516901149be4c42fb5f91164feeb2ee2cf34fb88b40a0",
+   "imports": "d832b8ff23565e2c0fb56d9fdb885774303a8881060f303014e28d64a54d9ce9",
+   "initrd": {
+    "base": "9fefba07b32d258de48e3bdb51fcb4b0be50effadfe90de902f45ee9a825dcc9",
+    "baseBytes": 1494448,
+    "cmdline": "console=hvc0 rdinit=/init",
+    "total": "a9ae40b59079f414a6cff1ffe6ec40ed4bf03bddf76c1f7c405fe3c6a040dfc8",
+    "totalBytes": 1696176
+   },
+   "inputsDelivered": 5,
+   "jit": false,
+   "jitStats": {
+    "bytes": 0,
+    "compiled": 0,
+    "failed": 0,
+    "freed": 0,
+    "refused": 0
+   },
+   "kernelStats": {
+    "idles": 633,
+    "switches": 22188,
+    "yields": 0
+   },
+   "memory": "8eb0e0b21840d43bb77feb8b095d44ac635330457846b9810decfe7b9161f512",
+   "memoryBytes": 134217728,
+   "mode": "controlled",
+   "mountDir": null,
+   "node": "v24.19.0",
+   "nsPerInsn": 5,
+   "realTimers": 0,
+   "seed": 1,
+   "stepNs": 1000,
+   "virtualNs": 40000000000,
+   "why": "end time"
+  }
+ },
+ "cost": {
+  "bench_lines": [
+   "bench steps 163 traps 0 checksum 16828551296332431224",
+   "bench steps 326163 traps 0 checksum 11290299613963237624",
+   "bench steps 326163 traps 0 checksum 11290299613963237624"
+  ],
+  "bench_steps": 326000,
+  "interpreter": {
+   "bench_insns": [
+    448600,
+    116367892,
+    116367571
+   ],
+   "boot_insns": 3750863,
+   "empty_run_insns": [
+    58975,
+    58020
+   ],
+   "import_calls_perf_run": 24058,
+   "insns_per_row": 14071.118159509202,
+   "insns_per_step": 355.57966564417177,
+   "jit": {
+    "bytes": 0,
+    "compiled": 0,
+    "failed": 0,
+    "freed": 0,
+    "refused": 0
+   },
+   "perf_run_insns": [
+    458776604,
+    458776472
+   ],
+   "session_insns": 1667772817,
+   "session_wall_s": 4.843707625,
+   "wall_ns_per_row_first_run": 38166.690950920245,
+   "wall_ns_per_row_second_run": 40328.97110429448,
+   "wall_ns_per_step_first_run": 1180.1958067484663,
+   "wall_ns_per_step_second_run": 827.2873190184049
+  },
+  "jit": {
+   "bench_insns": [
+    448600,
+    116367892,
+    116367571
+   ],
+   "boot_insns": 3750863,
+   "empty_run_insns": [
+    58975,
+    58020
+   ],
+   "import_calls_perf_run": 24068,
+   "insns_per_row": 14071.118159509202,
+   "insns_per_step": 355.57966564417177,
+   "jit": {
+    "bytes": 570088,
+    "compiled": 52,
+    "failed": 0,
+    "freed": 19,
+    "refused": 0
+   },
+   "perf_run_insns": [
+    458776604,
+    458776472
+   ],
+   "session_insns": 1667772817,
+   "session_wall_s": 2.219140291,
+   "wall_ns_per_row_first_run": 24237.135766871164,
+   "wall_ns_per_row_second_run": 17126.80343558282,
+   "wall_ns_per_step_first_run": 365.2886012269939,
+   "wall_ns_per_step_second_run": 358.65618404907974
+  },
+  "native_library_from_python_ns_per_step": 1246.1398781757184,
+  "native_line_executable_ns_per_row": 1659.4849385112593,
+  "native_ns_per_step": 248.61327459981402,
+  "perf_output_sha256": "271c62cc5a038d59ddae81438e534612557543ebf9b5fd2b770326ce1ae15dd5",
+  "rows": 32600,
+  "wasmtime_from_python_ns_per_step": 15328.144168972603
+ },
+ "environment": {
+  "node": "/nix/store/0n6wnabi4grafrkvnla0ip529rqp6yxp-nodejs-24.19.0/bin/node",
+  "system": "arm64-darwin",
+  "unkernel": "/nix/store/42f4npws9n3gq59zy1irwv65bcmh0v36-unkernel-0.2.0-261124-75694e2",
+  "zig": "/nix/store/j3fyiv1i1hb713k2p5q0pxmnv4bral9w-zig-0.16.0/bin/zig"
+ },
+ "faults": {
+  "date": [
+   "memory",
+   "imports",
+   "importCalls",
+   "icount"
+  ],
+  "entropy": [
+   "memory",
+   "imports",
+   "importCalls",
+   "icount"
+  ],
+  "idle-real": [
+   "a timer left to the real clock"
+  ],
+  "jitter": [
+   "memory",
+   "console",
+   "imports",
+   "importCalls",
+   "icount"
+  ]
+ },
+ "mount": {
+  "real_timers": {
+   "identical": true,
+   "node_ran": false,
+   "realTimers": 4,
+   "vsock": {
+    "accepted": 0,
+    "bytesIn": 0,
+    "bytesOut": 0,
+    "connected": 0,
+    "open": 0,
+    "refused": 1,
+    "resets": 0,
+    "violations": 0
+   }
+  },
+  "virtual_timers": {
+   "jit_off": {
+    "capturedTimers": 1024,
+    "console": "ebe554fb3c61ab5f61260edc0993fbce5f1e7caa5d8aa17c666f732018072de4",
+    "consoleBytes": 227754,
+    "counts": {
+     "args_get": 1,
+     "args_sizes_get": 1,
+     "clock_time_get": 23602,
+     "fd_close": 1,
+     "fd_filestat_get": 1,
+     "fd_prestat_get": 1,
+     "fd_read": 22,
+     "fd_write": 12884,
+     "kw_host_jit_caps": 1,
+     "path_open": 1,
+     "poll_oneoff": 1484,
+     "random_get": 1,
+     "sched_yield": 17,
+     "wasm_driver_block_info": 1,
+     "wasm_driver_console_size": 450,
+     "wasm_driver_fb_init": 1,
+     "wasm_driver_input_init": 1,
+     "wasm_driver_net_init": 1,
+     "wasm_driver_shm_init": 1,
+     "wasm_driver_sound_init": 1,
+     "wasm_driver_virtio_init": 1,
+     "wasm_driver_vsock_init": 1,
+     "wasm_driver_vsock_recv": 71,
+     "wasm_driver_vsock_rx_len": 137,
+     "wasm_driver_vsock_send": 128,
+     "wasm_switch_to": 2195
+    },
+    "deliver": "mount",
+    "deliveredFrom": {
+     "clock": 0,
+     "jump": 5,
+     "poll": 0
+    },
+    "files": [
+     {
+      "bytes": 37728,
+      "path": "/node/node",
+      "sha256": "3df8629145a460d6b70323c83a7da07ec48c1489257091f02858ef061d7f01d7"
+     },
+     {
+      "bytes": 37912,
+      "path": "/node/history",
+      "sha256": "6eaa071bab42e535c35b7a6696c99b9c8748662d0179a4163522c7f22470ca0c"
+     },
+     {
+      "bytes": 7128,
+      "path": "/node/vectors.txt",
+      "sha256": "e5f60a289ca31844296eef70ef8cd73242bbaeeca556254554adc90e7d61277d"
+     },
+     {
+      "bytes": 117803,
+      "path": "/node/history.txt",
+      "sha256": "38069e17b4743d45ec3efcd116e1d354888092bc5232d27dada2c1540acaa15e"
+     }
+    ],
+    "filesDigest": null,
+    "hostTimers": {
+     "fired": 1,
+     "pending": 0,
+     "virtual": 78
+    },
+    "icount": 195367115,
+    "idles": 1024,
+    "importCalls": 41006,
+    "importSequence": "0f40793b87acbe79f507223e76b0b50f129e0d2e63990b366c5f17827dcab898",
+    "imports": "5a50aa1b730f9bcb5140f5b10b133c1c36c092ed302befe4d48e683b995d3265",
+    "initrd": null,
+    "inputsDelivered": 5,
+    "jit": false,
+    "jitStats": {
+     "bytes": 0,
+     "compiled": 0,
+     "failed": 0,
+     "freed": 0,
+     "refused": 0
+    },
+    "kernelStats": {
+     "idles": 1024,
+     "switches": 2195,
+     "yields": 0
+    },
+    "memory": "3abd72281a3f7c9fedafac1c64fea635c560c168211885466aae834b0db07650",
+    "memoryBytes": 134217728,
+    "mode": "controlled",
+    "mountDir": "/node",
+    "node": "v24.19.0",
+    "nsPerInsn": 0,
+    "realTimers": 0,
+    "seed": 1,
+    "stepNs": 1000,
+    "virtualNs": 40000000000,
+    "vsockStats": {
+     "accepted": 1,
+     "bytesIn": 1068,
+     "bytesOut": 203393,
+     "connected": 1,
+     "open": 1,
+     "refused": 1,
+     "resets": 0,
+     "violations": 0
+    },
+    "why": "end time"
+   },
+   "jit_on": {
+    "capturedTimers": 1024,
+    "console": "ebe554fb3c61ab5f61260edc0993fbce5f1e7caa5d8aa17c666f732018072de4",
+    "consoleBytes": 227754,
+    "counts": {
+     "args_get": 1,
+     "args_sizes_get": 1,
+     "clock_time_get": 23602,
+     "fd_close": 1,
+     "fd_filestat_get": 1,
+     "fd_prestat_get": 1,
+     "fd_read": 22,
+     "fd_write": 12884,
+     "kw_host_jit_caps": 1,
+     "kw_host_jit_compile": 38,
+     "kw_host_jit_free": 8,
+     "path_open": 1,
+     "poll_oneoff": 1484,
+     "random_get": 1,
+     "sched_yield": 17,
+     "wasm_driver_block_info": 1,
+     "wasm_driver_console_size": 450,
+     "wasm_driver_fb_init": 1,
+     "wasm_driver_input_init": 1,
+     "wasm_driver_net_init": 1,
+     "wasm_driver_shm_init": 1,
+     "wasm_driver_sound_init": 1,
+     "wasm_driver_virtio_init": 1,
+     "wasm_driver_vsock_init": 1,
+     "wasm_driver_vsock_recv": 71,
+     "wasm_driver_vsock_rx_len": 137,
+     "wasm_driver_vsock_send": 128,
+     "wasm_switch_to": 2195
+    },
+    "deliver": "mount",
+    "deliveredFrom": {
+     "clock": 0,
+     "jump": 5,
+     "poll": 0
+    },
+    "files": [
+     {
+      "bytes": 37728,
+      "path": "/node/node",
+      "sha256": "3df8629145a460d6b70323c83a7da07ec48c1489257091f02858ef061d7f01d7"
+     },
+     {
+      "bytes": 37912,
+      "path": "/node/history",
+      "sha256": "6eaa071bab42e535c35b7a6696c99b9c8748662d0179a4163522c7f22470ca0c"
+     },
+     {
+      "bytes": 7128,
+      "path": "/node/vectors.txt",
+      "sha256": "e5f60a289ca31844296eef70ef8cd73242bbaeeca556254554adc90e7d61277d"
+     },
+     {
+      "bytes": 117803,
+      "path": "/node/history.txt",
+      "sha256": "38069e17b4743d45ec3efcd116e1d354888092bc5232d27dada2c1540acaa15e"
+     }
+    ],
+    "filesDigest": null,
+    "hostTimers": {
+     "fired": 1,
+     "pending": 0,
+     "virtual": 78
+    },
+    "icount": 195367115,
+    "idles": 1024,
+    "importCalls": 41052,
+    "importSequence": "bd3a2c6964303bc7045185656449251f0d1d4ef5d81b8bbd8391acb95fca764f",
+    "imports": "ab616d2125fe94478516b43d0fd8db1055aba25ae289c1b0e25473c8d6146fcb",
+    "initrd": null,
+    "inputsDelivered": 5,
+    "jit": true,
+    "jitStats": {
+     "bytes": 345058,
+     "compiled": 38,
+     "failed": 0,
+     "freed": 8,
+     "refused": 0
+    },
+    "kernelStats": {
+     "idles": 1024,
+     "switches": 2195,
+     "yields": 0
+    },
+    "memory": "23c25209c6123f7e9bc0a3180e0a6c058c37628a9b889a927fa3e3e5692ce454",
+    "memoryBytes": 134217728,
+    "mode": "controlled",
+    "mountDir": "/node",
+    "node": "v24.19.0",
+    "nsPerInsn": 0,
+    "realTimers": 0,
+    "seed": 1,
+    "stepNs": 1000,
+    "virtualNs": 40000000000,
+    "vsockStats": {
+     "accepted": 1,
+     "bytesIn": 1068,
+     "bytesOut": 203393,
+     "connected": 1,
+     "open": 1,
+     "refused": 1,
+     "resets": 0,
+     "violations": 0
+    },
+    "why": "end time"
+   },
+   "vsock_imports": {
+    "wasm_driver_vsock_init": 1,
+    "wasm_driver_vsock_recv": 71,
+    "wasm_driver_vsock_rx_len": 137,
+    "wasm_driver_vsock_send": 128
+   }
+  }
+ },
+ "session": {
+  "history_steps": 5913,
+  "piped_sha256": [
+   "272390725463ed2ab27d86be0c5dffa9e1e18d1bc99185bf8eacc6c625305321",
+   "0cb4cfad75debab80b854a207b444541e6a7402b1d3898de57fe5d6cfd30d4e4"
+  ],
+  "rows": 169
+ },
+ "sources": {
+  "guest_node.mjs": "a47e2371133636edb3cf96d2c8d9fa9b85814d5c1ed1b49872da70ed054716d4",
+  "guest_node_build.py": "c47652d9645b5b9235f1a9e36dfd440ad65d3296b9ff067c6c84d216a674dd2b",
+  "guest_node_check.py": "b8086487b69c03c1daadb767a4dab2414658a0b861935f56922090a9d4235b8a",
+  "guest_node_history.c": "66c3f5de9ea289a29c43d800bd51505d876cce5523a5130aee567a4639e3a818",
+  "host.mjs": "883cf5c2e0a099c75511a4b7767064ec2b94b04dc4f6b547d69b6a6f3f0e6241"
+ },
+ "teeth": {
+  "input_byte": {
+   "differ": [
+    "memory",
+    "console",
+    "imports",
+    "importCalls",
+    "icount"
+   ],
+   "first": "line 89: guest `4 7 22 2 0 0 5 3 1 7 11 0 1 1 14 0 1 7 11` native `3 7 22 2 0 0 4 0 0 0 0 0 0 1 15 3 7 0`",
+   "lines_differing": 1,
+   "offset": 3566
+  },
+  "mutant": {
+   "differ": [
+    "memory",
+    "console",
+    "imports",
+    "importCalls",
+    "icount"
+   ],
+   "first": "line 4: guest `2 0 0 2 0 0 5 0 0 7 22 0 1 2 14 0 0 7 22 15 0 6 0` native `2 0 0 2 0 0 5 0 0 7 22 0 1 1 14 0 0 7 22`",
+   "lines_differing": 12,
+   "name": "reply-before-ack"
+  }
+ }
+}

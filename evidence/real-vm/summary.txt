@@ -1,0 +1,22 @@
+commit a1fa61395da2d80ebee375c5093621fce2ca7259
+image nixos/nix@sha256:746280551ddc1c72177d1a597c05eacac86dfaa18d5d649bf86411278bcd5470 (aarch64-linux container under OrbStack, no /dev/kvm, QEMU fell back to tcg)
+sha256 real-vm.log d7693ce691a677975013685668a9b9709313f799257819a2d61e0320b4edd4ac
+sha256 real-vm-mutant.log b5eb69ea917e2b089be96c273fb1f8668129bd38fb85544ef83e77758bcd3e00
+real-vm exit=0
+real-vm-mutant exit=0
+done
+vm-test-run-real-vm> subtest: power loss right after the first acknowledged submission
+vm-test-run-real-vm> subtest: kill -9 in the middle of a workload
+vm-test-run-real-vm> subtest: the link between client and node is cut and restored
+vm-test-run-real-vm> subtest: delay and loss on a node's link, and a kill under them
+vm-test-run-real-vm> subtest: two nodes ping each other
+vm-test-run-real-vm> subtest: partition between the nodes, then heal
+vm-test-run-real-vm> subtest: delay and loss between the nodes, and a kill
+vm-test-run-real-vm> subtest: power loss of one of the two nodes
+vm-test-run-real-vm> subtest: a cancelled timer stays silent
+vm-test-run-real-vm> subtest: conformance of every log to the Shen source
+vm-test-run-real-vm> test script finished in 384.25s
+vm-test-run-real-vm-mutant> subtest: the mutant's log does not refine spec.shen
+vm-test-run-real-vm-mutant> 1  refinement: on state ((('free', 0, 0), ('free', 0, 0)), ('idle', 0, 0, 0, 0, 0), 0) and event ('submit', 0, 8, 22)
+vm-test-run-real-vm-mutant> subtest: judged against its own source, it tells a client ok before the row is durable
+vm-test-run-real-vm-mutant> test script finished in 95.15s

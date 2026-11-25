@@ -1,0 +1,1252 @@
+{
+ "unkernel": "0.2.0-261124-75694e2",
+ "kernel_wasm_sha256": "46dcb7263dbfb8d3dc593c3985616e99b3fa4ad967b960a034116f92544125b3",
+ "sources": {
+  "host.mjs": "883cf5c2e0a099c75511a4b7767064ec2b94b04dc4f6b547d69b6a6f3f0e6241",
+  "net.mjs": "37532a9204ff2ca81974e8bd9434736f78e382d0ad310ceeadfc1bb9e44c369b",
+  "netlib.mjs": "dcd9f2b0c9a46edce121870abd98192b306ca648e64d495bc22705458fddfdf1",
+  "switch.mjs": "22fb338d2b9fcb7bf5695fc1246bb9ceb8d900f84f3646b211bc0b0e813a39af",
+  "multi_stock.mjs": "d0fb9ddd34235c0ca97c48c27ea0224ce01855fda987eb25dc024fb37e9b2292",
+  "net_check.py": "058f23ce724cd51c761db1c891c3d8e1094bd326848c060e74cdbdcf46062821",
+  "net_workload.json": "57c31afdc6cf977ce1d63f215a169bf4f1c392b3045e10ce12c9d60495439cd8",
+  "net_busy.json": "ae34e9d97af51117f86bf122e70c93225b0385ffe8180bc5c3f0d89c69b912f3",
+  "multi_workload.json": "0470873fb4362bd199af93f25c1b055ac99a48ce6e4d729c609f15f66a318ae8",
+  "multi_busy.json": "433bc11273d0d9fb91eab492a476af4f37da1c8c627ec36189c318dbbca3d0d6"
+ },
+ "environment": {
+  "system": "arm64-darwin",
+  "node": "/nix/store/0n6wnabi4grafrkvnla0ip529rqp6yxp-nodejs-24.19.0/bin/node",
+  "nixpkgs": "34ab99075ac4f7e40cf037eef32cb1c360bb85e9"
+ },
+ "single": {
+  "idle": {
+   "why": "end time",
+   "jit": false,
+   "seed": 1,
+   "stepNs": 1000,
+   "nsPerInsn": 0,
+   "latencyNs": 200000,
+   "flip": -1,
+   "late": -1,
+   "memoryBytes": 134217728,
+   "memory": "9b695641b0866348570563a0bef1f4073a0f0e267bfb5fffaec203dac8be31ae",
+   "console": "092c297efbddc4700cff5636c37332f991a7f6975d9645818866fd3c22c5a6ca",
+   "consoleBytes": 6221,
+   "imports": "3b047807c5f7d807a196c85629336d61d65531e37feed10ce6e15c6db47ff514",
+   "importCalls": 14342,
+   "icount": 5319189,
+   "virtualNs": 14000000000,
+   "idles": 554,
+   "capturedTimers": 554,
+   "realTimers": 0,
+   "inputsDelivered": 5,
+   "deliveredFrom": {
+    "clock": 0,
+    "poll": 0,
+    "jump": 5
+   },
+   "trace": "d67404f972281222ffa69b6ca8d2845db94f9faf6bd40ca3c8fa78652880024d",
+   "frames": {
+    "tx": 13,
+    "rx": 8
+   },
+   "framesFrom": {
+    "clock": 1,
+    "jump": 7
+   },
+   "framesUndelivered": 0,
+   "maxLagNs": 0,
+   "wallMs": 169,
+   "wallMsPerVirtualS": 12
+  },
+  "busy": {
+   "why": "end time",
+   "jit": false,
+   "seed": 1,
+   "stepNs": 1000,
+   "nsPerInsn": 5,
+   "latencyNs": 200000,
+   "flip": -1,
+   "late": -1,
+   "memoryBytes": 134217728,
+   "memory": "fe2623aa20ed668cbb16ab611c23231f4e3d5c0cb1f38f5d220ef8fc25329448",
+   "console": "06941c505e9e71c9b3b6ecc5a4fb8bd3d57bf61a0b857e11410033f9734e37cb",
+   "consoleBytes": 6359,
+   "imports": "235975db2ffe4f5ecccbdaa4c41af2a1bdf5009a90eb5ed5d731461d8ca1c2fd",
+   "importCalls": 15795,
+   "icount": 419464567,
+   "virtualNs": 10000000000,
+   "idles": 268,
+   "capturedTimers": 268,
+   "realTimers": 0,
+   "inputsDelivered": 3,
+   "deliveredFrom": {
+    "clock": 0,
+    "poll": 0,
+    "jump": 3
+   },
+   "trace": "bd4cdd62249130381e7aa1c7641aae0c9a80b91ca0f28ac1a8679c0bee3f3278",
+   "frames": {
+    "tx": 14,
+    "rx": 9
+   },
+   "framesFrom": {
+    "clock": 9,
+    "jump": 0
+   },
+   "framesUndelivered": 0,
+   "maxLagNs": 853810,
+   "wallMs": 2183,
+   "wallMsPerVirtualS": 218
+  },
+  "jit": {
+   "why": "end time",
+   "jit": true,
+   "seed": 1,
+   "stepNs": 1000,
+   "nsPerInsn": 5,
+   "latencyNs": 200000,
+   "flip": -1,
+   "late": -1,
+   "memoryBytes": 134217728,
+   "memory": "96445ace6828e9145b90753e34d73e7eddcf1fb6f48bf9532d5e2a8746f40ddb",
+   "console": "06941c505e9e71c9b3b6ecc5a4fb8bd3d57bf61a0b857e11410033f9734e37cb",
+   "consoleBytes": 6359,
+   "imports": "17df7a7e71de1bb8b3f99174d2d704f5664635e138979214bbdf1f79d6507ac2",
+   "importCalls": 15952,
+   "icount": 419464567,
+   "virtualNs": 10000000000,
+   "idles": 268,
+   "capturedTimers": 268,
+   "realTimers": 0,
+   "inputsDelivered": 3,
+   "deliveredFrom": {
+    "clock": 0,
+    "poll": 0,
+    "jump": 3
+   },
+   "trace": "bd4cdd62249130381e7aa1c7641aae0c9a80b91ca0f28ac1a8679c0bee3f3278",
+   "frames": {
+    "tx": 14,
+    "rx": 9
+   },
+   "framesFrom": {
+    "clock": 9,
+    "jump": 0
+   },
+   "framesUndelivered": 0,
+   "maxLagNs": 853810,
+   "wallMs": 845,
+   "wallMsPerVirtualS": 84
+  }
+ },
+ "multi": {
+  "idle": {
+   "why": "end time",
+   "guests": [
+    {
+     "memoryBytes": 134217728,
+     "memory": "2a79d9a6136ff7eeca7f1c66c7eb1158a5ec0610d7fe59662d5d71267b7de5cc",
+     "console": "a629e6173ef56090d25e9f15f51cf3898c762b2d14714b26e92de03b08d21b0d",
+     "consoleBytes": 6198,
+     "imports": "13be9b89e644785caa78d089586a42661e8da8de90d81067d92cb29fe137935e",
+     "importCalls": 12751,
+     "icount": 5240993,
+     "virtualNs": 12000000000,
+     "idles": 477,
+     "parks": 4,
+     "capturedTimers": 477,
+     "inputsDelivered": 4,
+     "inputFrom": {
+      "clock": 0,
+      "wake": 4
+     },
+     "frames": {
+      "tx": 17,
+      "rx": 19
+     },
+     "framesFrom": {
+      "clock": 1,
+      "wake": 18
+     },
+     "framesUndelivered": 0,
+     "maxLagNs": 0
+    },
+    {
+     "memoryBytes": 134217728,
+     "memory": "850960e534060505304fa9cd39f95dcd9d7cc9251ff238089c0c11133da81c50",
+     "console": "e1bad345a34329d72fc683321ead6510bd45822249a687f5a8e7d44fe569dbfa",
+     "consoleBytes": 5809,
+     "imports": "b499b6a58ec85503a774e55a0dbc549eac7ae2bb0834aef0a242aa0fc410c3f5",
+     "importCalls": 11369,
+     "icount": 5145895,
+     "virtualNs": 12000000000,
+     "idles": 412,
+     "parks": 5,
+     "capturedTimers": 412,
+     "inputsDelivered": 3,
+     "inputFrom": {
+      "clock": 0,
+      "wake": 3
+     },
+     "frames": {
+      "tx": 15,
+      "rx": 21
+     },
+     "framesFrom": {
+      "clock": 7,
+      "wake": 14
+     },
+     "framesUndelivered": 0,
+     "maxLagNs": 0
+    },
+    {
+     "memoryBytes": 134217728,
+     "memory": "850fec921f83af96f3aebe61d11858df49ecbc5cead92dee0fb15507b50e20cc",
+     "console": "04e820f2979bb45ed384f2dfec3787c9afe7face187e4e379c9d088fdeba7bc9",
+     "consoleBytes": 6358,
+     "imports": "30af7493b77e3570eb712cc5d75bf1efab190062aebb9260867dcba9e415abfe",
+     "importCalls": 11794,
+     "icount": 5183588,
+     "virtualNs": 12000000000,
+     "idles": 434,
+     "parks": 6,
+     "capturedTimers": 434,
+     "inputsDelivered": 3,
+     "inputFrom": {
+      "clock": 0,
+      "wake": 3
+     },
+     "frames": {
+      "tx": 11,
+      "rx": 15
+     },
+     "framesFrom": {
+      "clock": 3,
+      "wake": 12
+     },
+     "framesUndelivered": 0,
+     "maxLagNs": 0
+    }
+   ],
+   "trace": "216c86c88368de541c421d70acb653fe6b8c99c5acf78691e378dd683b88927f",
+   "frames": {
+    "tx": 43,
+    "rx": 55
+   },
+   "switches": 1341,
+   "realTimers": 0,
+   "flip": -1,
+   "late": -1,
+   "latencyNs": 200000,
+   "nsPerInsn": 0,
+   "stepNs": 1000,
+   "seed": 1,
+   "jit": false,
+   "faults": {
+    "seed": 1,
+    "drop": 0,
+    "dup": 0,
+    "jitter": 0
+   },
+   "wallMs": 468,
+   "wallMsPerVirtualS": 39,
+   "wallMsPerVirtualSPerGuest": 13
+  },
+  "busy": {
+   "why": "end time",
+   "guests": [
+    {
+     "memoryBytes": 134217728,
+     "memory": "879d386243dfe29622459e5bf82db05a8ed4ba24b14877ffa0312ccf977c2557",
+     "console": "ef7277ca5847b4f84a67e4aa5a781c912c4ff08959ecb8519ee118062c0ba451",
+     "consoleBytes": 5590,
+     "imports": "989b678a130523c26c5daadca210a59746b0e7265c64f16d5dc9814c5fb0a62d",
+     "importCalls": 13245,
+     "icount": 301886186,
+     "virtualNs": 8000000000,
+     "idles": 253,
+     "parks": 66,
+     "capturedTimers": 253,
+     "inputsDelivered": 3,
+     "inputFrom": {
+      "clock": 0,
+      "wake": 3
+     },
+     "frames": {
+      "tx": 17,
+      "rx": 18
+     },
+     "framesFrom": {
+      "clock": 10,
+      "wake": 8
+     },
+     "framesUndelivered": 0,
+     "maxLagNs": 19646000
+    },
+    {
+     "memoryBytes": 134217728,
+     "memory": "8641569bfc2c02d6f746e8ba21f099cc985618bcf105d40bdede69bdc085772c",
+     "console": "a8f62e04d08fb5609fe9383d562583cbdec5fbda0e3d660f8402d8bc7e4be51d",
+     "consoleBytes": 5321,
+     "imports": "bc19481f0044a240730e33e446834646d5db7dda1abcf421829549a322a06978",
+     "importCalls": 8804,
+     "icount": 4881886,
+     "virtualNs": 8000000000,
+     "idles": 289,
+     "parks": 3,
+     "capturedTimers": 289,
+     "inputsDelivered": 2,
+     "inputFrom": {
+      "clock": 0,
+      "wake": 2
+     },
+     "frames": {
+      "tx": 10,
+      "rx": 14
+     },
+     "framesFrom": {
+      "clock": 2,
+      "wake": 12
+     },
+     "framesUndelivered": 0,
+     "maxLagNs": 14800
+    },
+    {
+     "memoryBytes": 134217728,
+     "memory": "ba3b4464da85a63f7867e84e3adef23d538bd0101fb337d92417d1c167d48869",
+     "console": "ae4e7333a160c6f24532a9020bd00b306710ac3225fec19eb97169dfef01e838",
+     "consoleBytes": 4920,
+     "imports": "029dbdf8eb3519ac788d38175052d6fab7cba06cb116e6095b2b3312710db12b",
+     "importCalls": 8469,
+     "icount": 4897255,
+     "virtualNs": 8000000000,
+     "idles": 270,
+     "parks": 3,
+     "capturedTimers": 270,
+     "inputsDelivered": 2,
+     "inputFrom": {
+      "clock": 0,
+      "wake": 2
+     },
+     "frames": {
+      "tx": 8,
+      "rx": 14
+     },
+     "framesFrom": {
+      "clock": 6,
+      "wake": 8
+     },
+     "framesUndelivered": 0,
+     "maxLagNs": 2665
+    }
+   ],
+   "trace": "9ffdd187571589afe0a5ffc2ec5d3459142372ec03ae43463d1bdb5e7902dcb0",
+   "frames": {
+    "tx": 35,
+    "rx": 46
+   },
+   "switches": 887,
+   "realTimers": 0,
+   "flip": -1,
+   "late": -1,
+   "latencyNs": 200000,
+   "nsPerInsn": 5,
+   "stepNs": 1000,
+   "seed": 1,
+   "jit": false,
+   "faults": {
+    "seed": 1,
+    "drop": 0,
+    "dup": 0,
+    "jitter": 0
+   },
+   "wallMs": 1975,
+   "wallMsPerVirtualS": 247,
+   "wallMsPerVirtualSPerGuest": 82
+  },
+  "jit": {
+   "why": "end time",
+   "guests": [
+    {
+     "memoryBytes": 134217728,
+     "memory": "fc9e1caaccd5b474f3d2faab2679d9374bb51052aaff29736dbb605d4e503ad2",
+     "console": "ef7277ca5847b4f84a67e4aa5a781c912c4ff08959ecb8519ee118062c0ba451",
+     "consoleBytes": 5590,
+     "imports": "ceec9bcd6a832b30eb57ec24dbef6f4d9332de809b4b0eca1cad619c3123e4cd",
+     "importCalls": 13351,
+     "icount": 301886186,
+     "virtualNs": 8000000000,
+     "idles": 253,
+     "parks": 66,
+     "capturedTimers": 253,
+     "inputsDelivered": 3,
+     "inputFrom": {
+      "clock": 0,
+      "wake": 3
+     },
+     "frames": {
+      "tx": 17,
+      "rx": 18
+     },
+     "framesFrom": {
+      "clock": 10,
+      "wake": 8
+     },
+     "framesUndelivered": 0,
+     "maxLagNs": 19646000
+    },
+    {
+     "memoryBytes": 134217728,
+     "memory": "2ff8a5ae8b0d2f9a538ecd2fe343c9b87a9c135776a01a2a8ffb675686dce184",
+     "console": "a8f62e04d08fb5609fe9383d562583cbdec5fbda0e3d660f8402d8bc7e4be51d",
+     "consoleBytes": 5321,
+     "imports": "1fa3a2a2ab7fc4ee18cfcaf80f66ed1fa0d0828e0c564fe26e2b8338ec6b5c7a",
+     "importCalls": 8806,
+     "icount": 4881886,
+     "virtualNs": 8000000000,
+     "idles": 289,
+     "parks": 3,
+     "capturedTimers": 289,
+     "inputsDelivered": 2,
+     "inputFrom": {
+      "clock": 0,
+      "wake": 2
+     },
+     "frames": {
+      "tx": 10,
+      "rx": 14
+     },
+     "framesFrom": {
+      "clock": 2,
+      "wake": 12
+     },
+     "framesUndelivered": 0,
+     "maxLagNs": 14800
+    },
+    {
+     "memoryBytes": 134217728,
+     "memory": "9e7f92f49e9725cc2b37df3fc269a38c19dc1c454bc6f2e4d45c83b1894fd460",
+     "console": "ae4e7333a160c6f24532a9020bd00b306710ac3225fec19eb97169dfef01e838",
+     "consoleBytes": 4920,
+     "imports": "557987a7cbee3423a2a5be09aec6865540858c3b326aa015e4aa2a0037a2e638",
+     "importCalls": 8471,
+     "icount": 4897255,
+     "virtualNs": 8000000000,
+     "idles": 270,
+     "parks": 3,
+     "capturedTimers": 270,
+     "inputsDelivered": 2,
+     "inputFrom": {
+      "clock": 0,
+      "wake": 2
+     },
+     "frames": {
+      "tx": 8,
+      "rx": 14
+     },
+     "framesFrom": {
+      "clock": 6,
+      "wake": 8
+     },
+     "framesUndelivered": 0,
+     "maxLagNs": 2665
+    }
+   ],
+   "trace": "9ffdd187571589afe0a5ffc2ec5d3459142372ec03ae43463d1bdb5e7902dcb0",
+   "frames": {
+    "tx": 35,
+    "rx": 46
+   },
+   "switches": 887,
+   "realTimers": 0,
+   "flip": -1,
+   "late": -1,
+   "latencyNs": 200000,
+   "nsPerInsn": 5,
+   "stepNs": 1000,
+   "seed": 1,
+   "jit": true,
+   "faults": {
+    "seed": 1,
+    "drop": 0,
+    "dup": 0,
+    "jitter": 0
+   },
+   "wallMs": 1138,
+   "wallMsPerVirtualS": 142,
+   "wallMsPerVirtualSPerGuest": 47
+  },
+  "latency25ms": {
+   "why": "end time",
+   "guests": [
+    {
+     "memoryBytes": 134217728,
+     "memory": "0e76766c4869efb92fa8b34e7b6e7c150fd75438562561345cf503c6f41801a5",
+     "console": "ef7277ca5847b4f84a67e4aa5a781c912c4ff08959ecb8519ee118062c0ba451",
+     "consoleBytes": 5590,
+     "imports": "52d697f47fbac3d5690c209345cbee53529992186f12b69405979b7ae9ec6fa4",
+     "importCalls": 13417,
+     "icount": 301886190,
+     "virtualNs": 8000000000,
+     "idles": 264,
+     "parks": 67,
+     "capturedTimers": 264,
+     "inputsDelivered": 3,
+     "inputFrom": {
+      "clock": 0,
+      "wake": 3
+     },
+     "frames": {
+      "tx": 17,
+      "rx": 18
+     },
+     "framesFrom": {
+      "clock": 11,
+      "wake": 7
+     },
+     "framesUndelivered": 0,
+     "maxLagNs": 866530
+    },
+    {
+     "memoryBytes": 134217728,
+     "memory": "f85ccc0ca34829992f0d442ccc8316db2f9c80d4d4c1137e11fa7a2517b73e35",
+     "console": "c876c42e632a942b95c4a3c6bafc964a97d1b92f27dbd8814c1ca9faca05d548",
+     "consoleBytes": 5329,
+     "imports": "500bcf2401a81a8a88d6b96bd4b0940e984088f071abb210431bacf8786b7ceb",
+     "importCalls": 8958,
+     "icount": 4882185,
+     "virtualNs": 8000000000,
+     "idles": 294,
+     "parks": 5,
+     "capturedTimers": 294,
+     "inputsDelivered": 2,
+     "inputFrom": {
+      "clock": 0,
+      "wake": 2
+     },
+     "frames": {
+      "tx": 10,
+      "rx": 14
+     },
+     "framesFrom": {
+      "clock": 1,
+      "wake": 13
+     },
+     "framesUndelivered": 0,
+     "maxLagNs": 95217
+    },
+    {
+     "memoryBytes": 134217728,
+     "memory": "72687bbfae9e5a10ea669e3763b5878c12ff8640abdab4433c5926faac81c8e5",
+     "console": "ae4e7333a160c6f24532a9020bd00b306710ac3225fec19eb97169dfef01e838",
+     "consoleBytes": 4920,
+     "imports": "526bd8a80ff9217772ed186e94751169f0f7945a704f16dd5606daf6eaac0c46",
+     "importCalls": 8589,
+     "icount": 4898103,
+     "virtualNs": 8000000000,
+     "idles": 277,
+     "parks": 3,
+     "capturedTimers": 277,
+     "inputsDelivered": 2,
+     "inputFrom": {
+      "clock": 0,
+      "wake": 2
+     },
+     "frames": {
+      "tx": 8,
+      "rx": 14
+     },
+     "framesFrom": {
+      "clock": 4,
+      "wake": 10
+     },
+     "framesUndelivered": 0,
+     "maxLagNs": 455
+    }
+   ],
+   "trace": "e0245a6a47c13e2fd670eb9f030ac0e69f9f80618f3a2e0dd4bbc5eca2d91f49",
+   "frames": {
+    "tx": 35,
+    "rx": 46
+   },
+   "switches": 913,
+   "realTimers": 0,
+   "flip": -1,
+   "late": -1,
+   "latencyNs": 25000000,
+   "nsPerInsn": 5,
+   "stepNs": 1000,
+   "seed": 1,
+   "jit": false,
+   "faults": {
+    "seed": 1,
+    "drop": 0,
+    "dup": 0,
+    "jitter": 0
+   },
+   "wallMs": 1857,
+   "wallMsPerVirtualS": 232,
+   "wallMsPerVirtualSPerGuest": 77
+  },
+  "faults_seed7": {
+   "why": "end time",
+   "guests": [
+    {
+     "memoryBytes": 134217728,
+     "memory": "f42cb749902b855a97ecf7c12649948792f13245c552124b34e53def8f9f7bb3",
+     "console": "01d27adc1655a54163cfd04dbb473d2e1e03a090565050f6ce97fbb9fa2d70f3",
+     "consoleBytes": 6143,
+     "imports": "63144304391b50b9802f599592a88a1ffff9035f9b77dbb1ebff1c5957d3c7d5",
+     "importCalls": 12965,
+     "icount": 5233529,
+     "virtualNs": 12000000000,
+     "idles": 494,
+     "parks": 4,
+     "capturedTimers": 494,
+     "inputsDelivered": 4,
+     "inputFrom": {
+      "clock": 0,
+      "wake": 4
+     },
+     "frames": {
+      "tx": 22,
+      "rx": 21
+     },
+     "framesFrom": {
+      "clock": 0,
+      "wake": 21
+     },
+     "framesUndelivered": 0,
+     "maxLagNs": 0
+    },
+    {
+     "memoryBytes": 134217728,
+     "memory": "58994605dbd10c130fd365ba2dc0c343720306443ad6f5377d056aeb5f06a562",
+     "console": "6de604ac91bd5ee89cb7b4757a35b490a55ab26959d0d5b4ca58bab7f6865bc3",
+     "consoleBytes": 5809,
+     "imports": "e734ff5d63701eeeb4f1984193b117cccd6a5e0a580d8aabde1e345986dcb95c",
+     "importCalls": 11527,
+     "icount": 5146549,
+     "virtualNs": 12000000000,
+     "idles": 424,
+     "parks": 4,
+     "capturedTimers": 424,
+     "inputsDelivered": 3,
+     "inputFrom": {
+      "clock": 0,
+      "wake": 3
+     },
+     "frames": {
+      "tx": 20,
+      "rx": 25
+     },
+     "framesFrom": {
+      "clock": 0,
+      "wake": 25
+     },
+     "framesUndelivered": 0,
+     "maxLagNs": 0
+    },
+    {
+     "memoryBytes": 134217728,
+     "memory": "86d3a1a0120710a51e78087894f37d91de402f21fd062024e7bae50edb39d898",
+     "console": "05299f5c3ce4de6236233ccee9cbbaf30ce7f2ceda36dfb96500af985c7f717d",
+     "consoleBytes": 6395,
+     "imports": "86a69764f11adfb6924ccba30ae3e7b857346bb5c052045ffa9e3bdab565bf8c",
+     "importCalls": 11868,
+     "icount": 5184286,
+     "virtualNs": 12000000000,
+     "idles": 437,
+     "parks": 4,
+     "capturedTimers": 437,
+     "inputsDelivered": 3,
+     "inputFrom": {
+      "clock": 0,
+      "wake": 3
+     },
+     "frames": {
+      "tx": 13,
+      "rx": 16
+     },
+     "framesFrom": {
+      "clock": 0,
+      "wake": 16
+     },
+     "framesUndelivered": 0,
+     "maxLagNs": 0
+    }
+   ],
+   "trace": "c1f0e2ffd5a955c137c2cfe7fc0f6d127e7744affae1eb04cb2ba1da4d88ff88",
+   "frames": {
+    "tx": 55,
+    "dup": 5,
+    "rx": 62,
+    "drop": 10,
+    "cut": 2
+   },
+   "switches": 1370,
+   "realTimers": 0,
+   "flip": -1,
+   "late": -1,
+   "latencyNs": 200000,
+   "nsPerInsn": 0,
+   "stepNs": 1000,
+   "seed": 1,
+   "jit": false,
+   "faults": {
+    "seed": 7,
+    "drop": 0.1,
+    "dup": 0.1,
+    "jitter": 300000,
+    "partition": "4500:5600"
+   },
+   "wallMs": 593,
+   "wallMsPerVirtualS": 49,
+   "wallMsPerVirtualSPerGuest": 16
+  },
+  "faults_seed8": {
+   "why": "end time",
+   "guests": [
+    {
+     "memoryBytes": 134217728,
+     "memory": "5ad02df969bf7b8a601b6517b59c5aaf8304f6d094d07200165ed7c2c9f0be38",
+     "console": "bb894e103de3761290116de5c92963709372d6b46f5476c24fb73eaea83cf3f5",
+     "consoleBytes": 6143,
+     "imports": "663085e32e0e3abcef2ab6810cb2a2868e0348a06820127652dbafb234621b9b",
+     "importCalls": 12838,
+     "icount": 5233624,
+     "virtualNs": 12000000000,
+     "idles": 485,
+     "parks": 4,
+     "capturedTimers": 485,
+     "inputsDelivered": 4,
+     "inputFrom": {
+      "clock": 0,
+      "wake": 4
+     },
+     "frames": {
+      "tx": 17,
+      "rx": 18
+     },
+     "framesFrom": {
+      "clock": 0,
+      "wake": 18
+     },
+     "framesUndelivered": 0,
+     "maxLagNs": 0
+    },
+    {
+     "memoryBytes": 134217728,
+     "memory": "926367533f0848906b4ab3325fe2a0eaec7e188a771aac6d7ae72239f925c6d6",
+     "console": "274cdbf2352c14c1175dc692b7fcc1b505808ec99f1824ff149a4d841e5fc3e7",
+     "consoleBytes": 5809,
+     "imports": "73eb136a976d1df3b5beec1adf89e582e56fad493dc780c5d3566ff2680b6046",
+     "importCalls": 11385,
+     "icount": 5146423,
+     "virtualNs": 12000000000,
+     "idles": 413,
+     "parks": 4,
+     "capturedTimers": 413,
+     "inputsDelivered": 3,
+     "inputFrom": {
+      "clock": 0,
+      "wake": 3
+     },
+     "frames": {
+      "tx": 16,
+      "rx": 22
+     },
+     "framesFrom": {
+      "clock": 2,
+      "wake": 20
+     },
+     "framesUndelivered": 0,
+     "maxLagNs": 66
+    },
+    {
+     "memoryBytes": 134217728,
+     "memory": "8d8f4977f21211588f30af010cde4d1c5cce0d917b71f1dc5bf509650742d9e7",
+     "console": "5c4f00b99affa48f24d8eedc0c69559d50a11e78db0fd2c1e0effb413c6517d0",
+     "consoleBytes": 6373,
+     "imports": "9210afbfff30c2c2fec00b8e87dfa24017a21479e92f098d98fe26c3066a0c26",
+     "importCalls": 11898,
+     "icount": 5183611,
+     "virtualNs": 12000000000,
+     "idles": 439,
+     "parks": 4,
+     "capturedTimers": 439,
+     "inputsDelivered": 3,
+     "inputFrom": {
+      "clock": 0,
+      "wake": 3
+     },
+     "frames": {
+      "tx": 12,
+      "rx": 15
+     },
+     "framesFrom": {
+      "clock": 0,
+      "wake": 15
+     },
+     "framesUndelivered": 0,
+     "maxLagNs": 0
+    }
+   ],
+   "trace": "03319f0666bd0e105fb07663765a61ce2ae2d99051c51416260517c0fd21a992",
+   "frames": {
+    "tx": 45,
+    "dup": 3,
+    "rx": 55,
+    "drop": 5,
+    "cut": 2
+   },
+   "switches": 1352,
+   "realTimers": 0,
+   "flip": -1,
+   "late": -1,
+   "latencyNs": 200000,
+   "nsPerInsn": 0,
+   "stepNs": 1000,
+   "seed": 1,
+   "jit": false,
+   "faults": {
+    "seed": 8,
+    "drop": 0.1,
+    "dup": 0.1,
+    "jitter": 300000,
+    "partition": "4500:5600"
+   },
+   "wallMs": 546,
+   "wallMsPerVirtualS": 46,
+   "wallMsPerVirtualSPerGuest": 15
+  }
+ },
+ "teeth": {
+  "one bit of the peer's address in the ARP reply": [
+   "memory",
+   "console",
+   "imports",
+   "trace"
+  ],
+  "one bit of the UDP answer": [
+   "console",
+   "imports",
+   "importCalls",
+   "trace"
+  ],
+  "one bit of an ICMP reply's padding": [
+   "imports",
+   "trace"
+  ],
+  "one frame 1000 ns later": [
+   "memory",
+   "console",
+   "imports",
+   "importCalls",
+   "trace"
+  ],
+  "three guests: one bit of one frame": [
+   "g2.memory",
+   "g2.imports",
+   "trace"
+  ],
+  "three guests: one frame 1000 ns later": [
+   "g2.memory",
+   "g2.console",
+   "g2.imports",
+   "trace"
+  ]
+ },
+ "unstable": {
+  "host_faults": {
+   "yield": {
+    "problems": [],
+    "differ": [
+     "imports"
+    ]
+   },
+   "math-random": {
+    "problems": [],
+    "differ": []
+   },
+   "idle-real": {
+    "problems": [
+     "a timer was left to the real clock"
+    ],
+    "differ": []
+   },
+   "entropy": {
+    "problems": [
+     "differ on console",
+     "differ on icount",
+     "differ on importCalls",
+     "differ on memory",
+     "differ on trace"
+    ],
+    "differ": [
+     "memory",
+     "console",
+     "imports",
+     "importCalls",
+     "icount",
+     "trace"
+    ]
+   }
+  },
+  "two_stock_kernels_one_thread": {
+   "created": 2,
+   "answered": [
+    true,
+    true
+   ],
+   "consoleBytes": [
+    4749,
+    4749
+   ],
+   "wallMs": 4095
+  },
+  "real_latency_single": [
+   {
+    "why": "end time",
+    "netFault": "real-latency",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "nsPerInsn": 0,
+    "latencyNs": 200000,
+    "flip": -1,
+    "late": -1,
+    "memoryBytes": 134217728,
+    "memory": "f9fee88e143df58595061c987e5901a7c6779c25568b1262156df4eb84939bc7",
+    "console": "bce90a50bab7d247bc6b1d5deefebfc6af733814c84f7305291f79049bebdd84",
+    "consoleBytes": 6219,
+    "imports": "4744762e2dfaa98fa26be68976dabeb10c9334c0dd6ccc4546b63d33851ff604",
+    "importCalls": 14273,
+    "icount": 5319159,
+    "virtualNs": 14000000000,
+    "idles": 549,
+    "capturedTimers": 549,
+    "realTimers": 0,
+    "inputsDelivered": 5,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 5
+    },
+    "trace": "30f58042f17149156eed6dedacc7f4827538b4a524f31ff3aaf154429294e55b",
+    "frames": {
+     "tx": 13,
+     "rx": 8
+    },
+    "framesFrom": {
+     "clock": 0,
+     "jump": 8
+    },
+    "framesUndelivered": 0,
+    "maxLagNs": 0,
+    "wallMs": 166,
+    "wallMsPerVirtualS": 12
+   },
+   {
+    "why": "end time",
+    "netFault": "real-latency",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "nsPerInsn": 0,
+    "latencyNs": 200000,
+    "flip": -1,
+    "late": -1,
+    "memoryBytes": 134217728,
+    "memory": "e37324677c621ca2da94e6df19a422ce37cf37bced63080e9664da4643e78b02",
+    "console": "ed709cf35c2d652d7994c2eec18010f58c2a3500789681c1886d6df59e31a36c",
+    "consoleBytes": 6219,
+    "imports": "d2c2bfce415a4a1f45154265f84451e1d7e7248e042357438dd505c7f2714cac",
+    "importCalls": 14266,
+    "icount": 5318987,
+    "virtualNs": 14000000000,
+    "idles": 550,
+    "capturedTimers": 550,
+    "realTimers": 0,
+    "inputsDelivered": 5,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 5
+    },
+    "trace": "60929b8fcf8554557e51972f29b3f83d17adda3b5d2c25b3f3c518e03f445549",
+    "frames": {
+     "tx": 13,
+     "rx": 8
+    },
+    "framesFrom": {
+     "clock": 0,
+     "jump": 8
+    },
+    "framesUndelivered": 0,
+    "maxLagNs": 0,
+    "wallMs": 159,
+    "wallMsPerVirtualS": 11
+   }
+  ],
+  "real_latency_multi": [
+   {
+    "why": "end time",
+    "guests": [
+     {
+      "memoryBytes": 134217728,
+      "memory": "7bd66caa62fc758beae223aefcf5698d5a0e78119de4b47b3d9f8dd02cb136e9",
+      "console": "8d418e350cb3ffdb95ab8214ecaa8c7f52c5f986bd0c1fe730c1cea57a457f0a",
+      "consoleBytes": 6198,
+      "imports": "d5ec7c1bf44d8e6e274a9112f7627f9bed3ba0b6a27560c7f1483b0fb123d68b",
+      "importCalls": 12844,
+      "icount": 5240565,
+      "virtualNs": 12000000000,
+      "idles": 482,
+      "parks": 5,
+      "capturedTimers": 482,
+      "inputsDelivered": 4,
+      "inputFrom": {
+       "clock": 0,
+       "wake": 4
+      },
+      "frames": {
+       "tx": 18,
+       "rx": 21
+      },
+      "framesFrom": {
+       "clock": 1,
+       "wake": 20
+      },
+      "framesUndelivered": 0,
+      "maxLagNs": 584
+     },
+     {
+      "memoryBytes": 134217728,
+      "memory": "10021ad629d51767eecb9742507d0fcd88d0f9635d1bf852ec4b14f29e1e6871",
+      "console": "075111ab8dce07571f2312b44c9040804a3121374b14b80bc220270b60f80b8e",
+      "consoleBytes": 5809,
+      "imports": "c3797b22cb8acc6048d1a4d760fd9dda81e56271a0d9b83a64f9c16ec884dd64",
+      "importCalls": 11445,
+      "icount": 5145947,
+      "virtualNs": 12000000000,
+      "idles": 420,
+      "parks": 5,
+      "capturedTimers": 420,
+      "inputsDelivered": 3,
+      "inputFrom": {
+       "clock": 0,
+       "wake": 3
+      },
+      "frames": {
+       "tx": 17,
+       "rx": 22
+      },
+      "framesFrom": {
+       "clock": 0,
+       "wake": 22
+      },
+      "framesUndelivered": 0,
+      "maxLagNs": 0
+     },
+     {
+      "memoryBytes": 134217728,
+      "memory": "e45c1fe83d1278630aef1c0df638e71fa14d7c696bb8a8e230ade6228c08f00f",
+      "console": "b085e2edecae81b8674f0dd433dd0f7af0a20dfd80bac484cfdecdcef96e1562",
+      "consoleBytes": 6358,
+      "imports": "25c5dc2763002eadf7e2078b8c6e60243214e639e81cb3264d285813420c6c91",
+      "importCalls": 11886,
+      "icount": 5183078,
+      "virtualNs": 12000000000,
+      "idles": 441,
+      "parks": 4,
+      "capturedTimers": 441,
+      "inputsDelivered": 3,
+      "inputFrom": {
+       "clock": 0,
+       "wake": 3
+      },
+      "frames": {
+       "tx": 11,
+       "rx": 15
+      },
+      "framesFrom": {
+       "clock": 0,
+       "wake": 15
+      },
+      "framesUndelivered": 0,
+      "maxLagNs": 0
+     }
+    ],
+    "trace": "6b6fedd2b6cc6b967992587ac621f41f90258e97cb1375ce15b91fe015fb6dcc",
+    "frames": {
+     "tx": 46,
+     "rx": 58
+    },
+    "switches": 1360,
+    "realTimers": 0,
+    "netFault": "real-latency",
+    "flip": -1,
+    "late": -1,
+    "latencyNs": 200000,
+    "nsPerInsn": 0,
+    "stepNs": 1000,
+    "seed": 1,
+    "jit": false,
+    "faults": {
+     "seed": 1,
+     "drop": 0,
+     "dup": 0,
+     "jitter": 0
+    },
+    "wallMs": 618,
+    "wallMsPerVirtualS": 52,
+    "wallMsPerVirtualSPerGuest": 17
+   },
+   {
+    "why": "end time",
+    "guests": [
+     {
+      "memoryBytes": 134217728,
+      "memory": "ce58d46547d7154c05debd1b402242536d710f8037e3e68e30912ac24f2a46f5",
+      "console": "6345e9ebcb6bac1dd234b9ea78f363fe078bb8ee175d7931e7031453a0ca234a",
+      "consoleBytes": 6198,
+      "imports": "341ee9f2d7d52bd62383ee7d813c6814909efca352dc4e2affa533c9bf4e1507",
+      "importCalls": 12833,
+      "icount": 5240722,
+      "virtualNs": 12000000000,
+      "idles": 481,
+      "parks": 5,
+      "capturedTimers": 481,
+      "inputsDelivered": 4,
+      "inputFrom": {
+       "clock": 0,
+       "wake": 4
+      },
+      "frames": {
+       "tx": 17,
+       "rx": 20
+      },
+      "framesFrom": {
+       "clock": 1,
+       "wake": 19
+      },
+      "framesUndelivered": 0,
+      "maxLagNs": 667
+     },
+     {
+      "memoryBytes": 134217728,
+      "memory": "dded98fbdfe2298cb61be4dd94e1ebf71d41e314714020ad47bd56169f103d69",
+      "console": "6cfc7c5499f6788793e6a51a3948f0fa5ba62232bef20b48ddf045b45d037f13",
+      "consoleBytes": 5809,
+      "imports": "a60d87b28d61521d7c098553b856674ef61df7865a650af8a7318bccaeebff83",
+      "importCalls": 11441,
+      "icount": 5145999,
+      "virtualNs": 12000000000,
+      "idles": 419,
+      "parks": 5,
+      "capturedTimers": 419,
+      "inputsDelivered": 3,
+      "inputFrom": {
+       "clock": 0,
+       "wake": 3
+      },
+      "frames": {
+       "tx": 16,
+       "rx": 21
+      },
+      "framesFrom": {
+       "clock": 0,
+       "wake": 21
+      },
+      "framesUndelivered": 0,
+      "maxLagNs": 0
+     },
+     {
+      "memoryBytes": 134217728,
+      "memory": "840203814fc81de0fe70ec08655c8bf64fcf18d793e8215bf6566517f3796f3a",
+      "console": "3c0c58e27c34e407c4b7eafc94a99857fd9e02a6700d01164010de340af3f0b8",
+      "consoleBytes": 6358,
+      "imports": "5b051e236595ee5294444d421efdcd64896345f68216965ef75f05a21169a4a6",
+      "importCalls": 11890,
+      "icount": 5182728,
+      "virtualNs": 12000000000,
+      "idles": 441,
+      "parks": 3,
+      "capturedTimers": 441,
+      "inputsDelivered": 3,
+      "inputFrom": {
+       "clock": 0,
+       "wake": 3
+      },
+      "frames": {
+       "tx": 11,
+       "rx": 15
+      },
+      "framesFrom": {
+       "clock": 0,
+       "wake": 15
+      },
+      "framesUndelivered": 0,
+      "maxLagNs": 0
+     }
+    ],
+    "trace": "56a0540aabb6e12991caca91bb688b16c8e02dec918c92e7d165a212cde0787a",
+    "frames": {
+     "tx": 44,
+     "rx": 56
+    },
+    "switches": 1357,
+    "realTimers": 0,
+    "netFault": "real-latency",
+    "flip": -1,
+    "late": -1,
+    "latencyNs": 200000,
+    "nsPerInsn": 0,
+    "stepNs": 1000,
+    "seed": 1,
+    "jit": false,
+    "faults": {
+     "seed": 1,
+     "drop": 0,
+     "dup": 0,
+     "jitter": 0
+    },
+    "wallMs": 512,
+    "wallMsPerVirtualS": 43,
+    "wallMsPerVirtualSPerGuest": 14
+   }
+  ],
+  "wallMs": {
+   "single_idle": [
+    169,
+    175,
+    181
+   ],
+   "single_busy": [
+    2183,
+    2123,
+    2030
+   ],
+   "single_jit": [
+    845,
+    832
+   ],
+   "multi_idle": [
+    468,
+    476,
+    519
+   ],
+   "multi_busy": [
+    1975,
+    1897,
+    2041
+   ],
+   "multi_jit": [
+    1138,
+    1057
+   ]
+  }
+ }
+}
