@@ -54,7 +54,8 @@ or ends would be judged differently by the two. As drops the trace is a schedule
 simulator has whenever the frame arrived. A frame the harness forwarded and the node
 never handled (it was down, or was killed first) stays undelivered in the simulator.
 
-A node killed inside a step has performed the effects it logged (`@did`), and possibly
+A node booted with `hold=` stops inside a step and is killed there; that is exact. Any
+other kill lands where it lands. A node killed inside a step has performed the effects it logged (`@did`), and possibly
 one more whose log line it did not live to write. That one is counted when the evidence
 shows it: one more frame on its link, or the row in its block image.
 """
@@ -150,8 +151,7 @@ def reconstruct(native, record):
                  f"{where}: booted as {boot['boot']}: not node {node} of {n} on its block file")
             need(boot["init"] is None or boot["init"] == tuple(native.init(node, n)),
                  f"{where}: the initial state differs")
-            need(boot["fail"] is None and boot["hold"] is None
-                 and not any(step["trap"] is not None for step in boot["steps"]),
+            need(boot["fail"] is None and not any(step["trap"] is not None for step in boot["steps"]),
                  f"{where}: the node stopped itself ({boot['fail'] or 'a step without a result'})")
             need(raw["status"] == -9, f"{where}: exit status {raw['status']}; a killed node has -9")
             if boot["steps"] and boot["steps"][-1]["post"] is None:
@@ -202,7 +202,7 @@ def reconstruct(native, record):
                     if len(seen) == sum(len(wire(step)) for step in steps) + 1:
                         last["applied"], last["inferred"] = last["applied"] + 1, True
                 elif kind == "disk-write":
-                    token, key, *values = following
+                    _, _, key, *values = following
                     if (key, *values) in image_rows(schema, raw["rows"]):
                         last["applied"], last["inferred"] = last["applied"] + 1, True
             sent = [(index, effect) for index, step in enumerate(steps) for effect in wire(step)]

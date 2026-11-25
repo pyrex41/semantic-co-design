@@ -14,6 +14,10 @@ term: who leads is whatever the run made of it.
     ["op", ["get", K]]       whoever leads and sent again while it has no `ok`
     ["kill", WHO]            SIGKILL; WHO is "leader", "follower", or a node number
     ["boot", "down"]         boot a killed node again on its block image
+    ["boot", "down", "hold", [A, B]]
+                             the same, and the node stops for good after one or two
+                             effects (the seed picks) of its N-th event, N going from A
+                             to B with the seed; ["kill", "held"] waits for that and kills it
     ["isolate", WHO]         cut every frame between WHO and the two others, both ways
     ["heal"]                 end the cut
     ["succession"]           wait until a node leads a later term than any node led when
@@ -95,6 +99,13 @@ SCENARIOS = {
     "restart-from-disk": {"image": "raft", "moves": [
         CALM, ["leader"], put(0, 11), ["kill", "follower"], put(1, 13), ["boot", "down"],
         ["run", 600], ["kill", "leader"], ["succession"], get(1), get(0), ["run", 200]]},
+    # A follower is killed, misses a write, is booted, and is killed again at a point
+    # inside its recovery or its catching up with the leader, where it stops and waits for
+    # the kill. It is booted a third time. Then the leader is killed, as above.
+    "kill-inside-a-step": {"image": "raft", "moves": [
+        CALM, ["leader"], put(0, 11), ["kill", "follower"], put(1, 13),
+        ["boot", "down", "hold", [4, 7]], ["kill", "held"], ["boot", "down"], ["run", 600],
+        ["kill", "leader"], ["succession"], get(1), get(0), ["run", 200]]},
     # The leader is cut off; the others elect one and take a write; the cut ends.
     "partition-heals": {"image": "raft", "moves": [
         CALM, ["leader"], put(0, 11), ["isolate", "leader"], ["succession"], put(0, 12),
@@ -117,6 +128,7 @@ EXPECT = {
     "elect-and-serve": {"gets": {2: 11, 5: 12}, "answered": 5, "kills": 0, "restarts": 0, "cuts": 0},
     "kill-the-leader": {"gets": {3: 11, 5: 12, 6: 13}, "answered": 6, "kills": 1, "restarts": 0, "cuts": 0},
     "restart-from-disk": {"gets": {3: 13, 4: 11}, "answered": 4, "kills": 2, "restarts": 1, "cuts": 0},
+    "kill-inside-a-step": {"gets": {3: 13, 4: 11}, "answered": 4, "kills": 3, "restarts": 2, "cuts": 0},
     "partition-heals": {"gets": {3: 12}, "answered": 3, "kills": 0, "restarts": 0, "cuts": 1},
     "lossy-links": {"gets": {2: 11, 5: 12}, "answered": 5, "kills": 0, "restarts": 0, "cuts": 0},
     "lossy-kills-and-cuts": {"gets": None, "answered": None, "kills": 1, "restarts": 1, "cuts": 1},

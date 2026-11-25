@@ -143,7 +143,7 @@ class TapLink:
 class Cluster:
     def __init__(self, schema, nodes, command, links, images, seed, blocks=16):
         self.schema, self.n, self.command, self.links, self.images = schema, nodes, command, links, images
-        self.rng = random.Random(seed)
+        self.seed, self.rng = seed, random.Random(seed)
         self.blocks = blocks
         self.log = []
         self.boots = [[] for _ in range(nodes)]         # finished boots, per node
@@ -152,6 +152,8 @@ class Cluster:
         self.seen = [0] * nodes                         # console lines already looked at
         self.belief = [None] * nodes                    # (role, term) of the last @step
         self.killed_at = [-1e18] * nodes
+        self.held = [False] * nodes                     # the node printed @hold
+        self.number = [0] * nodes                       # the boot a node is in, or was last in
         self.pending, self.sequence, self.frames = [], 0, 0
         self.blocked = set()
         self.faults = {"drop": 0.0, "dup": 0.0, "flood": 0.0, "delay": [0.0, 0.0]}
@@ -173,13 +175,18 @@ class Cluster:
 
     # ---- nodes
 
-    def boot(self, node):
+    def boot(self, node, hold=None):
         if self.live[node] is not None:
             raise RunError(f"node {node} is already running")
         self.pump(self.killed_at[node] + DRAIN)         # what the dead boot sent is read first
         options = [f"--block:{emit.DISK}={self.images[node]}"] + self.links[node].options()
-        self.argv[node] = self.command(options, [f"node={node}", f"nodes={self.n}"])
-        self.note("boot", node=node, boot=len(self.boots[node]))
+        arguments = [f"node={node}", f"nodes={self.n}"]
+        if hold:                                        # see driver.c: stop there and wait
+            arguments.append("hold=%d.%d" % hold)
+        self.argv[node] = self.command(options, arguments)
+        self.held[node] = False
+        self.number[node] = len(self.boots[node])
+        self.note("boot", node=node, boot=self.number[node])
         self.live[node] = Boot(self.argv[node])
         self.seen[node], self.belief[node] = 0, None
 
@@ -189,7 +196,7 @@ class Cluster:
             raise RunError(f"node {node} is not running")
         status, cpu = boot.kill()
         # Noted once the process is dead: nothing the node did is later than this entry.
-        self.note("kill", node=node, boot=len(self.boots[node]))
+        self.note("kill", node=node, boot=self.number[node])
         self.killed_at[node] = clock()
         self.live[node], self.belief[node] = None, None
         self.boots[node].append({"lines": list(boot.lines), "at": list(boot.at),
@@ -212,6 +219,8 @@ class Cluster:
                                          int(words[2 + self.role]))
                     if self.belief[node][0] == "leader":
                         self.led = max(self.led, self.belief[node][1])
+                elif line.startswith("@hold "):
+                    self.held[node] = True
                 elif line.split()[0] in ("@fail", "@trap"):
                     raise RunError(f"node {node} stopped itself: {line}")
 
@@ -228,6 +237,12 @@ class Cluster:
             lead = self.leader()
             return lead if who == "leader" else next(
                 node for node in range(self.n) if node != lead and self.live[node])
+        if who == "held":
+            def stopped():
+                self.look()
+                return any(self.held[node] and self.live[node] for node in range(self.n))
+            self.wait(stopped, "a node to reach its hold point")
+            return next(node for node in range(self.n) if self.held[node] and self.live[node])
         if who == "down":
             return next(node for node in range(self.n) if self.live[node] is None)
         return who
@@ -237,7 +252,8 @@ class Cluster:
     def arrive(self, node, data):
         """A frame read from the link of `node`."""
         self.frames += 1
-        entry = self.note("in", node=node, boot=len(self.boots[node]), id=self.frames,
+        # A frame read after the kill was sent before it: it belongs to the boot that died.
+        entry = self.note("in", node=node, boot=self.number[node], id=self.frames,
                           frame=data.hex())
         if data[0:6] == BROADCAST:
             effect = unframe(self.schema, data)
@@ -339,7 +355,14 @@ class Cluster:
                 self.wait(lambda: self.leader() is not None
                           and self.belief[self.leader()][1] > self.mark, "a leader of a later term")
             elif kind == "boot":
-                self.boot(self.pick(move[1]))
+                # With "hold": the node stops for good after one or two effects of one of
+                # its events, and is killed there. Which event goes round the range with
+                # the seed, so that a handful of seeds try every one.
+                hold = None
+                if len(move) > 2:
+                    low, high = move[3]
+                    hold = (low + self.seed % (high - low + 1), self.rng.randint(1, 2))
+                self.boot(self.pick(move[1]), hold)
             elif kind == "isolate":
                 alone = self.pick(move[1])
                 self.mark = self.led
