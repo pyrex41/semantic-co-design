@@ -199,6 +199,11 @@ def explain(schema, node, logs):
                         f"{where}: {event} answers the disk effect at {at} out of order: "
                         f"the next answer due is for {waiting[0] if waiting else 'nothing'}")
                 waiting.pop(0)
+                # Writes no acknowledgement told the node about are known durable from here:
+                # they reach the disk of the trace now, in the order issued, and not at the crash.
+                for place in sorted(place for place in unsynced if place < at):
+                    items.append({"kind": "sync", "node": node, "event": unsynced[place],
+                                  "rows": [unsynced.pop(place)]})
             if role == "disk-ack":
                 require(made[1] == event[1] and at in durable,
                         f"{where}: acknowledges a write that is not durable")

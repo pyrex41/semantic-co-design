@@ -12,7 +12,7 @@ from tempfile import TemporaryDirectory
 
 from ...check import CheckFailure, require
 from ...host import Client, Cluster, bundle, wal
-from ...host.conform import conform, explain
+from ...host.conform import conform, explain, interleave
 from ...schema import Schema
 from ...host import LINE
 from .check import MUTANTS, mutate
@@ -377,11 +377,22 @@ def prefix(schema, report):
                     f"completion order: {label} was rejected for another reason: {failure}")
         else:
             raise CheckFailure(f"completion order: acknowledgements {label} were accepted")
+    # A manifest without an acknowledgement event: the served read is what proves the write
+    # durable, so the row is on the disk of the trace when the node sees the result.
+    silent = Schema({**schema.manifest, "events": {tag: kind for tag, kind in schema.manifest["events"].items()
+                                                   if kind.get("role") != "disk-ack"}}, schema.directory)
+    steps = interleave([explain(silent, 0, [{"records": read(1, *row[1:]), "rows": [[2, 0, *row]]}])])["steps"]
+    seen = next(step for step in steps if step.get("event") == ["loaded", 1, 7, 1, *row[1:]])
+    crash = steps[-1]
+    require(seen["world"]["disks"][0] == [row] and [s["kind"] for s in steps].count("sync") == 1
+            and crash["kind"] == "crash" and (crash["persisted"], crash["lost_writes"]) == (0, 0),
+            f"durable prefix: without acknowledgements a read saw the disk {seen['world']['disks'][0]}")
     report(f"durable prefix: of two writes of one segment, neither, the first or both durable are "
            f"crashes that lost {lost['neither']}, {lost['the first']} and {lost['both']} writes; "
            f"the second alone is rejected (causality), and so is a read that misses a write "
            f"issued before it and lost (causality); acknowledgements of two durable writes are "
-           f"accepted in order or the first alone, and rejected second first or the second alone (causality)")
+           f"accepted in order or the first alone, and rejected second first or the second alone (causality); "
+           f"without an acknowledgement event a served read puts the write before it on the trace's disk")
 
 
 def mutants(work, schema, report):
