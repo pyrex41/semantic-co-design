@@ -8,6 +8,14 @@
    3. performs the effects the step returned, in the order it returned them: a block
       write, a block read, a packet, a timer entry, a clock reading.
 
+   A node speaks to another node of its cluster with the simulator's convention: the
+   first field of a `send` effect is the destination, and the receiver handles the
+   effect's `deliver` event with the sender in that field's place. On the wire that is a
+   frame from this node's address to the destination's, carrying the event as the
+   receiver will see it. A node handles such a frame only when it is addressed to it;
+   who the sender is, is what the frame says, so the network between the nodes has to be
+   one that does not let a node speak under another's address (the harness checks it).
+
    Everything a guarantee could rest on is in the specification: what is written, when a
    reply is sent, what a restart reads back, what a retry means. The loop keeps no
    record of requests, never repeats an effect and never reorders two of them. Whatever
@@ -34,7 +42,8 @@
      @did K                                    effect K of that step has been performed
      @idle                                     nothing left to do; waiting
      @hold N K                                 stopped after K effects of event N (see hold=)
-     @skip WHY LEN                             a frame that is not a request was ignored
+     @skip WHY LEN                             a frame that is not a request, or not a message
+                                               for this node (WHY is `address`), was ignored
      @fail WHY                                 the node stops; inside a step, before the
                                                effect that follows the last @did
 
@@ -69,6 +78,7 @@ static int64_t events, now, hold_event, hold_count;
 static int64_t written[MAX_EFFECTS + 1];           /* keys the step in progress has written */
 static int written_count;
 static int busy = 1;
+static int64_t self, cluster;                      /* node= and nodes= of the boot arguments */
 
 /* ---- console */
 
@@ -202,6 +212,30 @@ static void packet(const struct kind *kind, const int64_t *fields) {
     (void)solo5_net_write(net, frame, size < FRAME_MIN ? FRAME_MIN : size);
 }
 
+/* The address of a node on the link between the nodes: locally administered, unicast. */
+static void address(uint8_t *to, int64_t node) {
+    static const uint8_t prefix[SOLO5_NET_ALEN - 1] = {0x02, 0x53, 0x35, 0x00, 0x00};
+    for (int i = 0; i < SOLO5_NET_ALEN - 1; ++i) to[i] = prefix[i];
+    to[SOLO5_NET_ALEN - 1] = (uint8_t)node;
+}
+
+/* A message to one node. The frame carries the event the receiver handles: the tag the
+   manifest gives as `deliver`, this node in the destination's place, then the payload. */
+static void message(const struct kind *kind, const int64_t *fields) {
+    size_t size = BODY + 8 * (size_t)(1 + kind->width);
+    if (fields[0] < 0 || fields[0] >= cluster || fields[0] > 255) fail("send-destination");
+    for (size_t i = 0; i < FRAME_MIN; ++i) frame[i] = 0;
+    address(frame, fields[0]);
+    address(frame + SOLO5_NET_ALEN, self);
+    frame[12] = ETHERTYPE >> 8;
+    frame[13] = ETHERTYPE & 0xff;
+    pack(frame + SOLO5_NET_HLEN, 1 + kind->width);
+    pack(frame + BODY, kind->deliver);
+    pack(frame + BODY + 8, self);
+    for (int i = 1; i < kind->width; ++i) pack(frame + BODY + 8 * (1 + i), fields[i]);
+    (void)solo5_net_write(net, frame, size < FRAME_MIN ? FRAME_MIN : size);
+}
+
 static void timer_clear(int64_t id) {
     for (int i = 0; i < TIMERS; ++i)
         if (timers[i].armed && timers[i].id == id) timers[i].armed = 0;
@@ -224,6 +258,7 @@ static void perform(const struct kind *kind, const int64_t *fields) {
     case R_DISK_WRITE: disk_write(fields, kind->width); break;
     case R_DISK_READ: disk_read(fields); break;
     case R_OUTPUT: packet(kind, fields); break;
+    case R_SEND: message(kind, fields); break;
     case R_TIMER_SET: timer_set(fields[0], fields[1]); break;
     case R_TIMER_CANCEL: timer_clear(fields[0]); break;
     case R_CLOCK_READ: {
@@ -283,15 +318,27 @@ static int due_timer(void) {
     return best;
 }
 
+static int mine(void) {
+    uint8_t own[SOLO5_NET_ALEN];
+    address(own, self);
+    for (int i = 0; i < SOLO5_NET_ALEN; ++i)
+        if (frame[i] != own[i]) return 0;
+    return 1;
+}
+
 /* A frame is a request when it carries our ethertype, the tag of a request event and
-   fields of the declared kinds. Anything else is not for the node. */
+   fields of the declared kinds. It is a message from another node when the tag is that
+   of a `recv` event and the frame is addressed to this node. Anything else is not for
+   the node. */
 static void receive(size_t size) {
     int64_t event[1 + EVENT_WIDTH];
     const char *why = "ethertype";
     if (size >= BODY + 8 && frame[12] == ETHERTYPE >> 8 && frame[13] == (ETHERTYPE & 0xff)) {
         const struct kind *kind = find(EVENTS, NEVENTS, unpack(frame + BODY));
         why = "tag";
-        if (kind != NULL && kind->role == R_REQUEST) {
+        if (kind != NULL && kind->role == R_RECV && !mine()) {
+            why = "address";
+        } else if (kind != NULL && (kind->role == R_REQUEST || kind->role == R_RECV)) {
             why = "length";
             if (unpack(frame + SOLO5_NET_HLEN) == 1 + kind->width
                     && size >= BODY + 8 * (size_t)(1 + kind->width)) {
@@ -336,8 +383,8 @@ static int64_t argument(const char *cmdline, const char *name, int64_t otherwise
 }
 
 int solo5_app_main(const struct solo5_start_info *info) {
-    int64_t node = argument(info->cmdline, "node", 0, NULL);
-    int64_t nodes = argument(info->cmdline, "nodes", 1, NULL);
+    int64_t node = self = argument(info->cmdline, "node", 0, NULL);
+    int64_t nodes = cluster = argument(info->cmdline, "nodes", 1, NULL);
     hold_event = argument(info->cmdline, "hold", 0, &hold_count);
     if (USES_DISK) {
         if (solo5_block_acquire("disk", &disk, &disk_info) != SOLO5_R_OK) fail("no-disk");
