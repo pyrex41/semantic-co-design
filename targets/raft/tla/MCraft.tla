@@ -47,4 +47,10 @@ LeaderAppendOnly ==
               => /\ Len(log'[i]) >= Len(log[i])
                  /\ SubSeq(log'[i], 1, Len(log[i])) = log[i]]_vars
 
+\* What a bound with MaxTerm = 2 cannot show. Terms start at 1 and the first candidate is
+\* in term 2, so at most one election ever happens. Where that holds, LeaderCompleteness
+\* cannot be false: the only leader there is, is the one that committed. It is checked so
+\* that the report can say so.
+AtMostOneElection == Cardinality(elections) <= 1
+
 =============================================================================
