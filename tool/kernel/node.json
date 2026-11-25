@@ -11,6 +11,8 @@
     "lock": {"role": "request", "fields": ["num"]},
     "unlock": {"role": "request", "fields": ["num"]},
     "math": {"role": "request", "fields": ["num", "num"]},
+    "cmp": {"role": "request", "fields": ["num", "num"]},
+    "calc": {"role": "request", "fields": ["num", "num", "num"]},
     "flag": {"role": "request", "fields": ["bool"]}
   },
   "effects": {

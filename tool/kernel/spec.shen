@@ -14,6 +14,8 @@
   State [math A B] -> [State [[total (k.math A B)]]] where (and (> B 0) (and (> A B) (not (= B 3))))
   State [math A B] ->
     [State (if (= A B) [] [[total (nth A [10 20 30])] [total (length (hd (tl (tl (tl State)))))]])]
+  State [cmp A B] -> [State [[total (k.cmp A B)]]]
+  State [calc Op A B] -> [State [[total (k.calc Op A B)]]]
   State [flag B] -> (k.flag State B)
   State _ -> [State []])
 
@@ -51,6 +53,33 @@
            (cases (= R 0) (+ Q Q)
                   (or (< Q 2) (= R 1)) (* Q R)
                   true (- Q R))))
+
+\\ Every comparison operator: on runtime operands and on constants, in value position
+\\ and as a guard.
+(define k.cmp
+  A B -> (+ (if (< A B) 1 0)
+            (+ (if (> A B) 2 0)
+               (+ (if (<= A B) 4 0)
+                  (+ (if (>= A B) 8 0)
+                     (+ (if (<= 2 5) 16 0)
+                        (+ (if (>= 2 5) 32 0)
+                           (+ (if (<= 5 5) 64 0)
+                              (+ (if (>= 5 5) 128 0) (k.order A B))))))))))
+
+(define k.order
+  A B -> 256 where (<= A B)
+  A B -> 512 where (>= A B))
+
+\\ Arithmetic at the edge of the exact integer range and on negative operands. Clause 5
+\\ computes a product nobody uses, and clause 6 overflows in a constant expression.
+(define k.calc
+  0 A B -> (+ A B)
+  1 A B -> (- A B)
+  2 A B -> (* A B)
+  3 A B -> (shen.mod A B)
+  4 A B -> (/ (- A (shen.mod A B)) B)
+  5 A B -> (let Unused (* A B) 7)
+  6 A B -> (if (= A B) (+ 2305843009213693951 1) (shen.mod -7 3)))
 
 (define k.flag
   [Mode Owner Flag Slots] Flag -> [[Mode Owner Flag Slots] [[same]]]

@@ -7,6 +7,7 @@ of the state, the event kind inside each entry branch and all of the program
 text are static. The partial evaluator in tool/pe.py does the rest.
 """
 import ctypes
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -51,16 +52,7 @@ def show(value):
     return "<runtime %s>" % value.kind if isinstance(value, Node) else str(value)
 
 
-def plain(value):
-    """A fully static specialization-time value as nested tuples."""
-    if isinstance(value, Cons) or value is None:
-        return tuple(plain(v) for v in items_of(value))
-    if isinstance(value, Node):
-        raise Unsupported("expected a value known at specialization time")
-    return value
-
-
-def specialize(schema, source=None, *, share=True, **limits):
+def specialize(schema, source=None, *, share=True, specializer=Specializer, **limits):
     """Schema and Shen source to (IR tree, slot count, residual block count)."""
     def encoder(value):
         parts = items_of(value)
@@ -86,7 +78,7 @@ def specialize(schema, source=None, *, share=True, **limits):
                            schema.code)
         return out
 
-    sp = Specializer(parse(schema.source if source is None else source), symbols=schema.code,
+    sp = specializer(parse(schema.source if source is None else source), symbols=schema.code,
                      encoder=encoder, strict=True, **limits)
 
     def inputs(shape, counter):
@@ -115,18 +107,52 @@ def specialize(schema, source=None, *, share=True, **limits):
     return tree, slots, len(blocks)
 
 
-def initial_state(schema, node, nodes, source=None):
-    """(init Node Nodes) evaluated at specialization time, as state integers."""
-    sp = Specializer(parse(schema.source if source is None else source), symbols=schema.code)
-    result = []
-    sp.block(lambda: result.append(sp.call(schema.init, [node, nodes])))
-    if not result:
-        raise Unsupported("init has no value")
-    return schema.encode_state(plain(result[0]))
+def specialize_init(schema, source=None, *, specializer=Specializer, **limits):
+    """(init Node Nodes) with both arguments runtime integers, to (IR tree, slot count).
+
+    The residual program reads the node number and the node count as inputs 0 and 1 and
+    emits the state leaves, so the initial state is in the native artifact, not beside it.
+    """
+    sp = specializer(parse(schema.source if source is None else source), symbols=schema.code,
+                     encoder=lambda value: flatten(value, schema.state, "initial state",
+                                                   schema.code), strict=True, **limits)
+    start = sp.block(lambda: sp.tail_call(schema.init, [sp.input(0), sp.input(1)], False,
+                                          frozenset()))
+    tree, slots = assemble(start, sp.blocks(), legacy=False)
+    return tree, slots
 
 
-def c_source(tree, slots):
-    return generate(tree, template=TEMPLATE.read_text(), slots=max(slots, 1), depth=DEPTH)
+def lower(tree, slots):
+    """IR to (normalized tree, the C statements of its body)."""
+    saved = dict(LIMITS)
+    LIMITS.update(slots=max(slots, 1), depth=DEPTH)
+    try:
+        tree = normalize(tree)
+    except (ValueError, RecursionError) as error:
+        if isinstance(error, Unsupported):
+            raise
+        raise Unsupported(f"the residual program cannot be lowered: {error} (nesting is "
+                          f"limited to {DEPTH}, for example by a chain of that many clauses)"
+                          ) from None
+    finally:
+        LIMITS.update(saved)
+    try:
+        body = generate(tree, template="/* PROGRAM */", slots=max(slots, 1), depth=DEPTH,
+                        checked=True)
+    except RecursionError:
+        raise Unsupported("the residual program is nested too deeply to lower") from None
+    return tree, body
+
+
+def c_source(step_body, slots, init_body, init_slots):
+    out = TEMPLATE.read_text()
+    for marker, text in (("/* SLOTS */", str(max(slots, 1))), ("/* BANKS */", ""),
+                         ("/* INIT SLOTS */", str(max(init_slots, 1))),
+                         ("/* PROGRAM */", step_body), ("/* INIT PROGRAM */", init_body)):
+        if out.count(marker) != 1:
+            raise AssertionError(marker)
+        out = out.replace(marker, text)
+    return out
 
 
 def size(tree):
@@ -142,19 +168,41 @@ class Native:
 
     def __init__(self, schema, library, executable=None, stats=None):
         self.schema, self.library, self.executable, self.stats = schema, library, executable, stats
-        self.lib = ctypes.CDLL(str(library))
+        # The loader caches an image by path, so a library rebuilt at the same path would
+        # silently be the old code. Load a copy named by its contents instead.
+        library = Path(library)
+        data = library.read_bytes()
+        loaded = library.with_name(f"{library.stem}.{hashlib.sha256(data).hexdigest()[:16]}"
+                                   f"{library.suffix}")
+        if not loaded.exists():
+            loaded.write_bytes(data)
+        self.lib = ctypes.CDLL(str(loaded))
         pointer = ctypes.POINTER(ctypes.c_int64)
         self.lib.node_step.restype = ctypes.c_int64
         self.lib.node_step.argtypes = [pointer, ctypes.c_int64, pointer, ctypes.c_int64]
+        self.lib.node_init.restype = ctypes.c_int64
+        self.lib.node_init.argtypes = [ctypes.c_int64, ctypes.c_int64, pointer, ctypes.c_int64]
         self.input = (ctypes.c_int64 * schema.input_width)()
         self.output = (ctypes.c_int64 * schema.output_capacity)()
 
-    def raw(self, row):
-        """Integer vector in, integer vector out; None when the step traps."""
+    def code(self, row):
+        """The value node_step returns: the output length, or a negative code."""
         self.input[:] = row
-        written = self.lib.node_step(self.input, len(row), self.output,
-                                     self.schema.output_capacity)
+        return self.lib.node_step(self.input, len(row), self.output, self.schema.output_capacity)
+
+    def raw(self, row):
+        """Integer vector in, integer vector out; None when the step has no result."""
+        written = self.code(row)
         return None if written < 0 else self.output[:written]
+
+    def init(self, node, nodes):
+        """The state integers of (<init> node nodes), computed by the native library."""
+        written = self.lib.node_init(node, nodes, self.output, self.schema.output_capacity)
+        if written != self.schema.state_width:
+            raise Trap(f"init has no result for node {node} of {nodes} (code {written})")
+        state = tuple(self.output[:written])
+        self.schema.decode_state(state)
+        return state
 
     def step(self, state, event):
         out = self.raw(self.schema.encode_input(state, event))
@@ -163,29 +211,38 @@ class Native:
         return self.schema.decode_output(out)
 
 
-def build(schema, directory, source=None, *, name="node", **limits):
+def build(schema, directory, source=None, *, name="node", executable=True, **limits):
     """Write IR, C, a shared library and a line-oriented executable into `directory`."""
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
     tree, slots, blocks = specialize(schema, source, **limits)
-    saved = dict(LIMITS)
-    LIMITS.update(slots=max(slots, 1), depth=DEPTH)
-    try:
-        tree = normalize(tree)
-    finally:
-        LIMITS.update(saved)
-    code = c_source(tree, slots)
+    only = {key: limits[key] for key in ("specializer",) if key in limits}
+    init_tree, init_slots = specialize_init(schema, source, **only)
+    tree, body = lower(tree, slots)
+    init_tree, init_body = lower(init_tree, init_slots)
+    code = c_source(body, slots, init_body, init_slots)
     (directory / f"{name}.ir.json").write_text(json.dumps(tree) + "\n")
+    (directory / f"{name}.init.ir.json").write_text(json.dumps(init_tree) + "\n")
     (directory / f"{name}.c").write_text(code)
-    clang = [os.environ.get("CLANG", "clang"), "-std=c11", "-O2", f"-fbracket-depth={2 * DEPTH}",
+    clang = [os.environ.get("CLANG", "clang"), "-std=c11", "-O2", "-Wno-tautological-compare",
+             f"-fbracket-depth={2 * DEPTH}",
              str(directory / f"{name}.c")]
     library = directory / f"{name}.{'dylib' if sys.platform == 'darwin' else 'so'}"
-    executable = directory / name
     subprocess.run([*clang, "-shared", "-fPIC", "-o", str(library)], check=True, timeout=300)
-    subprocess.run([*clang, "-DNODE_MAIN", "-o", str(executable)], check=True, timeout=300)
+    program = None
+    if executable:
+        program = directory / name
+        subprocess.run([*clang, "-DNODE_MAIN", "-o", str(program)], check=True, timeout=300)
     stats = {"ir_nodes": size(tree), "slots": slots, "blocks": blocks,
              "c_lines": code.count("\n")}
-    return Native(schema, library, executable, stats)
+    return Native(schema, library, program, stats)
+
+
+def run_init(executable, node, nodes):
+    """`node init <node> <nodes>`: the initial state as the executable prints it."""
+    result = subprocess.run([str(executable), "init", str(node), str(nodes)], text=True,
+                            capture_output=True, check=True, timeout=60)
+    return tuple(int(x) for x in result.stdout.split())
 
 
 def run_lines(executable, rows):

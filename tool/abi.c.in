@@ -1,13 +1,19 @@
-/* Native ABI of a compiled node step.
+/* Native ABI of a compiled node.
 
+   int64_t node_init(int64_t node, int64_t nodes, int64_t *out, int64_t capacity)
    int64_t node_step(const int64_t *in, int64_t count, int64_t *out, int64_t capacity)
 
-   in:  state leaves, event tag, event fields (zero padded); `count` integers.
-   out: new state leaves, effect count, then tag and fields of each effect.
-   Returns the number of integers written, or a negative code: -1 the
-   specification has no result for this state and event, -2 a read outside the
-   input, -3 more output than `capacity`. The function keeps no state between
-   calls. Built with -DNODE_MAIN the same code is a line-oriented executable. */
+   node_init writes the state leaves of (<init> node nodes): the memory a node has
+   when it boots and after every crash.
+   node_step: in is state leaves, event tag, event fields (zero padded), `count`
+   integers; out is new state leaves, effect count, then tag and fields of each effect.
+   Both return the number of integers written, or a negative code: -1 the
+   specification has no result (a Shen error, including integer overflow), -2 a
+   read outside the input, -3 more output than `capacity`, -4 an input integer
+   outside [-2^61, 2^61 - 1], the range in which Shen integers are exact. The
+   functions keep no state between calls. Built with -DNODE_MAIN the same code is
+   an executable: `node init <node> <nodes>` prints the initial state, and with no
+   arguments it reads one input vector per line and prints one output per line. */
 #define _POSIX_C_SOURCE 200809L
 #include <ctype.h>
 #include <errno.h>
@@ -18,7 +24,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-enum { LIMIT = 65536, SLOTS = /* SLOTS */ };
+enum { LIMIT = 65536, SLOTS = /* SLOTS */, INIT_SLOTS = /* INIT SLOTS */ };
+#define NUM_MAX INT64_C(2305843009213693951)
+#define NUM_MIN (-NUM_MAX - 1)
 static const int64_t *input;
 static int64_t *output;
 static int64_t emitted, capacity;
@@ -42,27 +50,107 @@ static void emit(int64_t value) {
     output[emitted++] = value;
 }
 
+/* Arithmetic with Shen's meaning. A result outside the exact range is an error in
+   Shen ("integer overflow"), so it is a trap here; nothing wraps. */
+static int64_t exact(int64_t value) {
+    if (value < NUM_MIN || value > NUM_MAX) TRAP();
+    return value;
+}
+
+static int64_t op_add(int64_t a, int64_t b) {
+    int64_t r;
+    if (__builtin_add_overflow(a, b, &r)) TRAP();
+    return exact(r);
+}
+
+static int64_t op_sub(int64_t a, int64_t b) {
+    int64_t r;
+    if (__builtin_sub_overflow(a, b, &r)) TRAP();
+    return exact(r);
+}
+
+static int64_t op_mul(int64_t a, int64_t b) {
+    int64_t r;
+    if (__builtin_mul_overflow(a, b, &r)) TRAP();
+    return exact(r);
+}
+
+/* (shen.mod A B) as Shen defines it: A when B > A; otherwise B must be positive, and Shen
+   doubles B until it exceeds A, which must itself stay exact; then the remainder. */
+static int64_t op_mod(int64_t a, int64_t b) {
+    if (b > a) return a;
+    if (b <= 0) TRAP();
+    if (a > NUM_MAX / 2)
+        for (int64_t m = b; m <= a; m *= 2)
+            if (m > NUM_MAX / 2) TRAP();
+    return a % b;
+}
+
+/* (/ (- A (shen.mod A B)) B), the only quotient the compiler accepts. */
+static int64_t op_div(int64_t a, int64_t b) {
+    if (b > a) {
+        if (b == 0) TRAP();
+        return 0;
+    }
+    (void)op_mod(a, b);
+    return a / b;
+}
+
 static void evaluate(int64_t count) {
     int64_t slots[SLOTS] = {0};
-    (void)write_at;
+    (void)write_at; (void)op_add; (void)op_sub; (void)op_mul; (void)op_mod; (void)op_div;
 /* PROGRAM */
 }
 
-int64_t node_step(const int64_t *in, int64_t count, int64_t *out, int64_t limit) {
+static void evaluate_init(int64_t count) {
+    int64_t slots[INIT_SLOTS] = {0};
+/* INIT PROGRAM */
+}
+
+static int64_t run(void (*program)(int64_t), const int64_t *in, int64_t count, int64_t *out,
+                   int64_t limit) {
+    for (int64_t i = 0; i < count; ++i)
+        if (in[i] < NUM_MIN || in[i] > NUM_MAX) return -4;
     input = in;
     output = out;
     emitted = 0;
     capacity = limit;
     int code = setjmp(failure);
     if (code) return -code;
-    evaluate(count);
+    program(count);
     return emitted;
+}
+
+int64_t node_step(const int64_t *in, int64_t count, int64_t *out, int64_t limit) {
+    return run(evaluate, in, count, out, limit);
+}
+
+int64_t node_init(int64_t node, int64_t nodes, int64_t *out, int64_t limit) {
+    int64_t in[2] = {node, nodes};
+    return run(evaluate_init, in, 2, out, limit);
 }
 
 #ifdef NODE_MAIN
 static int64_t row[LIMIT], result[LIMIT];
 
-int main(void) {
+static void print(int64_t written) {
+    if (written < 0) {
+        printf("trap %" PRId64 "\n", -written);
+        return;
+    }
+    for (int64_t i = 0; i < written; ++i) {
+        if (i) putchar(' ');
+        printf("%" PRId64, result[i]);
+    }
+    putchar('\n');
+}
+
+int main(int argc, char **argv) {
+    if (argc == 4 && strcmp(argv[1], "init") == 0) {
+        print(node_init(strtoimax(argv[2], NULL, 10), strtoimax(argv[3], NULL, 10), result, LIMIT));
+        return fflush(stdout) != 0 ? 2 : 0;
+    }
+    if (argc != 1) return 2;
     char *line = NULL;
     size_t size = 0;
     ssize_t bytes;
@@ -81,16 +169,7 @@ int main(void) {
             row[count++] = value;
             cursor = end;
         }
-        int64_t written = node_step(row, count, result, LIMIT);
-        if (written < 0) {
-            printf("trap %" PRId64 "\n", -written);
-        } else {
-            for (int64_t i = 0; i < written; ++i) {
-                if (i) putchar(' ');
-                printf("%" PRId64, result[i]);
-            }
-            putchar('\n');
-        }
+        print(node_step(row, count, result, LIMIT));
         if (fflush(stdout) != 0) return 2;
     }
     free(line);

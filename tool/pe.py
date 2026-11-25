@@ -25,7 +25,9 @@ import sys
 
 sys.setrecursionlimit(max(sys.getrecursionlimit(), 20000))
 
-EXACT = 1 << 53
+# shen-jit computes exactly on integers in [-2^61, 2^61 - 1] and raises "integer overflow"
+# when + - * leave that range. Its reader turns a literal outside (-2^61, 2^61) into a float.
+NUM_MIN, NUM_MAX = -(1 << 61), (1 << 61) - 1
 
 
 class Unsupported(ValueError):
@@ -73,11 +75,12 @@ class Split:
 
 class Node:
     """A runtime integer: an input, a slot, or an operation on nodes and constants."""
-    __slots__ = ("op", "args", "kind", "syms", "depth", "force", "uses", "slot", "sets")
+    __slots__ = ("op", "args", "kind", "syms", "depth", "force", "uses", "slot", "sets", "must")
 
     def __init__(self, op, args, kind, syms=None, depth=0):
         self.op, self.args, self.kind, self.syms, self.depth = op, args, kind, syms, depth
         self.force, self.uses, self.slot, self.sets = False, 0, None, []
+        self.must = False       # may trap: evaluated where it was created, used or not
 
     def __repr__(self):
         return f"<{self.kind} {self.op} {self.args}>"
@@ -89,6 +92,22 @@ class Buffer:
 
     def __init__(self, parent=None):
         self.items, self.cse, self.known, self.parent = [], {}, {}, parent
+
+
+def shen_mod(a, b):
+    """(shen.mod A B) as the Shen kernel defines it, or None where it has no answer.
+
+    A when B > A. Otherwise B must be positive (a zero divisor loops, a negative one
+    overflows), and the kernel doubles B until it exceeds A, which must stay exact.
+    """
+    if b > a:
+        return a
+    if b <= 0:
+        return None
+    top = b
+    while top <= a:
+        top *= 2
+    return a % b if top <= NUM_MAX else None
 
 
 BOTTOM = object()
@@ -171,10 +190,13 @@ def strip_comments(text):
 def atom(token):
     if token.startswith('"'):
         return Text(token[1:-1])
-    if re.fullmatch(r"-?\d+", token):
+    if re.fullmatch(r"[-+]?\d+", token):
+        if not -NUM_MAX <= int(token) <= NUM_MAX:
+            raise Unsupported(f"integer literal {token} is outside the range Shen reads exactly")
         return int(token)
-    if re.fullmatch(r"-?\d*\.\d+(e-?\d+)?", token):
-        raise Unsupported(f"non-integer number {token}")
+    if re.match(r"[-+]?\.?\d", token):
+        # 1.5, 1e2, .5, 1/2 ...: Shen reads a number (or something stranger) here.
+        raise Unsupported(f"number {token} is not a plain integer")
     return {"true": True, "false": False}.get(token, token)
 
 
@@ -293,7 +315,7 @@ class Specializer:
 
     # ---- residual nodes
 
-    def node(self, op, args, kind="num", syms=None):
+    def node(self, op, args, kind="num", syms=None, must=False):
         key = (op, kind, tuple(a if type(a) is int else id(a) for a in args))
         scope = self.buf
         while scope is not None:
@@ -304,8 +326,9 @@ class Specializer:
         depth = 0 if op in ATOMS else 1 + max(
             (a.depth for a in args if isinstance(a, Node) and not a.force), default=0)
         made = Node(op, args, kind, syms, depth)
-        if depth > INLINE_DEPTH:
+        if depth > INLINE_DEPTH or must:
             made.force, made.depth = True, 0
+        made.must = must
         self.buf.cse[key] = made
         self.buf.items.append(("def", made))
         return made
@@ -345,6 +368,31 @@ class Specializer:
     def trap(self):
         self.buf.items.append(("trap",))
         raise Trapped()
+
+    def fail(self, why):
+        """A static computation that Shen answers with an error.
+
+        A node step traps on that path, as Shen does. Elsewhere it is refused.
+        """
+        if self.strict:
+            self.trap()
+        raise Unsupported(why)
+
+    def comparison(self, name, a, b):
+        """(operation, left, right) for one of < > <= >= applied to a and b."""
+        left, right = (b, a) if name in (">", ">=") else (a, b)
+        return ("lt" if name in ("<", ">") else "le"), left, right
+
+    def block_key(self, name, skeleton):
+        """The name of a residual block: the function and its static arguments, by type.
+
+        Python has True == 1 and False == 0, so a static leaf carries its kind.
+        """
+        def typed(value):
+            if isinstance(value, Cons):
+                return "cons", typed(value.head), typed(value.tail)
+            return value if isinstance(value, Param) or value is None else (kind_of(value), value)
+        return name, tuple(typed(value) for value in skeleton)
 
     def known(self, cond):
         scope = self.buf
@@ -429,32 +477,25 @@ class Specializer:
         if name in ("+", "-", "*"):
             if static:
                 result = {"+": a + b, "-": a - b, "*": a * b}[name]
-                if not -EXACT < result < EXACT:
-                    raise Unsupported("static arithmetic leaves the exact range of Shen numbers")
+                if not NUM_MIN <= result <= NUM_MAX:
+                    return self.fail("static arithmetic leaves the exact range of Shen integers")
                 return result
-            return self.node({"+": "add", "-": "sub", "*": "mul"}[name], (a, b))
-        if name in ("shen.mod", "/"):
-            if type(b) is int and b == 0 and self.strict:
-                self.trap()
-            if self.strict and isinstance(b, Node):
-                zero = self.node("eq", (b, 0), "bool")
-                if self.known(zero):
-                    self.trap()
-                if self.known(zero) is None:
-                    fail = Buffer(self.buf)
-                    fail.items.append(("trap",))
-                    self.buf.items.append(("if", zero, fail, Buffer(self.buf)))
-                    self.buf.known[id(zero)] = (zero, False)
+            return self.node({"+": "add", "-": "sub", "*": "mul"}[name], (a, b), must=self.strict)
         if name == "shen.mod":
             if static:
-                if a < 0 or b <= 0:
-                    raise Unsupported("static modulus outside non-negative operands")
-                return a % b
-            return self.node("mod", (a, b))
+                result = shen_mod(a, b)
+                if result is None:
+                    return self.fail("shen.mod has no answer for these operands")
+                return result
+            return self.node("mod", (a, b), must=self.strict)
         if name == "/":
             if static:
-                if b == 0 or a % b:
+                if b == 0:
+                    return self.fail("division by zero")
+                if a % b:
                     raise Unsupported("inexact static division")
+                if not NUM_MIN <= a // b <= NUM_MAX:
+                    return self.fail("static arithmetic leaves the exact range of Shen integers")
                 return a // b
             # Integer IR has no inexact quotient. Accept only (A - A mod B) / B.
             def same(x, y):
@@ -463,10 +504,9 @@ class Specializer:
                 top, rest = a.args
                 if (isinstance(rest, Node) and rest.op == "mod" and same(rest.args[0], top)
                         and same(rest.args[1], b)):
-                    return self.node("div", (top, b))
+                    return self.node("div", (top, b), must=self.strict)
             raise Unsupported("a runtime quotient that may be inexact")
-        left, right = (b, a) if name in (">", "<=") else (a, b)
-        kind = "lt" if name in ("<", ">") else "le"
+        kind, left, right = self.comparison(name, a, b)
         if static:
             return left < right if kind == "lt" else left <= right
         return self.node(kind, (left, right), "bool")
@@ -776,13 +816,13 @@ class Specializer:
             return self.fork(split.cond, lambda d: self.jump(name, subst(values, split, split.a)),
                              lambda d: self.jump(name, subst(values, split, split.b)), True)
         skeleton, actuals = self.generalize(name, values)
-        key = name, skeleton
+        key = self.block_key(name, skeleton)
         if key not in self.keys:
             if len(self.keys) == self.max_blocks:
                 raise Unsupported("block budget exhausted: a static value varies without bound "
                                   "under runtime control")
             self.keys[key] = len(self.keys)
-            self.pending.append(key)
+            self.pending.append((name, skeleton))
         self.buf.items.append(("jump", self.keys[key], actuals))
 
     def block(self, body):
@@ -792,6 +832,12 @@ class Specializer:
             body()
         except Trapped:
             pass
+        except RecursionError:
+            raise Unsupported(
+                "unfolding too deep: recursion that no runtime test in tail position controls "
+                "does not end within the evaluator's depth (static recursion deeper than a few "
+                "thousand calls, a loop that never ends, or recursion on a runtime value outside "
+                "tail position)") from None
         buf, self.buf = self.buf, None
         return buf, self.temps
 
@@ -854,6 +900,8 @@ class Lowering:
             if item[0] in ("jump", "ret"):
                 for value in item[-1]:
                     self.mark(value)
+            elif item[0] == "def" and item[1].must:
+                self.mark(item[1])
             elif item[0] == "if":
                 self.roots(item[2])
                 self.roots(item[3])

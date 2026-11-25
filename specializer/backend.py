@@ -87,8 +87,12 @@ def normalize(tree, depth=0):
     return [op,condition,*branches]
 
 
-def generate(program, *, template=None, slots=1024, depth=128):
-    """Lower to C. A caller may supply its own driver template, slot count and nesting bound."""
+def generate(program, *, template=None, slots=1024, depth=128, checked=False):
+    """Lower to C. A caller may supply its own driver template, slot count and nesting bound.
+
+    With `checked`, add sub mul div mod become calls of op_add ... op_mod, which the
+    template must define; that is where a caller gives arithmetic its own range and traps.
+    """
     saved = dict(LIMITS)
     LIMITS.update(slots=slots, depth=depth)
     try:
@@ -112,6 +116,8 @@ def generate(program, *, template=None, slots=1024, depth=128):
             return f"read_at(bank_{args[0]}, LIMIT, {c_expr(args[1])})"
         if op == "u32":
             return f"((int64_t)(uint32_t){c_expr(args[0])})"
+        if checked and op in ("add","sub","mul","div","mod"):
+            return f"op_{op}({c_expr(args[0])}, {c_expr(args[1])})"
         sign = ARITHMETIC[op][0] if op in ARITHMETIC else {"div":"/","mod":"%"}[op]
         return f"({c_expr(args[0])} {sign} {c_expr(args[1])})"
 
