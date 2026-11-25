@@ -18,7 +18,7 @@ The last line of `solo5` is `solo5: ok` only when the command itself ran Solo5. 
 | [driver.c](driver.c) | The event loop. Includes only `solo5.h` and the generated tables. |
 | [host.c](host.c) | The ten Solo5 calls the driver uses, over a file and a datagram socket. Not Solo5. |
 | [include/solo5.h](include/solo5.h) | The Solo5 header at the pinned commit, for the host build. The Nix build compares it byte for byte with the pinned source and compiles the unikernel against the installed one. |
-| [freestanding/](freestanding/) | What `node.c` needs with no C library: `setjmp` from the compiler builtins, four `mem*` functions, empty headers. |
+| [freestanding/](freestanding/) | What `node.c` needs with no C library: `sigsetjmp` from the compiler builtins, four `mem*` functions, empty headers. |
 | [emit.py](emit.py) | Manifest to `node.c`, `node_tables.h` and the Solo5 device manifest. |
 | [run.py](run.py) | Starts a driver, plays a scripted client, kills it, records console, frames and disk image. |
 | [compare.py](compare.py) | A record as a simulator trace, or the reason it is not one. |
