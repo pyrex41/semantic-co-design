@@ -62,6 +62,9 @@ DEFAULT_PROFILE = {
 #   budget["timer"]     how many timer events may be delivered (bounds an untimed search)
 #   delay["timer"]      [low, high] percent: each timer runs for its delay scaled by a drawn factor
 #   "timer_rate"        percent per node: a node whose clock runs slow or fast, applied to every timer
+#   "slow"              {"net": percent, "disk": percent} (seeded schedules): that share of messages,
+#                       or of disk operations, takes a delay from delay["net-slow"] or
+#                       delay["disk-slow"] instead: a message later than a timeout, a disk that stalls
 
 
 def profile(**changes):
@@ -286,7 +289,7 @@ class World:
 
     def request(self, node, event, draw):
         """The workload hands a request to the network."""
-        self.net.append((*self.stamp(draw.delay("net")), node, freeze(event)))
+        self.net.append((*self.stamp(self.wait("net", draw)), node, freeze(event)))
 
     def apply(self, action, draw):
         kind = action[0]
@@ -323,7 +326,7 @@ class World:
                 self.dropped.add(content[-1])
             else:
                 items.append(item)
-                items.append((*self.stamp(draw.delay("net")), *content))
+                items.append((*self.stamp(self.wait("net", draw)), *content))
         elif kind == "crash":
             self.budget["crash"] -= 1
             rec.update(node=action[1])
@@ -382,22 +385,23 @@ class World:
         role = schema.effects[tag].role
         if role == "disk-write":
             token, key, *vals = fields
-            self.writes[node].append((*self.stamp(draw.delay("disk")), token, key, tuple(vals)))
+            self.writes[node].append((*self.stamp(self.wait("disk", draw)), token, key,
+                                      tuple(vals)))
         elif role == "disk-read":
             token, key = fields
             result = schema.roles["disk-read-result"]
             row = self.disk[node].get(key)
             vals = schema.default(result.fields[3:]) if row is None else row
-            self.local.append((*self.stamp(draw.delay("disk")), node,
+            self.local.append((*self.stamp(self.wait("disk", draw)), node,
                                (result.tag, token, key, int(row is not None), *vals)))
         elif role == "output":
-            self.outs.append((*self.stamp(draw.delay("net")), effect))
+            self.outs.append((*self.stamp(self.wait("net", draw)), effect))
         elif role == "send":
             dest, *payload = fields
             if not (type(dest) is int and 0 <= dest < self.n):
                 raise SimError(f"node {node} sends to {dest}, which is not a node")
             if (node, dest) not in self.blocked:
-                self.net.append((*self.stamp(draw.delay("net")), dest,
+                self.net.append((*self.stamp(self.wait("net", draw)), dest,
                                  (schema.effects[tag].deliver, node, *payload)))
         elif role in ("timer-set", "timer-cancel"):
             timer = schema.roles["timer"].tag
@@ -408,6 +412,15 @@ class World:
         elif role == "clock-read":
             self.local.append((*self.stamp(0), node,
                                (schema.roles["clock"].tag, fields[0], self.clock)))
+
+    def wait(self, kind, draw):
+        """How long a message ("net") or a disk operation ("disk") takes. With the optional
+        profile key `slow`, a drawn share of them takes a delay from a second range instead.
+        Both the choice and the delay are recorded draws."""
+        share = self.profile.get("slow", {}).get(kind, 0)
+        if share and self.timed and draw.choose("slow", 100) < share:
+            return draw.delay(kind + "-slow")
+        return draw.delay(kind)
 
     def timer_delay(self, node, delay, draw):
         """How long a timer set for `delay` really runs: the node's clock rate, then a drawn

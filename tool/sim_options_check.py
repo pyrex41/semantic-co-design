@@ -5,10 +5,14 @@
     budget["oneway"]               an asymmetric cut: everything into a node, or out of it
     budget["timer"]                a bound on timer events, so that an untimed search of a
                                    node that re-arms its timers is finite
+    "slow", delay["net-slow"],     a drawn share of messages, or of disk operations, takes a
+    delay["disk-slow"]             delay from a second range: late messages, a stalled disk
 
-The node is tool/examples/gossip, which sends and sets timers. Each key has a simulator in
-tool/sim/mutants.py (or an edited Maude model) that ignores it and that the check rejects.
+The node is tool/examples/gossip, which sends and sets timers; the stalled disk is shown on
+tool/sim/probe, which writes. Each key has a simulator in tool/sim/mutants.py (or an edited
+Maude model) that ignores it and that the check rejects.
 """
+import collections
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -128,6 +132,87 @@ def timer_budget(schema, native, report):
            f"set inside the next; a simulator and a Maude model that ignore the budget are told apart")
 
 
+def flights(trace, share=None):
+    """Every message handed to the network in a fault-free seeded run, as
+    (destination, event, time sent, the slow draw or None, the delay drawn), and the
+    Counter of (node, event, time) over the deliveries. `share`: whether the simulator
+    that made the trace draws the slow choice (by default, what the profile says)."""
+    share = trace["profile"].get("slow", {}).get("net", 0) if share is None else share
+    sent, delivered = [], collections.Counter()
+    for step in trace["steps"]:
+        draws = list(step["draws"])
+        take = lambda: (draws.pop(0) if share else None, draws.pop(0))
+        if step["kind"] == "client":
+            sent.append((step["node"], tuple(step["event"]), step["t"], *take()))
+        elif step["kind"] in ("deliver", "local"):
+            if step["kind"] == "deliver":
+                delivered[(step["node"], tuple(step["event"]), step["t"])] += 1
+            for effect in step["effects"]:
+                if effect[0] == "tell":
+                    sent.append((effect[1], ("heard", step["node"], effect[2]), step["t"], *take()))
+    return sent, delivered
+
+
+def slow(native, report):
+    """Late messages on the gossip ring and a stalled disk on the probe node."""
+    quiet = {"crash": 0, "drop": 0, "dup": 0}
+    late = sim.profile(nodes=3, budget=quiet, max_steps=120, slow={"net": 30},
+                       delay={"net-slow": [200, 400]})
+    workload, kinds, messages = Setters((3, 5, 4)), collections.Counter(), 0
+    for seed in range(50):
+        trace = sim.run(native, workload, late, seed)
+        sim.replay(native, workload, trace)
+        sent, delivered = flights(trace)
+        due = collections.Counter()
+        for node, event, at, choice, delay in sent:
+            is_slow = choice < 30
+            require(200 <= delay <= 400 if is_slow else 1 <= delay <= 20,
+                    f"slow messages: seed {seed} drew {choice} of 100 and then a delay of {delay}")
+            kinds[is_slow] += 1
+            due[(node, event, at + delay)] += 1
+        require(delivered and not delivered - due,
+                f"slow messages: seed {seed} delivers a message at a time no draw gave it")
+        messages += sum(delivered.values())
+        plain, _ = flights(sim.run(native, workload, late, seed, world=mutants.NeverSlow), 0)
+        require(all(delay <= 20 for *_, delay in plain), "the never-slow simulator was slow")
+    share = kinds[True] / (kinds[True] + kinds[False])
+    require(0.2 < share < 0.4, f"slow messages: {share:.0%} of messages were slow, 30% asked")
+    always = sim.profile(nodes=3, budget=quiet, max_steps=60, slow={"net": 100},
+                         delay={"net-slow": [300, 300]})
+    sent, _ = flights(sim.run(native, workload, always, 0))
+    require(sent and all(delay == 300 for *_, delay in sent), "a share of 100% is not every message")
+    report(f"slow messages: with a share of 30% and delays of 200 to 400, over 50 seeds "
+           f"{kinds[True]} of {kinds[True] + kinds[False]} messages were slow ({share:.0%}), each "
+           f"delay the recorded draw and each of {messages} deliveries at the time its draw "
+           f"gave; with 100% every message takes the slow delay; a simulator that is never slow "
+           f"is told apart")
+
+
+def stalled_disk(report):
+    """One probe node: a request issues two writes; with a stalled disk both syncs wait."""
+    from .sim_check import Goes, HERE as PROBE
+    schema = Schema(PROBE / "node.json")
+    quiet = {"crash": 0, "drop": 0, "dup": 0}
+    stalled = sim.profile(budget=quiet, max_steps=40, slow={"disk": 100},
+                          delay={"disk-slow": [50, 50], "net": [1, 1]})
+    with TemporaryDirectory() as tmp:
+        native = build(schema, Path(tmp) / "probe", executable=False)
+        waits = {}
+        for label, world in (("stalled", sim.World), ("ignored", mutants.NeverSlow)):
+            trace = sim.run(native, Goes((5,)), stalled, 0, world=world)
+            if world is sim.World:
+                sim.replay(native, Goes((5,)), trace)
+            issued = next(s["t"] for s in trace["steps"] if s.get("event", [None])[0] == "go"
+                          and s["kind"] == "deliver")
+            waits[label] = [s["t"] - issued for s in trace["steps"] if s["kind"] == "sync"]
+    require(waits["stalled"] == [50, 50], f"stalled disk: the writes synced after {waits['stalled']}")
+    require(waits["ignored"] and max(waits["ignored"]) <= 5,
+            f"the never-slow simulator stalled: {waits['ignored']}")
+    report("stalled disk: with a share of 100% and a delay of 50 the two writes of a step sync "
+           "50 after they were issued, in order; a simulator that is never slow syncs them "
+           f"after {waits['ignored']}")
+
+
 def main(report=print):
     schema = Schema(HERE / "node.json")
     with TemporaryDirectory() as tmp:
@@ -135,3 +220,5 @@ def main(report=print):
         skew(native, report)
         oneway(native, report)
         timer_budget(schema, native, report)
+        slow(native, report)
+    stalled_disk(report)

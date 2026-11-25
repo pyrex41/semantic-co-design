@@ -76,3 +76,10 @@ class IgnoresTimerBudget(World):
 
     def spent_timer(self, event):
         return False
+
+
+class NeverSlow(World):
+    """No message is late and no disk stalls, whatever share the profile's `slow` key asks for."""
+
+    def wait(self, kind, draw):
+        return draw.delay(kind)
