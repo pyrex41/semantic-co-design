@@ -1,0 +1,194 @@
+{
+  "schema": 1,
+  "interfaces": [
+    {
+      "id": "front",
+      "tenant": "main",
+      "mac": [2, 0, 0, 0, 0, 1],
+      "addresses": [
+        [192, 0, 2, 1],
+        [32, 1, 13, 184, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
+      ],
+      "vlan": 0,
+      "mtu": 1500,
+      "forward": true,
+      "policy": []
+    },
+    {
+      "id": "back",
+      "tenant": "main",
+      "mac": [2, 0, 0, 0, 0, 2],
+      "addresses": [
+        [198, 51, 100, 1],
+        [32, 1, 13, 184, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
+      ],
+      "vlan": 42,
+      "mtu": 1500,
+      "forward": true,
+      "policy": []
+    }
+  ],
+  "routes": [
+    {
+      "prefix": [192, 0, 2, 0],
+      "bits": 24,
+      "out": "front",
+      "via": [],
+      "metric": 0
+    },
+    {
+      "prefix": [198, 51, 100, 0],
+      "bits": 24,
+      "out": "back",
+      "via": [],
+      "metric": 0
+    },
+    {
+      "prefix": [203, 0, 113, 0],
+      "bits": 24,
+      "out": "back",
+      "via": [198, 51, 100, 20],
+      "metric": 0
+    },
+    {
+      "prefix": [32, 1, 13, 184, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "bits": 64,
+      "out": "front",
+      "via": [],
+      "metric": 0
+    },
+    {
+      "prefix": [32, 1, 13, 184, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "bits": 64,
+      "out": "back",
+      "via": [],
+      "metric": 0
+    },
+    {
+      "prefix": [32, 1, 13, 184, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "bits": 64,
+      "out": "back",
+      "via": [32, 1, 13, 184, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32],
+      "metric": 0
+    }
+  ],
+  "neighbors": [
+    {
+      "port": "front",
+      "address": [192, 0, 2, 10],
+      "mac": [2, 0, 0, 0, 0, 10],
+      "until": 9223372036854775807
+    },
+    {
+      "port": "front",
+      "address": [32, 1, 13, 184, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 16],
+      "mac": [2, 0, 0, 0, 0, 10],
+      "until": 9223372036854775807
+    },
+    {
+      "port": "back",
+      "address": [198, 51, 100, 20],
+      "mac": [2, 0, 0, 0, 0, 20],
+      "until": 9223372036854775807
+    },
+    {
+      "port": "back",
+      "address": [32, 1, 13, 184, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32],
+      "mac": [2, 0, 0, 0, 0, 20],
+      "until": 9223372036854775807
+    },
+    {
+      "port": "back",
+      "address": [198, 51, 100, 21],
+      "mac": [2, 0, 0, 0, 0, 21],
+      "until": 9223372036854775807
+    },
+    {
+      "port": "back",
+      "address": [32, 1, 13, 184, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 33],
+      "mac": [2, 0, 0, 0, 0, 21],
+      "until": 9223372036854775807
+    }
+  ],
+  "listeners": [
+    {
+      "tenant": "main",
+      "address": [203, 0, 113, 80],
+      "port": 443,
+      "protocol": 6,
+      "translation": [198, 51, 100, 100],
+      "backends": [
+        {
+          "id": "blue",
+          "address": [198, 51, 100, 20],
+          "port": 8443,
+          "healthy": true,
+          "draining": false
+        },
+        {
+          "id": "green",
+          "address": [198, 51, 100, 21],
+          "port": 8443,
+          "healthy": true,
+          "draining": false
+        }
+      ],
+      "front": "front",
+      "back": "back"
+    },
+    {
+      "tenant": "main",
+      "address": [32, 1, 13, 184, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128],
+      "port": 53,
+      "protocol": 17,
+      "translation": [32, 1, 13, 184, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0],
+      "backends": [
+        {
+          "id": "blue6",
+          "address": [32, 1, 13, 184, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32],
+          "port": 5353,
+          "healthy": true,
+          "draining": false
+        },
+        {
+          "id": "green6",
+          "address": [32, 1, 13, 184, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 33],
+          "port": 5353,
+          "healthy": true,
+          "draining": false
+        }
+      ],
+      "front": "front",
+      "back": "back"
+    }
+  ],
+  "peers": [
+    {
+      "id": "peer-a",
+      "port": "back",
+      "address": [198, 51, 100, 20],
+      "local-as": 64512,
+      "remote-as": 64513,
+      "hold": 30,
+      "router-id": [192, 0, 2, 1],
+      "import": [
+        {
+          "prefix": [203, 0, 114, 0],
+          "bits": 24
+        }
+      ],
+      "export": [
+        {
+          "prefix": [192, 0, 2, 0],
+          "bits": 24
+        }
+      ]
+    }
+  ],
+  "flow-limit": 32,
+  "tenant-limit": 16,
+  "port-low": 40000,
+  "port-high": 40015,
+  "pending-limit": 16,
+  "neighbor-limit": 32
+}

@@ -25,7 +25,23 @@
           BIFROST_SHEN_GO = "${capcov.packages.${system}.shen-go}/bin/shen";
         });
       });
+      # tool/solo5: the pinned Solo5 source on every system; the tender, the toolchain
+      # wrappers and the unikernel images on Linux.
+      packages = eachSystem (system: import ./tool/solo5/nix { pkgs = nixpkgs.legacyPackages.${system}; });
       checks = eachSystem (system: {
+        generated-applications = let
+          pkgs = nixpkgs.legacyPackages.${system};
+          python = pkgs.python3.withPackages (p: [ p.cython ]);
+          shen = pkgs.callPackage ./nix/shen-jit.nix { };
+        in pkgs.runCommand "generated-applications" {
+          nativeBuildInputs = [ python pkgs.clang shen ];
+          PYTHONDONTWRITEBYTECODE = "1";
+          SHEN_JIT = "${shen}/bin/shen-jit";
+        } ''
+          cd ${self}
+          python3 example/qualify.py
+          touch "$out"
+        '';
         staged-examples = nixpkgs.legacyPackages.${system}.runCommand "staged-examples" (environment system) ''
           cd ${self}
           python3 -m unittest specializer.test_backend
@@ -47,6 +63,13 @@
         workflow = nixpkgs.legacyPackages.${system}.runCommand "workflow" (environment system) ''
           cd ${self}
           python3 -m tool check workflow
+          touch "$out"
+        '';
+        # The effect shim of tool/solo5 as a host process, against the simulator. The
+        # unikernels themselves need Linux and a tap device: see tool/solo5/README.md.
+        solo5-host = nixpkgs.legacyPackages.${system}.runCommand "solo5-host" (environment system) ''
+          cd ${self}
+          python3 -m tool check solo5-host
           touch "$out"
         '';
         native-replay = nixpkgs.legacyPackages.${system}.runCommand "native-replay" (environment system) ''

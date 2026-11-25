@@ -1,0 +1,23 @@
+{
+  "name": "store",
+  "spec": "spec.shen",
+  "step": "store.step",
+  "init": "store.init",
+  "symbols": [],
+  "state": ["num"],
+  "events": {
+    "restart": {"role": "restart"},
+    "put": {"role": "request", "fields": ["num", "num"]},
+    "get": {"role": "request", "fields": ["num"]},
+    "swap": {"role": "request", "fields": ["num", "num", "num"]},
+    "acked": {"role": "disk-ack", "fields": ["num"]},
+    "loaded": {"role": "disk-read-result", "fields": ["num", "num", "num", "num"]}
+  },
+  "effects": {
+    "read": {"role": "disk-read", "fields": ["num", "num"]},
+    "write": {"role": "disk-write", "fields": ["num", "num", "num"]},
+    "done": {"role": "output", "fields": ["num"]},
+    "say": {"role": "output", "fields": ["num", "num"]}
+  },
+  "max_effects": 2
+}

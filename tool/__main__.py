@@ -1,4 +1,5 @@
 """python3 -m tool check <kernel | sim | example | target>   run the retained checks
+python3 -m tool check <solo5 | solo5-host>   the effect shim of tool/solo5 against the simulator
 python3 -m tool record <example>             regenerate an example's retained evidence
 python3 -m tool compile <example> <dir>      write IR, C, shared library and executable"""
 import importlib
@@ -15,6 +16,9 @@ def main(argv):
             elif name == "sim":
                 from .sim_check import main as run
                 run()
+            elif name in ("solo5", "solo5-host"):
+                from .solo5.check import main as run
+                run(solo5=name == "solo5")
             elif (Path(__file__).parent / "examples" / name).is_dir():
                 module = importlib.import_module(f".examples.{name}.check", __package__)
                 module.main(record=argv[0] == "record")

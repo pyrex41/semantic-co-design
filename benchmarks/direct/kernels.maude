@@ -1,0 +1,69 @@
+fmod KERNELS is
+  protecting INT .
+  sort Row .
+  op nil : -> Row [ctor] .
+  op cons : Int Row -> Row [ctor] .
+  vars A B E F H I K L M N P Q R S T X Y : Int .
+  vars D G O U V W : Row .
+  op cat : Row Row -> Row .
+  eq cat(nil, V) = V .
+  eq cat(cons(X,U), V) = cons(X,cat(U,V)) .
+  op reverseTo : Row Row -> Row .
+  eq reverseTo(nil,V) = V .
+  eq reverseTo(cons(X,U),V) = reverseTo(U,cons(X,V)) .
+
+  --- maudec maps Int to C++ int. Use two 16-bit limbs for 32-bit wrap.
+  --- The public result is one unsigned word, decoded by the timing driver.
+  op checksum : Row Int Int -> Row .
+  eq checksum(nil,H,L) = cons(H,cons(L,nil)) .
+  eq checksum(cons(X,D),H,L) = checksum(D,
+    ((31 * H) + (((31 * L) + X) quo 65536)) rem 65536, ((31 * L) + X) rem 65536) .
+
+  op dispatch : Row Int Int Int Int Int -> Row .
+  op rail : Row Int Int Int -> Row .
+  op advance : Row Int Int Int Int -> Row .
+  eq rail(nil,R,T,S) = nil .
+  eq advance(D,F,R,T,S) = cons(F,cons(R,cons(T,cons(S,rail(D,R,T,S))))) .
+  eq rail(cons(E,D),R,T,S) = dispatch(D,E rem 4,(E quo 4) + 1,R,T,S) .
+  eq dispatch(D,0,Q,R,T,S) = if R == 0 then advance(D,1,Q,T,Q) else advance(D,0,R,T,S) fi .
+  eq dispatch(D,1,Q,R,T,S) = if R == Q and T == 0 then advance(D,2,0,T,S) else advance(D,0,R,T,S) fi .
+  eq dispatch(D,2,Q,R,T,S) = if R == Q and T == 0 then advance(D,3,R,Q,S) else advance(D,0,R,T,S) fi .
+  eq dispatch(D,3,Q,R,T,S) = if T == Q then advance(D,4,0,0,S) else advance(D,0,R,T,S) fi .
+
+  op dropPairs : Int Row -> Row .
+  eq dropPairs(0,D) = D .
+  eq dropPairs(N,cons(A,cons(B,D))) = dropPairs(N - 1,D) [owise] .
+  op matches : Int Int Row -> Row .
+  eq matches(A,B,nil) = nil .
+  eq matches(A,B,cons(X,cons(Y,D))) =
+    if A == X then cons(A,cons(B,cons(X,cons(Y,matches(A,B,D)))))
+    else matches(A,B,D) fi .
+  op joinRows : Int Row Row -> Row .
+  eq joinRows(0,D,V) = nil .
+  eq joinRows(N,cons(A,cons(B,D)),V) = cat(matches(A,B,V),joinRows(N - 1,D,V)) [owise] .
+  op query : Row -> Row .
+  eq query(cons(Q,cons(N,cons(M,D)))) = joinRows(N,D,dropPairs(N,D)) .
+
+  --- Position, error, phase, kind, length, pending, checksum, reversed payload and output.
+  sort State .
+  op st : Int Int Int Int Int Int Int Row Row -> State [ctor] .
+  var Z : State .
+  op consume : Int State -> State .
+  eq consume(X,st(P,E,F,K,L,R,S,U,O)) =
+    if E >= 0 then st(P,E,F,K,L,R,S,U,O) else
+    if F == 0 and X == 165 then st(P + 1,-1,1,K,L,R,S,U,O) else
+    if F == 1 and (X == 1 or X == 2) then st(P + 1,-1,2,X,L,R,7 + X,U,O) else
+    if F == 2 and X == 0 then st(P + 1,-1,3,K,0,R,S,U,O) else
+    if F == 3 and X <= 32 then st(P + 1,-1,if X == 0 then 5 else 4 fi,K,X,X,S + X,nil,O) else
+    if F == 4 then st(P + 1,-1,if R == 1 then 5 else 4 fi,K,L,R - 1,S + X,cons(X,U),O) else
+    if F == 5 and X == S rem 256 then st(P + 1,-1,0,K,L,R,S,nil,cat(U,cons(L,cons(K,cons(-1,O)))))
+    else st(P + 1,P,F,K,L,R,S,U,O) fi fi fi fi fi fi fi .
+  op checkpoint : State -> State .
+  eq checkpoint(st(P,E,F,K,L,R,S,U,O)) = st(P,E,F,K,L,R,S,U,
+    cons(if F == 4 then R else 0 fi,cons(F,cons(E,cons(P,cons(-2,O)))))) .
+  op chunks : Row State -> Row . op bytes : Int Row State -> Row .
+  eq chunks(nil,st(P,E,F,K,L,R,S,U,O)) = reverseTo(O,nil) .
+  eq chunks(cons(N,D),Z) = bytes(N,D,Z) .
+  eq bytes(0,D,Z) = chunks(D,checkpoint(Z)) .
+  eq bytes(N,cons(X,D),Z) = bytes(N - 1,D,consume(X,Z)) [owise] .
+endfm

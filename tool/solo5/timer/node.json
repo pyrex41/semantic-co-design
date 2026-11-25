@@ -1,0 +1,22 @@
+{
+  "name": "timer",
+  "spec": "spec.shen",
+  "step": "timer.step",
+  "init": "timer.init",
+  "symbols": [],
+  "state": ["num", "num"],
+  "events": {
+    "restart": {"role": "restart"},
+    "arm": {"role": "request", "fields": ["num", "num"]},
+    "disarm": {"role": "request", "fields": ["num"]},
+    "fired": {"role": "timer", "fields": ["num"]},
+    "time": {"role": "clock", "fields": ["num", "num"]}
+  },
+  "effects": {
+    "set": {"role": "timer-set", "fields": ["num", "num"]},
+    "cancel": {"role": "timer-cancel", "fields": ["num"]},
+    "now": {"role": "clock-read", "fields": ["num"]},
+    "say": {"role": "output", "fields": ["num", "num"]}
+  },
+  "max_effects": 2
+}

@@ -187,6 +187,7 @@ Every step has `i`, `t` (virtual time), `kind`, `action`, `draws` and the `world
 
 * One step function per world. Nodes differ only by state.
 * The disk is a keyed row store with in-order sync. There is no corruption, no torn row, no full disk and no failed read.
+* A `sync` is an action of its own, so no write becomes durable between two effects of one step, and a step that writes a row and then reads it always reads the old row. A device whose writes are synchronous would hand back the new one. Simulation is therefore not a superset of such a device for that one pattern; the Solo5 shim refuses the read for this reason ([solo5/README.md](solo5/README.md#a-read-of-a-row-the-same-step-wrote)). Lifting the limit means a draw inside `World.step` and a matching nondeterministic choice in the Maude environment's `app`.
 * Local events (acknowledgements, read results, timers, clock readings) are never dropped, duplicated or delayed past a crash. There is no profile in which a stale completion arrives, so a specification's own defence against one could not be tested here. A partition discards at send time; messages already in flight still arrive.
 * There is no source of randomness for a node. A specification that needs a random number needs a new effect role for it (see extension points).
 * The seeded schedule is one random policy. What it covers is whatever the seeds reach; the checks report how many seeds show each required history.
@@ -245,4 +246,4 @@ A new application is a directory `tool/examples/<name>/` with `node.json`, `spec
 
 A one-off run, not retained: 895 further random programs (seeds 120 to 1019, 53,700 rows) also agreed with shen-jit.
 
-Not attempted: Solo5. The generated code uses only `sigsetjmp` (without the signal mask), integer arithmetic and the compiler's overflow builtins, but nothing here builds or runs a unikernel, and no effect shim exists whose compliance with the environment rules could be checked.
+Solo5: [solo5/](solo5/README.md) is an effect shim written against the Solo5 API, built as a unikernel by a Nix derivation and as a host process, with scripted runs of both (kills included) checked against the simulator by `python3 -m tool check solo5` and `solo5-host`. That README says which environment rules hold under which tender and what a returned block write is worth. The generated code uses only `sigsetjmp` (without the signal mask), integer arithmetic and the compiler's overflow builtins; a unikernel has no C library, so its build takes `sigsetjmp` from the compiler's builtins ([solo5/freestanding/setjmp.h](solo5/freestanding/setjmp.h)).

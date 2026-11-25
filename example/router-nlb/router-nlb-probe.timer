@@ -1,0 +1,10 @@
+[Unit]
+Description=Schedule router backend TCP health checks
+
+[Timer]
+OnBootSec=15s
+OnUnitActiveSec=15s
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

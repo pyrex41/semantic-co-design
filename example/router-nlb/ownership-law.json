@@ -1,0 +1,7 @@
+{
+  "language": "app-shen/1",
+  "name": "router-ownership-law",
+  "sources": ["ownership.shen"],
+  "capabilities": {},
+  "entries": {"ownership-law": {"function": "own.law"}}
+}
