@@ -23,6 +23,7 @@ from .pe import PRELUDE_SOURCE, Call, Cons, Text, Unsupported, is_variable, pars
 VALUES = """fmod SHEN-VALUE is
   protecting INT .
   protecting QID .
+  protecting EXT-BOOL .
   sort Val .
   op i : Int -> Val [ctor] .
   op q : Qid -> Val [ctor] .
@@ -34,9 +35,29 @@ VALUES = """fmod SHEN-VALUE is
   op shen.error : ~> Val .
   eq int(i(N:Int)) = N:Int .
   eq bool(b(B:Bool)) = B:Bool .
+  --- A Shen error is a term with no normal form of sort Val, and every operator below
+  --- is strict, so an argument that is an error leaves the whole term stuck.
+  --- Integers are exact from -2^61 to 2^61 - 1 and arithmetic outside that is an error.
+  op num : Int ~> Val .
+  ceq num(N:Int) = i(N:Int)
+   if N:Int >= -2305843009213693952 /\\ N:Int <= 2305843009213693951 .
+  --- shen.mod as the kernel defines it. A when B > A. Otherwise B must be positive and
+  --- the first B * 2^k above A must be exact, and the answer is the remainder.
+  op top : Int Int -> Int .
+  eq top(A:Int, M:Int) = if M:Int > A:Int then M:Int else top(A:Int, 2 * M:Int) fi .
+  op smod : Int Int ~> Int .
+  ceq smod(A:Int, B:Int) = A:Int if B:Int > A:Int .
+  ceq smod(A:Int, B:Int) = A:Int rem B:Int
+   if B:Int > 0 /\\ B:Int <= A:Int /\\ top(A:Int, B:Int) <= 2305843009213693951 .
+  --- Division where the quotient is an integer. Shen answers an inexact one with a float.
+  op sdiv : Int Int ~> Int .
+  ceq sdiv(A:Int, B:Int) = A:Int quo B:Int if B:Int =/= 0 /\\ A:Int rem B:Int == 0 .
+  op same : Val Val -> Val .
+  eq same(X:Val, Y:Val) = b(X:Val == Y:Val) .
 endfm
 """
-INFIX = {"+": "+", "-": "-", "*": "*", "/": "quo", "shen.mod": "rem"}
+ARITHMETIC = {"+": "int({}) + int({})", "-": "int({}) - int({})", "*": "int({}) * int({})",
+              "/": "sdiv(int({}), int({}))", "shen.mod": "smod(int({}), int({}))"}
 COMPARE = {"<": "<", ">": ">", "<=": "<=", ">=": ">="}
 
 
@@ -68,8 +89,9 @@ class Translator:
 
     def pattern(self, pattern, fresh):
         if pattern == "_" and type(pattern) is str:
-            fresh[0] += 1
-            return f"W{fresh[0]}:Val"
+            # A Shen variable starts with an upper-case letter, so this name is free.
+            fresh.append(f"w{len(fresh)}:Val")
+            return fresh[-1]
         if is_variable(pattern):
             return f"{pattern}:Val"
         if isinstance(pattern, Cons):
@@ -113,9 +135,9 @@ class Translator:
         if name == "not":
             return f"b(not bool({parts[0]}))"
         if name == "=":
-            return f"b({parts[0]} == {parts[1]})"
-        if name in INFIX:
-            return f"i(int({parts[0]}) {INFIX[name]} int({parts[1]}))"
+            return f"same({parts[0]}, {parts[1]})"
+        if name in ARITHMETIC:
+            return f"num({ARITHMETIC[name].format(*parts)})"
         if name in COMPARE:
             return f"b(int({parts[0]}) {COMPARE[name]} int({parts[1]}))"
         return f"f.{name}({', '.join(parts)})" if parts else f"f.{name}"
@@ -129,18 +151,27 @@ class Translator:
         self.equations.append(f"  eq {call(f'f.{name}', generic)} = {call(f'f.{name}.0', generic)} .")
         for n, (patterns, guard, body) in enumerate(clauses):
             self.ops.append(f"  op f.{name}.{n} : {sort}")
-            fresh = [0]
-            scope = []
+            wild, scope = [], []
             for pattern in patterns:
                 self.variables(pattern, scope)
-            left = call(f"f.{name}.{n}", ", ".join(self.pattern(p, fresh) for p in patterns))
+            matched = ", ".join(self.pattern(p, wild) for p in patterns)
+            left = call(f"f.{name}.{n}", matched)
             right = self.expr(body, scope)
+            following = call(f"f.{name}.{n + 1}", matched) if n + 1 < len(clauses) else "shen.error"
             if guard is None:
                 self.equations.append(f"  eq {left} = {right} .")
             else:
-                self.equations.append(
-                    f"  ceq {left} = {right} if bool({self.expr(guard, scope)}) = true .")
-            if n + 1 < len(clauses):    # the next clause is tried only when this one fails
+                # Once the patterns match, the guard decides: true takes this clause, false
+                # goes on to the next, and a guard that is an error is an error (stuck).
+                bound = ", ".join([f"{v}:Val" for v in scope] + wild)
+                test = f"g.{name}.{n}"
+                self.ops.append(f"  op {test} : {'Val ' * (len(scope) + len(wild) + 1)}~> Val .")
+                with_guard = lambda value: f"{test}({', '.join(filter(None, [value, bound]))})"
+                self.equations += [
+                    f"  eq {left} = {with_guard(self.expr(guard, scope))} .",
+                    f"  eq {with_guard('b(true)')} = {right} .",
+                    f"  eq {with_guard('b(false)')} = {following} ."]
+            if n + 1 < len(clauses):    # the next clause is tried when the patterns fail
                 self.equations.append(f"  eq {call(f'f.{name}.{n}', generic)} = "
                                       f"{call(f'f.{name}.{n + 1}', generic)} [owise] .")
 
