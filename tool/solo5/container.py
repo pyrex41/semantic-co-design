@@ -43,10 +43,11 @@ def records(work):
     given = os.environ.get("SOLO5_RECORDS")
     if given:
         return Path(given)
-    docker = shutil.which("docker")
+    name = os.environ.get("SOLO5_DOCKER", "docker")       # or podman, or a wrapper
+    docker = shutil.which(name)
     if docker is None:
-        raise Unavailable("solo5: blocked: no `docker` on PATH, and Solo5 has no tender for "
-                          f"{os.uname().sysname}; run sim-tool-solo5-run on Linux and set SOLO5_RECORDS")
+        raise Unavailable(f"solo5: blocked: no `{name}` on PATH to run a Linux container with; "
+                          "run sim-tool-solo5-run on Linux and set SOLO5_RECORDS")
     out = work / "solo5"
     out.mkdir()
     command = [docker, "run", "--rm", "--label", "sim-tool-solo5=run",
@@ -82,8 +83,12 @@ def check(work, natives, digests, host_traces, report):
     require(devices == ["BLOCK_BASIC", "NET_BASIC"], f"solo5: AcceptedJob declares {devices}")
     where = (out / "uname.txt").read_text().strip()
     tender = (out / "tender.txt").read_text().split("\n")[0]
+    hashes = dict(reversed(line.split()) for line in (out / "sha256.txt").read_text().splitlines())
+    require(set(hashes) == set(abis), "solo5: an image has no recorded hash")
     report(f"solo5: Solo5 {COMMIT[:12]} ({tender}) and {len(abis)} unikernels built by a Nix "
-           f"derivation on {where}; every node.c is byte-identical to the simulator's")
+           f"derivation on {where}, as {(out / 'images-path.txt').read_text().strip()}; every "
+           f"node.c is byte-identical to the simulator's; accepted_job.spt has SHA-256 "
+           f"{hashes['accepted_job.spt']}")
     hvt = [line for line in (out / "hvt.txt").read_text().splitlines() if line.strip()]
     if hvt[-1] == "status 124" and any(line.startswith("@idle") for line in hvt):
         report("solo5: hvt: accepted_job.hvt booted under solo5-hvt and went idle; NO scenario "

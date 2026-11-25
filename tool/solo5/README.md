@@ -107,7 +107,9 @@ What this ARM64 Mac can do, each observed:
 
 The container is the pinned `nixos/nix` image with `/dev/net/tun` and `CAP_NET_ADMIN`, and it needs the network for the Nix binary cache. Its Nix store is kept in the Docker volume `sim-tool-solo5-nix` (about 1.5 GB) so that a second run downloads nothing and takes about two minutes; `docker volume rm sim-tool-solo5-nix` removes it. A first run has to fetch a compiler and may not finish within the check's 580 seconds, in which case the check reports blocked and a second attempt continues from the volume.
 
-On Linux with Nix no container is needed: `nix build .#solo5-run`, run `result/bin/sim-tool-solo5-run OUT` as root, then `SOLO5_RECORDS=OUT python3 -m tool check solo5`. That path was exercised only with records produced in the container.
+`SOLO5_DOCKER` names another container command than `docker`. With none on the path the check fails with `solo5: blocked: no ... on PATH`.
+
+On Linux with Nix no container is needed: `nix build .#solo5-run`, run `result/bin/sim-tool-solo5-run OUT` as root, then `SOLO5_RECORDS=OUT python3 -m tool check solo5`. That path was exercised only with records produced in the container. The runner also writes the SHA-256 of every image and the store path they were built as; the check prints the hash of `accepted_job.spt`.
 
 ## What carries over from simulation, and what does not
 

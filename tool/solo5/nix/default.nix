@@ -105,6 +105,7 @@ let
           "$(solo5-elftool query-manifest $image | tr -d ' \n')"
       done > $out/images.txt
       printf '%s\n' ${solo5-src.rev} > $out/SOLO5_COMMIT
+      (cd $out && sha256sum *.spt *.hvt > sha256.txt)
     '';
     dontInstall = true;
   };
@@ -123,7 +124,9 @@ let
     cd ${source}
     python3 -m tool.solo5.run spt ${images} "$out/spt.json" "$@"
     python3 -m tool.solo5.run host ${images} "$out/host.json" "$@"
-    cp ${images}/images.txt ${images}/node.c.sha256.json ${images}/SOLO5_COMMIT "$out/"
+    cp ${images}/images.txt ${images}/node.c.sha256.json ${images}/SOLO5_COMMIT \
+      ${images}/sha256.txt "$out/"
+    echo ${images} > "$out/images-path.txt"
     solo5-spt --version > "$out/tender.txt" 2>&1 || true
     uname -srm > "$out/uname.txt"
     # The hvt image: boot it for a few seconds if this machine has a hypervisor for it.
