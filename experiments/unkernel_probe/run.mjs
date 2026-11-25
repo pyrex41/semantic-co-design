@@ -7,16 +7,18 @@
 // under the stock one. --repeat N boots N times in this process. --dump writes the final
 // linear memory, --pages its per-page digests, --console the console bytes, --log every
 // import call (each of the last boot). --snap-at/--snap-out save a snapshot instead of
-// running to --end; --restore resumes one.
+// running to --end; --restore resumes one. --fault removes one control (see host.mjs).
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { serialize, deserialize } from "node:v8";
 import { icount, install } from "./host.mjs";
 
-const arg = Object.fromEntries(process.argv.slice(2).join(" ").split("--").filter(Boolean).map((s) => {
-	const [k, ...v] = s.trim().split(" ");
-	return [k, v.join(" ") || "1"];
-}));
+// Every option takes one value: --key value, pairwise, so a value may hold anything.
+const argv = process.argv.slice(2), arg = {};
+for (let i = 0; i < argv.length; i += 2) {
+	if (!argv[i].startsWith("--") || i + 1 >= argv.length) throw new Error(`expected --key value at "${argv[i]}"`);
+	arg[argv[i].slice(2)] = argv[i + 1];
+}
 const num = (k, d) => (arg[k] === undefined ? d : Number(arg[k]));
 const mode = arg.mode ?? "controlled";
 const script = arg.script ? JSON.parse(readFileSync(arg.script, "utf8")) : [];
@@ -37,7 +39,7 @@ function finish(why, st) {
 	if (arg.console) writeFileSync(arg.console, out);
 	const stats = st.vm?.stats?.() ?? {};
 	records.push({
-		mode, why, jit: !!num("jit", 0), seed: num("seed", 1), stepNs: num("step", 1000), node: process.version,
+		mode, why, fault: arg.fault, jit: !!num("jit", 0), seed: num("seed", 1), stepNs: num("step", 1000), node: process.version,
 		memoryBytes: mem.length, memory: sha(mem), pages: sha(pages),
 		console: sha(out), consoleBytes: out.length,
 		imports: st.full.digest("hex"), importSequence: st.seq.digest("hex"), importCalls: st.calls,
@@ -45,7 +47,7 @@ function finish(why, st) {
 		icount: icount(st.vm, st.memory), nsPerInsn: num("ns-per-insn", 0),
 		virtualNs: mode === "controlled" ? st.vns : null, idles: st.idles,
 		capturedTimers: st.capturedTimers, realTimers: st.realTimers,
-		inputsDelivered: st.inputAt, snapshot: snapshotDigest,
+		inputsDelivered: st.inputAt, deliveredFrom: st.delivered, snapshotFrom: st.snapFrom, snapshot: snapshotDigest,
 		kernelStats: { switches: stats.switches, idles: stats.idles, yields: stats.yields },
 		jitStats: stats.jit && { compiled: stats.jit.compiled, freed: stats.jit.freed, refused: stats.jit.refused, failed: stats.jit.failed, bytes: stats.jit.bytes },
 	});
@@ -56,7 +58,7 @@ function finish(why, st) {
 }
 
 const host = install({
-	mode, script, seed: num("seed", 1), stepNs: num("step", 1000), nsPerInsn: num("ns-per-insn", 0),
+	mode, script, fault: arg.fault, seed: num("seed", 1), stepNs: num("step", 1000), nsPerInsn: num("ns-per-insn", 0),
 	epochMs: 1767225600000 + num("epoch-offset", 0), // 2026-01-01T00:00:00Z, plus the time a restored machine had run
 	endAtMs: mode === "controlled" && arg["snap-at"] === undefined ? num("end", 22000) : undefined,
 	snapAtMs: arg["snap-at"] === undefined ? undefined : num("snap-at"),
@@ -83,6 +85,7 @@ async function boot() {
 		log: (m) => chunks.push(Buffer.from(`${m}\n`)),
 		onOutput: (b) => chunks.push(Buffer.from(b)),
 	});
+	if (num("ns-per-insn", 0) && icount(vm, st.memory) === null) throw new Error("--ns-per-insn: the instruction counter cannot be read");
 	// A snapshot with stop ends the kernel first; that run ends in onSnapshot.
 	vm.exited.then((res) => host.state() === st && !st.snapAsked && host.end(`exit ${res.kind} ${res.code}`));
 	if (mode === "stock") {

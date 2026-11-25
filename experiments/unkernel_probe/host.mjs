@@ -8,6 +8,9 @@
 //               since the last read, if set) and jumps to the deadline when the guest idles;
 //               entropy is a seeded generator; sched_yield returns at once; console input and
 //               the snapshot request are delivered when the virtual clock passes their times.
+//
+// cfg.fault removes one control again (check.py's seeded faults): entropy, date, jitter,
+// idle-real, icount, yield, math-random.
 import { createHash } from "node:crypto";
 import { openSync, writeSync, closeSync } from "node:fs";
 
@@ -26,7 +29,9 @@ function prng(seed) {
 }
 
 /** Retired guest instructions: kwemu's counter, 32 bytes into the cpu that wasm_kw_cpu points at. */
+let blind = false; // the seeded fault "icount"
 export function icount(vm, memory) {
+	if (blind) return null;
 	const g = vm?.kernel?.exports?.wasm_kw_cpu;
 	if (!(g instanceof WebAssembly.Global)) return null;
 	const dv = new DataView(memory.buffer), at = Number(g.value);
@@ -35,7 +40,9 @@ export function icount(vm, memory) {
 }
 
 export function install(cfg) {
-	const controlled = cfg.mode === "controlled";
+	const controlled = cfg.mode === "controlled", fault = cfg.fault;
+	blind = fault === "icount";
+	const realNow = performance.now.bind(performance);
 	// One run's state. begin() replaces it, so a second boot in the same process starts clean;
 	// imports of an earlier kernel (it parks at its next suspension) then pass straight through.
 	let st, gen = 0, logFd = null, logBuf = [];
@@ -46,7 +53,8 @@ export function install(cfg) {
 		st = {
 			vns: 0, calls: 0, counts: {}, idles: 0, realTimers: 0, capturedTimers: 0, checkpoints: [],
 			seq: createHash("sha256"), full: createHash("sha256"), memory: null, vm: null,
-			inputAt: 0, snapAsked: false, ended: false, insns: 0,
+			inputAt: 0, snapAsked: false, ended: false, insns: null,
+			delivered: { clock: 0, poll: 0, jump: 0 }, snapFrom: null,
 			rand: prng(cfg.seed), mrand: prng(cfg.seed ^ 0x5bd1e995),
 		};
 		return st;
@@ -80,9 +88,9 @@ export function install(cfg) {
 	const realSetTimeout = globalThis.setTimeout, realClearTimeout = globalThis.clearTimeout;
 	let capture = null;
 	if (controlled) {
-		Math.random = () => st.mrand() / 4294967296;
+		if (fault !== "math-random") Math.random = () => st.mrand() / 4294967296;
 		performance.now = () => st.vns / 1e6;
-		Date.now = () => cfg.epochMs + Math.floor(st.vns / 1e6);
+		if (fault !== "date") Date.now = () => cfg.epochMs + Math.floor(st.vns / 1e6);
 		// The idle wait's timer is taken while poll_oneoff runs (below); any other is the host's own.
 		globalThis.setTimeout = (fn, ms, ...rest) => {
 			if (capture) {
@@ -96,15 +104,19 @@ export function install(cfg) {
 		globalThis.clearTimeout = (t) => (t && t.captured ? undefined : realClearTimeout(t));
 	}
 
-	/** Deliver what the script and the snapshot request have due at the current virtual time. */
-	const pump = () => {
+	/** Deliver what the script and the snapshot request have due at the current virtual time.
+	 * `from` is the import it happens in: a clock read (the guest is running), the start of an
+	 * idle wait, or the jump that ends one. */
+	const pump = (from) => {
 		const script = cfg.script;
 		while (st.inputAt < script.length && st.vns >= script[st.inputAt][0] * 1e6) {
 			if (!st.vm) throw new Error("input due before createKernel() returned");
 			st.vm.write(script[st.inputAt++][1]);
+			st.delivered[from]++;
 		}
 		if (cfg.snapAtMs !== undefined && !st.snapAsked && st.vns >= cfg.snapAtMs * 1e6) {
 			st.snapAsked = true;
+			st.snapFrom = from;
 			st.vm.snapshot({ stop: true }).then((snap) => cfg.onSnapshot(snap, st), (e) => end(`snapshot failed: ${e.message}`));
 		}
 		if (cfg.endAtMs !== undefined && st.vns >= cfg.endAtMs * 1e6) end("end time");
@@ -113,13 +125,16 @@ export function install(cfg) {
 	const controlledImpl = {
 		clock_time_get: (orig) => (id, precision, time) => {
 			st.vns += cfg.stepNs;
-			if (cfg.nsPerInsn) {
-				// Time as a function of guest progress: each retired user instruction costs the same.
-				const n = icount(st.vm, st.memory) ?? st.insns;
-				st.vns += (n - st.insns) * cfg.nsPerInsn;
+			if (fault === "jitter") st.vns += Math.floor(realNow() * 1e6) & 1;
+			if (cfg.nsPerInsn && st.vm) {
+				// Time as a function of guest progress: each user instruction retired since the first
+				// read after createKernel() returned (or after a restore) costs the same.
+				const n = icount(st.vm, st.memory);
+				if (n === null) throw new Error("--ns-per-insn: the instruction counter cannot be read");
+				st.vns += (n - (st.insns ?? n)) * cfg.nsPerInsn;
 				st.insns = n;
 			}
-			pump();
+			pump("clock");
 			return orig(id, precision, time);
 		},
 		random_get: () => (buf, len) => {
@@ -129,7 +144,7 @@ export function install(cfg) {
 		},
 		sched_yield: () => () => 0,
 		poll_oneoff: (orig) => (...args) => {
-			pump();
+			pump("poll");
 			capture = [];
 			let r, timers;
 			try {
@@ -152,9 +167,13 @@ export function install(cfg) {
 				return r;
 			}
 			st.vns += Math.max(0, jump);
-			pump(); // input wakes the wait through Kernel.sendInput
-			if (jump >= waitNs) for (const t of timers) t.fn();
-			else if (st.snapAsked) for (const t of timers) t.fn(); // the snapshot IRQ woke it already; harmless
+			pump("jump"); // input wakes the wait through Kernel.sendInput
+			// The snapshot IRQ woke the wait already; calling its timer too is harmless.
+			if (jump >= waitNs || st.snapAsked)
+				for (const t of timers) {
+					if (fault !== "idle-real") t.fn();
+					else st.realTimers++, realSetTimeout(t.fn, 0);
+				}
 			return r;
 		},
 	};
@@ -176,8 +195,9 @@ export function install(cfg) {
 		fd_read: (args, ret) => (ret === 0 ? iov(args, new DataView(st.memory.buffer).getUint32(args[3], true)) : ""),
 	};
 
+	const dropped = { entropy: "random_get", yield: "sched_yield" }[fault];
 	const wrap = (name, fn) => {
-		const impl = controlled && controlledImpl[name] ? controlledImpl[name](fn) : fn;
+		const impl = controlled && controlledImpl[name] && name !== dropped ? controlledImpl[name](fn) : fn;
 		const extra = extraOf[name], mine = gen;
 		return (...args) => {
 			if (mine !== gen || st.ended) return fn(...args);
