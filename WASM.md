@@ -7,7 +7,7 @@
 | 1 | The simulator, seeded | `wasm-step` | run, passes |
 | 2 | The simulator, schedules chosen and shrunk by Hegel | `hegel-step` (host target), `wasm-step` (module) | run, passes |
 | 3 | OS processes on loopback, killed and restarted | `real-host`, `packed-node` | run, passes |
-| 4 | NixOS virtual machines with real faults | `real-vm`, `real-vm-mutant` (Linux only) | **UNKNOWN**: never built or booted |
+| 4 | NixOS virtual machines with real faults | `real-vm`, `real-vm-mutant` (Linux only) | Pass on `aarch64-linux` at `a1fa613`, in a container, with the machines emulated in software |
 | 5 | unkernel: Linux as a wasm module under a controlled host | `unkernel-probe` | run, passes; a probe of the substrate, the node is not in it |
 
 The node is in rung 5 as well: `accepted_job` as a static aarch64-linux program inside the guest equals the native build line for line and reruns bit-identically (flake check `uk-node`; [experiments/unkernel_probe/README.md](experiments/unkernel_probe/README.md), section 8).
@@ -139,7 +139,19 @@ UNKNOWN: Linux. The `RLIMIT_FSIZE` and hostile-input teeth were observed on Darw
 
 ## Rung 4: NixOS machines
 
-**UNKNOWN. `real-vm` and `real-vm-mutant` have never been built or booted, here or anywhere.** The exact failure is the platform mismatch quoted above; `nix build .#checks.aarch64-linux.real-vm` reports 64 derivations to build and several hundred paths to fetch (700 in the retained run; the number depends on the local store), then stops at the first Linux derivation.
+**Both tests pass on `aarch64-linux` at `a1fa613`, with the machines emulated in software.** They were built in a `nixos/nix` container under OrbStack on this Mac, which has no `/dev/kvm`, so QEMU fell back to TCG:
+
+```
+docker run --privileged -v <source>:/src:ro nixos/nix \
+  nix build path:/src#checks.aarch64-linux.real-vm path:/src#checks.aarch64-linux.real-vm-mutant -L \
+    --option system-features "nixos-test kvm benchmark big-parallel" --option sandbox false
+```
+
+`real-vm` ran its ten subtests in 384 s and `real-vm-mutant` its two in 95 s; [evidence/real-vm/summary.txt](evidence/real-vm/summary.txt) holds the subtest lines and the digests of the two logs, which are not retained in the repository. The first attempt, at `6a1b4af`, failed before any machine booted: the generated node did not compile against glibc, because `_POSIX_C_SOURCE` was defined after the first include and `-std=c11` then hides `getline` and `ssize_t`. `a1fa613` moves the definition.
+
+Not shown by this run: KVM, `x86_64-linux`, a sandboxed build, and a second run. The timing bounds in `nix/vm.py` held under emulation once.
+
+The rest of this section is the record from before that run, when there was no Linux builder. The failure then is the platform mismatch quoted above; `nix build .#checks.aarch64-linux.real-vm` reports 64 derivations to build and several hundred paths to fetch (700 in the retained run; the number depends on the local store), then stops at the first Linux derivation.
 
 What was observed, and it is not a run:
 
@@ -218,8 +230,8 @@ This is about determinism only. It says nothing about Solo5 as a place to deploy
 
 | | Status | Why |
 |---|---|---|
-| Every check on `aarch64-linux` and `x86_64-linux` | UNKNOWN | no Linux builder; all evaluate, none built |
-| `real-vm`, `real-vm-mutant` | UNKNOWN | never built or booted; four untested assumptions in `nix/vm.py` |
+| Every other check on `aarch64-linux`, and every check on `x86_64-linux` | UNKNOWN | only the two machine tests were built on Linux |
+| `real-vm`, `real-vm-mutant` | pass once on `aarch64-linux` under TCG | not run with KVM, on `x86_64-linux`, or in the sandbox |
 | A VM-tier fault that shows the power-loss steps have teeth | not built | needs a deployed host that skips `fsync` |
 | The host's `RecursionError` catch | unexercised | the seeded fault survives |
 | The import refusal of `tool.wasm.Wasm` | observed once by hand | no retained check seeds a module with an import |
