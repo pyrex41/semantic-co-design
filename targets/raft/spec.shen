@@ -5,7 +5,7 @@
 \\
 \\ State  [Id N Role Term Voted Len Log Commit Applied Kv Votes Next Match Issued Acked Hold]
 \\   Id N      this server and the number of servers (3 or 5; at most 5)
-\\   Role      loading | follower | candidate | leader
+\\   Role      loading | follower | candidate | leader | failed
 \\   Term      currentTerm            (persistent)
 \\   Voted     votedFor, -1 for none  (persistent)
 \\   Len Log   the log: Len entries [Term Op Key Val Req] in 8 slots (persistent).
@@ -48,6 +48,7 @@
   [Id N | _] [restart] -> [(raft.init Id N) [[read 0 0]]]
   State [loaded _ Key Found A Tag B C D] -> (raft.loaded State Key Found A Tag B C D)
   [Id N loading | Rest] _ -> [[Id N loading | Rest] []]
+  [Id N failed | Rest] _ -> [[Id N failed | Rest] []]
   State Event -> (let Result (raft.apply (raft.handle State Event)) Result))
 
 (define raft.handle
@@ -56,11 +57,25 @@
   State [written Token] -> (raft.written State Token)
   State [put Req Key Val] -> (raft.client State put Key Val Req)
   State [get Req Key] -> (raft.client State get Key 0 Req)
-  State [on-vote-req Src T LastIndex LastTerm] -> (raft.vote-req State Src T LastIndex LastTerm)
-  State [on-vote-rsp Src T Granted] -> (raft.vote-rsp State Src T Granted)
-  State [on-app-req Src T Prev PrevT Has ETerm Op Key Val Req LCommit] ->
-    (raft.app-req State Src T Prev PrevT Has [ETerm Op Key Val Req] LCommit)
-  State [on-app-rsp Src T Ok Index] -> (raft.app-rsp State Src T Ok Index))
+  [Id N | Rest] [on-vote-req Src T LastIndex LastTerm] ->
+    (raft.vote-req [Id N | Rest] Src T LastIndex LastTerm) where (raft.member? Src Id N)
+  [Id N | Rest] [on-vote-rsp Src T Granted] ->
+    (raft.vote-rsp [Id N | Rest] Src T Granted) where (raft.member? Src Id N)
+  [Id N | Rest] [on-app-req Src T Prev PrevT Has ETerm Op Key Val Req LCommit] ->
+    (raft.app-req [Id N | Rest] Src T Prev PrevT Has [ETerm Op Key Val Req] LCommit)
+    where (raft.member? Src Id N)
+  [Id N | Rest] [on-app-rsp Src T Ok Index] ->
+    (raft.app-rsp [Id N | Rest] Src T Ok Index) where (raft.member? Src Id N)
+  State [on-vote-req | _] -> [State []]
+  State [on-vote-rsp | _] -> [State []]
+  State [on-app-req | _] -> [State []]
+  State [on-app-rsp | _] -> [State []])
+
+\\ A message counts only when it names another server of this cluster as its sender. The
+\\ per-server arrays have five slots whatever N is, so a vote or an acknowledgement under
+\\ an id from N to 4 would otherwise be counted towards a majority of N.
+(define raft.member?
+  Src Id N -> (and (>= Src 0) (and (< Src N) (not (= Src Id)))))
 
 \\ ---- recovery: read the persistent state back, row by row, before doing anything else
 
@@ -74,6 +89,10 @@
         (raft.boot [Id N loading Term Voted Len (raft.store Key [ETerm Op K V Req] Log) | Rest])
         [[Id N loading Term Voted Len (raft.store Key [ETerm Op K V Req] Log) | Rest]
          [[read (+ Key 1) (+ Key 1)]]])
+  \\ A row inside the recorded length is not on the disk. The write order below and the
+  \\ environment rules exclude it. If it happens all the same, part of what this server may
+  \\ have acknowledged is gone: it says so by its role and takes no further part.
+  [Id N loading | Rest] _ _ _ _ _ _ _ -> [[Id N failed | Rest] []]
   State _ _ _ _ _ _ _ -> [State []])
 
 (define raft.boot

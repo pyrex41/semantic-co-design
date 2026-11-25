@@ -8,11 +8,38 @@
 
 \\ A server that is still reading its disk back has no log in memory yet: while it loads,
 \\ its Len is the length it is going to have and its Log is partly filled. The invariants
-\\ about logs look at running servers, so such a server counts as down.
+\\ about logs look at running servers, so such a server counts as down. So does a server
+\\ that found a row missing and stopped (role failed). Neither is out of sight for that:
+\\ inv.recovery-completes is about exactly these servers.
 (define inv.running
   [] -> []
   [[_ _ loading | _] | States] -> [down | (inv.running States)]
+  [[_ _ failed | _] | States] -> [down | (inv.running States)]
   [State | States] -> [State | (inv.running States)])
+
+(define inv.nth
+  _ [] -> down
+  0 [X | _] -> X
+  N [_ | Xs] -> (inv.nth (- N 1) Xs))
+
+(define inv.adjoin
+  X Xs -> (if (element? X Xs) Xs [X | Xs]))
+
+\\ The value of row Key of a disk, or the symbol missing.
+(define inv.row
+  _ [] -> missing
+  Key [[Key | Value] | _] -> Value
+  Key [_ | Rows] -> (inv.row Key Rows))
+
+\\ Entries I to Len of a disk, or the symbol missing when one of those rows is not there.
+(define inv.disk-log
+  I Len _ -> [] where (> I Len)
+  I Len Rows -> (inv.disk-cons (inv.row I Rows) (inv.disk-log (+ I 1) Len Rows)))
+
+(define inv.disk-cons
+  missing _ -> missing
+  _ missing -> missing
+  E Es -> [E | Es])
 
 (define inv.take
   0 _ -> []
@@ -239,10 +266,11 @@
   [_ E | Es] Term -> (inv.cr-term [E | Es] Term)
   _ _ -> false)
 
-\\ ---- Persistent state is on stable storage before a reply that depends on it.
+\\ ---- Persistent state is on stable storage before a message that depends on it.
 \\ Seen is every [Node Term Voted] that has been in row 0 of a disk. A granted vote must be
 \\ one of them, and a successful AppendEntries reply for index Top needs a durable log of
-\\ at least Top entries; no reply names a term the disk does not have.
+\\ at least Top entries; no reply names a term the disk does not have. A request for votes
+\\ is sent by a candidate whose vote for itself in that term is on its disk.
 
 (define inv.replies-are-durable
   Steps -> (inv.rd Steps []))
@@ -285,7 +313,263 @@
     (and (>= DTerm Term)
          (and (or (not Ok) (>= DLen Top))
               (inv.rd-effects Node Effects Seen [DTerm DVoted DLen])))
+  Node [[vote-req _ Term | _] | Effects] Seen Meta ->
+    (and (element? [Node Term Node] Seen) (inv.rd-effects Node Effects Seen Meta))
   Node [_ | Effects] Seen Meta -> (inv.rd-effects Node Effects Seen Meta))
+
+\\ ---- A leader was elected. Whenever a server leads a term, more than half of the servers
+\\ have had a vote for it in that term on their disks, its own among them. Seen is the
+\\ history of row 0 of every disk, as above.
+
+(define inv.leaders-are-elected
+  Steps -> (inv.le Steps []))
+
+(define inv.le
+  [] _ -> true
+  [[_ _ _ _ [_ States Disks]] | Steps] Seen ->
+    (inv.le-world (inv.running States) (inv.rd-disks Disks 0 Seen) Steps))
+
+(define inv.le-world
+  States Seen Steps -> (inv.le-next (inv.le-states States Seen) Seen Steps))
+
+(define inv.le-next
+  true Seen Steps -> (inv.le Steps Seen)
+  Bad _ _ -> Bad)
+
+(define inv.le-states
+  [] _ -> true
+  [[Id N leader Term | _] | States] Seen ->
+    (if (> (* 2 (inv.le-votes Term Id Seen)) N)
+        (inv.le-states States Seen)
+        [violated leader-without-a-majority-of-durable-votes Id Term (inv.le-votes Term Id Seen)])
+  [_ | States] Seen -> (inv.le-states States Seen))
+
+(define inv.le-votes
+  _ _ [] -> 0
+  Term Id [[_ Term Id] | Seen] -> (+ 1 (inv.le-votes Term Id Seen))
+  Term Id [_ | Seen] -> (inv.le-votes Term Id Seen))
+
+\\ ---- One vote per term (Figure 2: a server votes for at most one candidate in a term),
+\\ over the whole history, restarts included. Votes is every [Voter Term Candidate] so far:
+\\ a granted reply that was sent, or a request for votes that was sent, whose sender has
+\\ voted for itself. It is a history of what left the server, not of its memory or its
+\\ disk: a vote that was durable, answered and then forgotten in recovery is seen when the
+\\ second one is given, and a candidacy that was lost in a crash before anything was sent
+\\ is no vote.
+
+(define inv.one-vote-per-term
+  Steps -> (inv.ov Steps []))
+
+(define inv.ov
+  [] _ -> true
+  [[_ Node _ Effects _] | Steps] Votes -> (inv.ov-next (inv.ov-effects Node Effects Votes) Steps))
+
+(define inv.ov-next
+  [violated | Why] _ -> [violated | Why]
+  Votes Steps -> (inv.ov Steps Votes))
+
+(define inv.ov-effects
+  _ _ [violated | Why] -> [violated | Why]
+  _ [] Votes -> Votes
+  Node [[vote-rsp Dest Term true] | Effects] Votes ->
+    (inv.ov-effects Node Effects (inv.ov-add [Node Term Dest] Votes Votes))
+  Node [[vote-req _ Term | _] | Effects] Votes ->
+    (inv.ov-effects Node Effects (inv.ov-add [Node Term Node] Votes Votes))
+  Node [_ | Effects] Votes -> (inv.ov-effects Node Effects Votes))
+
+(define inv.ov-add
+  Vote [] All -> [Vote | All]
+  Vote [Vote | _] All -> All
+  [Voter Term For] [[Voter Term Other] | _] _ ->
+    [violated two-votes-in-one-term Voter Term For Other]
+  Vote [_ | Votes] All -> (inv.ov-add Vote Votes All))
+
+\\ ---- The write order (spec.shen: "rows are written in an order of which every prefix is
+\\ a state this server was allowed to be in"). A disk holds a prefix of the writes issued
+\\ so far at every moment, so the claim is about every disk in every world. What a restart
+\\ would read from it now is a term, a vote and a log, every row of which is there; and the
+\\ server has had that term and that vote in memory together with that log or an extension
+\\ of it. Held is, per server, every [Term Voted Log] it has had in memory while running,
+\\ and the empty state it starts from. Disks change at a sync and at a crash only.
+
+(define inv.disk-is-a-held-state
+  Steps -> (inv.dh Steps []))
+
+(define inv.dh
+  [] _ -> true
+  [[Kind _ _ _ [_ States Disks]] | Steps] Held ->
+    (inv.dh-next Kind (inv.dh-hold (inv.running States) Held) Disks Steps))
+
+(define inv.dh-next
+  Kind Held Disks Steps -> (inv.dh-then (inv.dh-disks Disks Held 0) Held Steps)
+    where (or (= Kind sync) (= Kind crash))
+  _ Held _ Steps -> (inv.dh Steps Held))
+
+(define inv.dh-then
+  true Held Steps -> (inv.dh Steps Held)
+  Bad _ _ -> Bad)
+
+(define inv.dh-hold
+  [] _ -> []
+  [State | States] [] -> [(inv.dh-add State [[0 -1 []]]) | (inv.dh-hold States [])]
+  [State | States] [H | Held] -> [(inv.dh-add State H) | (inv.dh-hold States Held)])
+
+(define inv.dh-add
+  down H -> H
+  [_ _ _ Term Voted Len Log | _] H -> (inv.adjoin [Term Voted (inv.take Len Log)] H))
+
+(define inv.dh-disks
+  [] _ _ -> true
+  [Rows | Disks] [H | Held] Node ->
+    (if (inv.dh-held? (inv.meta Rows) Rows H)
+        (inv.dh-disks Disks Held (+ Node 1))
+        [violated the-disk-is-not-a-state-the-server-held Node Rows]))
+
+(define inv.dh-held?
+  [Term Voted Len] Rows H -> (inv.dh-among Term Voted (inv.disk-log 1 Len Rows) H))
+
+(define inv.dh-among
+  _ _ missing _ -> false
+  _ _ _ [] -> false
+  Term Voted Log [[Term Voted Held] | H] ->
+    (or (inv.prefix? Log Held) (inv.dh-among Term Voted Log H))
+  Term Voted Log [_ | H] -> (inv.dh-among Term Voted Log H))
+
+\\ ---- Recovery restores the disk. In the step in which a server finishes reading its disk
+\\ back, its term, its vote and its log are exactly what the disk holds.
+
+(define inv.recovery-restores-the-disk
+  [] -> true
+  [[_ Node [loaded | _] _ [_ States Disks]] | Steps] ->
+    (inv.rr-next (inv.rr (inv.nth Node (inv.running States)) (inv.nth Node Disks) Node) Steps)
+  [_ | Steps] -> (inv.recovery-restores-the-disk Steps))
+
+(define inv.rr-next
+  true Steps -> (inv.recovery-restores-the-disk Steps)
+  Bad _ -> Bad)
+
+(define inv.rr
+  down _ _ -> true
+  [_ _ _ Term Voted Len Log | _] Rows Node ->
+    (if (= [Term Voted (inv.take Len Log)] (inv.rr-read (inv.meta Rows) Rows))
+        true
+        [violated the-recovered-state-is-not-the-disk Node [Term Voted (inv.take Len Log)] Rows]))
+
+(define inv.rr-read
+  [Term Voted Len] Rows -> [Term Voted (inv.disk-log 1 Len Rows)])
+
+\\ ---- Recovery completes. A server that is reading its disk back always has a read
+\\ outstanding: each step in which it restarts or is handed a row, and after which it is
+\\ still loading, asks for another row (unless the server dies in that very step, which the
+\\ next step of the trace then says). Read results are local events that the environment
+\\ delivers, so such a server leaves `loading` after at most one read per row. And no server
+\\ ever stops for want of a row (role failed), which the write order is there to exclude.
+
+(define inv.recovery-completes
+  [] -> true
+  [[_ Node [Tag | _] Effects [_ States _]] | Steps] ->
+    (inv.rc (inv.nth Node States) Node Effects Steps) where (or (= Tag restart) (= Tag loaded))
+  [_ | Steps] -> (inv.recovery-completes Steps))
+
+(define inv.rc
+  [_ _ failed | _] Node _ _ -> [violated a-row-inside-the-recorded-length-is-missing Node]
+  [_ _ loading | _] Node Effects Steps ->
+    (if (or (inv.reads? Effects) (inv.dies-next? Node Steps))
+        (inv.recovery-completes Steps)
+        [violated loading-with-no-read-outstanding Node])
+  _ _ _ Steps -> (inv.recovery-completes Steps))
+
+(define inv.reads?
+  [] -> false
+  [[read | _] | _] -> true
+  [_ | Effects] -> (inv.reads? Effects))
+
+(define inv.dies-next?
+  Node [[crash Node | _] | _] -> true
+  _ _ -> false)
+
+\\ ---- A leader commits only what a majority of disks hold. When the commit index of a
+\\ leader advances, every entry it newly covers is, in that world, inside the recorded
+\\ length of more than half of the disks. This is what a leader counting itself only up to
+\\ its durable length, and a follower acknowledging only what is durable, are for.
+
+(define inv.commits-are-durable
+  [] -> true
+  [[_ _ _ _ [_ States _]] | Steps] -> (inv.cd (inv.running States) Steps))
+
+(define inv.cd
+  _ [] -> true
+  Before [[_ _ _ _ [_ States Disks]] | Steps] ->
+    (inv.cd-next (inv.cd-all Before (inv.running States) Disks) (inv.running States) Steps))
+
+(define inv.cd-next
+  true States Steps -> (inv.cd States Steps)
+  Bad _ _ -> Bad)
+
+(define inv.cd-all
+  [] [] _ -> true
+  [[Id N leader Term _ _ _ Commit | _] | Before] [[Id N leader Term _ _ Log Commit2 | _] | After]
+  Disks ->
+    (inv.cd-and (inv.cd-range (+ Commit 1) Commit2 Log N Disks Id) Before After Disks)
+  [_ | Before] [_ | After] Disks -> (inv.cd-all Before After Disks))
+
+(define inv.cd-and
+  true Before After Disks -> (inv.cd-all Before After Disks)
+  Bad _ _ _ -> Bad)
+
+(define inv.cd-range
+  I Commit _ _ _ _ -> true where (> I Commit)
+  I Commit Log N Disks Id ->
+    (if (> (* 2 (inv.holders I (inv.nth (- I 1) Log) Disks)) N)
+        (inv.cd-range (+ I 1) Commit Log N Disks Id)
+        [violated committed-without-a-durable-majority Id I
+                  (inv.holders I (inv.nth (- I 1) Log) Disks)]))
+
+\\ How many disks hold entry E at index I inside their recorded length.
+(define inv.holders
+  _ _ [] -> 0
+  I E [Rows | Disks] -> (+ (if (inv.holds? I E (inv.meta Rows) Rows) 1 0) (inv.holders I E Disks)))
+
+(define inv.holds?
+  I E [_ _ Len] Rows -> (and (<= I Len) (= (inv.row I Rows) E)))
+
+\\ ---- What a leader counts is on disk. For a leader of term T, its matchIndex for a server
+\\ whose disk is not in a later term is a length up to which that server's durable log
+\\ equals the leader's log. For its own slot that is "a leader counts its own log towards a
+\\ majority only up to what is durable"; for the others it is that an acknowledgement is
+\\ counted only in the term it was given for, by the leader it was given to.
+
+(define inv.match-is-durable
+  [] -> true
+  [[_ _ _ _ [_ States Disks]] | Steps] ->
+    (inv.md-next (inv.md-leaders (inv.running States) Disks) Steps))
+
+(define inv.md-next
+  true Steps -> (inv.match-is-durable Steps)
+  Bad _ -> Bad)
+
+(define inv.md-leaders
+  [] _ -> true
+  [[Id _ leader Term _ _ Log _ _ _ _ _ Match | _] | States] Disks ->
+    (inv.md-and (inv.md-each Match Disks Term Log Id 0) States Disks)
+  [_ | States] Disks -> (inv.md-leaders States Disks))
+
+(define inv.md-and
+  true States Disks -> (inv.md-leaders States Disks)
+  Bad _ _ -> Bad)
+
+\\ Match has five slots; there is one disk for each server of the cluster.
+(define inv.md-each
+  _ [] _ _ _ _ -> true
+  [M | Match] [Rows | Disks] Term Log Id P ->
+    (if (inv.md-backed? M (inv.meta Rows) Rows Term Log)
+        (inv.md-each Match Disks Term Log Id (+ P 1))
+        [violated match-index-is-not-on-that-disk Id P M Rows]))
+
+(define inv.md-backed?
+  M [DTerm _ Len] Rows Term Log ->
+    (or (> DTerm Term)
+        (and (<= M Len) (= (inv.disk-log 1 M Rows) (inv.take M Log)))))
 
 \\ ---- witnesses: histories the simulation must be able to show
 

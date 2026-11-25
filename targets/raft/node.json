@@ -4,7 +4,7 @@
   "step": "raft.step",
   "init": "raft.init",
   "symbols": ["none", "put", "get", "meta", "loading", "follower", "candidate", "leader",
-              "vote", "app", "ok", "full"],
+              "vote", "app", "ok", "full", "failed"],
   "state": ["num", "num", "sym", "num", "num", "num",
             {"capacity": 8, "of": ["num", "sym", "num", "num", "num"]},
             "num", "num",
@@ -40,5 +40,9 @@
   "invariants": {"file": "invariants.shen", "state": [],
                  "trace": ["inv.election-safety", "inv.leader-append-only", "inv.log-matching",
                            "inv.leader-completeness", "inv.state-machine-safety",
-                           "inv.replies-are-durable", "inv.commit-rule"]}
+                           "inv.replies-are-durable", "inv.commit-rule",
+                           "inv.leaders-are-elected", "inv.one-vote-per-term",
+                           "inv.disk-is-a-held-state",
+                           "inv.recovery-restores-the-disk", "inv.recovery-completes",
+                           "inv.commits-are-durable", "inv.match-is-durable"]}
 }
