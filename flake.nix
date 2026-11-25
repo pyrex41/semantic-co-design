@@ -19,6 +19,11 @@
           WASM_CLANG = "${pkgs.llvmPackages.clang-unwrapped}/bin/clang";
           PYTHONDONTWRITEBYTECODE = "1";
         };
+      # experiments/unkernel_probe: Linux as a wasm module under Node, both pinned.
+      unkernel = system: let pkgs = nixpkgs.legacyPackages.${system}; in {
+        nativeBuildInputs = [ pkgs.nodejs_24 pkgs.python3 ];
+        UNKERNEL = "${self.packages.${system}.unkernel}";
+      };
       # nix/node.nix: the node runtime, the conformance command and one package per example.
       packed = system: import ./nix/node.nix {
         pkgs = nixpkgs.legacyPackages.${system};
@@ -36,17 +41,18 @@
       });
       nixosModules.default = ./nix/module.nix;
       devShells = eachSystem (system: {
-        default = nixpkgs.legacyPackages.${system}.mkShell (environment system);
+        # Everything a check below is run with: the tool's environment, and Node with the pinned unkernel.
+        default = let env = environment system; in nixpkgs.legacyPackages.${system}.mkShell (env // {
+          nativeBuildInputs = env.nativeBuildInputs ++ [ nixpkgs.legacyPackages.${system}.nodejs_24 ];
+          inherit (unkernel system) UNKERNEL;
+        });
         research = let env = environment system; in nixpkgs.legacyPackages.${system}.mkShell (env // {
           nativeBuildInputs = env.nativeBuildInputs ++ [ capcov.packages.${system}.bifrost nixpkgs.legacyPackages.${system}.git ];
           PYTHONPATH = "${capcov}/src";
           BIFROST_SHEN_GO = "${capcov.packages.${system}.shen-go}/bin/shen";
         });
-        # experiments/unkernel_probe: Linux as a wasm module under Node, both pinned.
-        unkernel = let pkgs = nixpkgs.legacyPackages.${system}; in pkgs.mkShell {
-          nativeBuildInputs = [ pkgs.nodejs_24 pkgs.python3 ];
-          UNKERNEL = "${pkgs.callPackage ./nix/unkernel.nix { }}";
-        };
+        # The probe's own inputs and nothing else; default has them too.
+        unkernel = nixpkgs.legacyPackages.${system}.mkShell (unkernel system);
       });
       checks = eachSystem (system: {
         staged-examples = nixpkgs.legacyPackages.${system}.runCommand "staged-examples" (environment system) ''
@@ -60,13 +66,14 @@
           python3 -m experiments.branching_vm.check
           touch "$out"
         '';
+        # One check per rung of WASM.md. Rung 1: the wasm step under the simulator.
         wasm-step = nixpkgs.legacyPackages.${system}.runCommand "wasm-step" (environment system) ''
           cd ${self}
           export HOME=$TMPDIR
           NODE_TARGET=wasm python3 -m tool check kernel accepted_job
           touch "$out"
         '';
-        # The same check on the host target; its last section is the Hegel property run.
+        # Rung 2: schedules generated and shrunk by Hegel, on the host target (wasm-step runs them on the module).
         hegel-step = nixpkgs.legacyPackages.${system}.runCommand "hegel-step" (environment system) ''
           cd ${self}
           export HOME=$TMPDIR
@@ -74,7 +81,7 @@
           python3 -m tool check accepted_job
           touch "$out"
         '';
-        # Real processes on loopback, killed and restarted; needs no network beyond localhost.
+        # Rung 3: real processes on loopback, killed and restarted; needs no network beyond localhost.
         real-host = nixpkgs.legacyPackages.${system}.runCommand "real-host"
           (environment system // { __darwinAllowLocalNetworking = true; }) ''
           cd ${self}
@@ -82,7 +89,7 @@
           python3 -m tool real heartbeat accepted_job
           touch "$out"
         '';
-        # The packages the machine tests deploy, driven by the same commands on loopback.
+        # Rung 3 again: the packages the machine tests deploy, driven by the same commands on loopback.
         packed-node = nixpkgs.legacyPackages.${system}.runCommand "packed-node"
           { nativeBuildInputs = [ nixpkgs.legacyPackages.${system}.python3 ]; __darwinAllowLocalNetworking = true; } ''
           export HOME=$TMPDIR
@@ -91,11 +98,9 @@
             ${self.packages.${system}.accepted_job-reply-before-ack} ${self.packages.${system}.heartbeat}
           touch "$out"
         '';
-        # Two boots of Linux-as-wasm under a controlled host must reach the same memory, byte for byte.
-        unkernel-probe = let pkgs = nixpkgs.legacyPackages.${system}; in pkgs.runCommand "unkernel-probe" {
-          nativeBuildInputs = [ pkgs.nodejs_24 pkgs.python3 ];
-          UNKERNEL = "${pkgs.callPackage ./nix/unkernel.nix { }}";
-        } ''
+        # Rung 5: two boots of Linux-as-wasm under a controlled host must reach the same memory, byte for byte.
+        # About a minute and a half of one core; the package is a fixed-output fetch, so nothing is fetched while it runs.
+        unkernel-probe = nixpkgs.legacyPackages.${system}.runCommand "unkernel-probe" (unkernel system) ''
           export HOME=$TMPDIR
           python3 ${self}/experiments/unkernel_probe/check.py --no-stock
           touch "$out"
@@ -106,7 +111,7 @@
           touch "$out"
         '';
       } // nixpkgs.lib.optionalAttrs (nixpkgs.lib.hasSuffix "-linux" system)
-        # NixOS machine tests (real-vm, real-vm-mutant): they need KVM and a Linux builder.
+        # Rung 4: NixOS machine tests (real-vm, real-vm-mutant). They need KVM and a Linux builder.
         (import ./nix/vm.nix { pkgs = nixpkgs.legacyPackages.${system}; packages = packed system; }));
     };
 }
