@@ -291,6 +291,8 @@ def main(report=print, record=False):
         traces = seeded(work, schema, native, report)
         replay_teeth(work, schema, native, traces, report)
         bounded(schema, native, traces, report)
+    from .sim_options_check import main as options
+    options(report)
     report("sim: ok")
 
 

@@ -57,6 +57,11 @@ DEFAULT_PROFILE = {
     "client_rate": 0.2,             # chance per step that the workload acts
     "delay": {"net": [1, 20], "disk": [1, 5]},
 }
+# Optional keys, absent by default so that existing profiles keep their traces:
+#   budget["oneway"]    one-directional cuts (timed schedules): all traffic into, or out of, a node
+#   budget["timer"]     how many timer events may be delivered (bounds an untimed search)
+#   delay["timer"]      [low, high] percent: each timer runs for its delay scaled by a drawn factor
+#   "timer_rate"        percent per node: a node whose clock runs slow or fast, applied to every timer
 
 
 def profile(**changes):
@@ -103,7 +108,7 @@ class NoDraw(Draw):
         return 0
 
     def delay(self, kind):
-        return 0
+        return 100 if kind == "timer" else 0        # a timer skew is a percentage
 
 
 class SeededDraw(Draw):
@@ -218,7 +223,8 @@ class World:
         net = order({i[2:] for i in self.net})
         outs = order({o[2] for o in self.outs})
         acts = [("deliver", node, event) for node, event in net]
-        acts += [("local", node, event) for node, event in order({i[2:] for i in self.local})]
+        acts += [("local", node, event) for node, event in order({i[2:] for i in self.local})
+                 if not self.spent_timer(event)]
         acts += [("sync", node) for node in range(self.n) if self.writes[node]]
         acts += [("output", payload) for payload in outs]
         for fault in ("drop", "dup"):
@@ -233,14 +239,23 @@ class World:
                 acts.append(("heal",))
             elif self.budget.get("partition", 0) > 0:
                 acts += [("partition", mask) for mask in range(1, 2 ** (self.n - 1))]
+            if not self.blocked and self.budget.get("oneway", 0) > 0:
+                acts += [("oneway", node, way) for node in range(self.n) for way in ("in", "out")]
         acts += [("client", *action) for action in self.workload.actions(self)]
         return acts
+
+    def spent_timer(self, event):
+        """Whether `event` is a timer that the profile's timer budget no longer allows."""
+        return (self.budget.get("timer", 1) <= 0 and "timer" in self.schema.roles
+                and event[0] == self.schema.roles["timer"].tag)
 
     def earliest(self):
         """The timed action that is due first, or None."""
         best = None
         for kind, items in (("deliver", self.net), ("local", self.local)):
             for item in items:
+                if kind == "local" and self.spent_timer(item[3]):
+                    continue
                 if best is None or item[:2] < best[0]:
                     best = item[:2], (kind, item[2], item[3])
         for item in self.outs:
@@ -280,6 +295,9 @@ class World:
             _, node, event = action
             self.take(self.net if kind == "deliver" else self.local, (node, event))
             rec.update(node=node, event=event)
+            if (kind == "local" and "timer" in self.budget and "timer" in self.schema.roles
+                    and event[0] == self.schema.roles["timer"].tag):
+                self.budget["timer"] -= 1
             if not self.up[node]:
                 rec["kind"] = "lost"
             else:
@@ -322,6 +340,12 @@ class World:
             side = {node for node in range(self.n) if action[1] >> node & 1}
             self.blocked = {(a, b) for a in range(self.n) for b in range(self.n)
                             if (a in side) != (b in side)}
+        elif kind == "oneway":
+            # An asymmetric cut: the node still sends but hears nothing, or the reverse.
+            self.budget["oneway"] -= 1
+            _, node, way = action
+            self.blocked = {(other, node) if way == "in" else (node, other)
+                            for other in range(self.n) if other != node}
         elif kind == "heal":
             self.blocked = set()
         elif kind == "client":
@@ -379,10 +403,23 @@ class World:
             timer = schema.roles["timer"].tag
             self.local = [i for i in self.local if i[2:] != (node, (timer, fields[0]))]
             if role == "timer-set":
-                self.local.append((*self.stamp(fields[1]), node, (timer, fields[0])))
+                self.local.append((*self.stamp(self.timer_delay(node, fields[1], draw)), node,
+                                   (timer, fields[0])))
         elif role == "clock-read":
             self.local.append((*self.stamp(0), node,
                                (schema.roles["clock"].tag, fields[0], self.clock)))
+
+    def timer_delay(self, node, delay, draw):
+        """How long a timer set for `delay` really runs: the node's clock rate, then a drawn
+        skew. Both are optional profile keys; without them a timer runs for exactly `delay`."""
+        if not self.timed:
+            return delay
+        rates = self.profile.get("timer_rate")
+        if rates:
+            delay = delay * rates[node] // 100
+        if "timer" in self.profile["delay"]:
+            delay = delay * draw.delay("timer") // 100
+        return delay
 
     def crash(self, node, draw, rec):
         """Memory is lost. A prefix of the pending writes reaches the disk; the rest never do."""
@@ -460,7 +497,8 @@ def start(native, workload, prof, seed, world=World):
 def pick(world, actions, rng):
     """The seeded schedule: mostly whatever is due first, sometimes a fault or the workload."""
     prof = world.profile
-    for kinds, rate in ((("crash", "drop", "dup", "partition", "heal"), prof["fault_rate"]),
+    for kinds, rate in ((("crash", "drop", "dup", "partition", "oneway", "heal"),
+                         prof["fault_rate"]),
                         (("restart",), prof["restart_rate"]), (("client",), prof["client_rate"])):
         some = [a for a in actions if a[0] in kinds]
         if some and rng.random() < rate:

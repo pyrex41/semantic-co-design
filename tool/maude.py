@@ -341,9 +341,9 @@ def environment_module(schema, prof, workload):
     restart = list_of(q(roles["restart"].tag)) if "restart" in roles else None
     steps = []
 
-    def delivery(label, taken, state, event, rest):
+    def delivery(label, taken, state, event, rest, when=""):
         """A step from `taken`, with and without a crash between two of its effects."""
-        result = f"cons(S', cons(Es, nil)) := {step(state, event)}"
+        result = f"cons(S', cons(Es, nil)) := {step(state, event)}{when}"
         steps.append(f"  crl [{label}] : {{ {taken} R }} => {{ app(I, Es, node(I, S') {rest}) }}\n"
                      f"   if {result} .")
         steps.append(
@@ -354,7 +354,16 @@ def environment_module(schema, prof, workload):
             f"   /\\ px(Pre2) PS2 := allPrefixes(PW) .")
 
     delivery("deliver", "ev(I, E) node(I, S)", "S", "E", "R")
-    delivery("local", "lev(I, E) node(I, S)", "S", "E", "R")
+    if "timer" in prof["budget"] and "timer" in roles:
+        # A bound on timer events: a timer is delivered only while the budget lasts.
+        effects += ["  op timer? : Val -> Bool .",
+                    f"  eq timer?(cons({q(roles['timer'].tag)}, Vs)) = true .",
+                    "  eq timer?(E) = false [owise] ."]
+        delivery("local", "lev(I, E) node(I, S)", "S", "E", "R", " /\\ timer?(E) = false")
+        delivery("timer", "lev(I, E) node(I, S) budget('timer, s(M:Nat))", "S", "E",
+                 "budget('timer, M:Nat) R", " /\\ timer?(E) = true")
+    else:
+        delivery("local", "lev(I, E) node(I, S)", "S", "E", "R")
     for label, taken in (("trap", "ev(I, E) node(I, S)"), ("trap-local", "lev(I, E) node(I, S)")):
         steps.append(f"  crl [{label}] : {{ {taken} R }} => trapped(I, S, E) "
                      f"if not ok({step('S', 'E')}) .")
@@ -380,6 +389,8 @@ def environment_module(schema, prof, workload):
                if "disk-read-result" in roles else "nil")
     soup = " ".join([*(f"node({n}, {init(n)}) disk({n}, nil, nil)" for n in range(prof["nodes"])),
                      *(f"budget('{name}, {prof['budget'][name]})" for name in ("crash", "drop", "dup")),
+                     *([f"budget('timer, {prof['budget']['timer']})"] if "timer" in prof["budget"]
+                       else []),
                      workload["init"]])
     for node in range(prof["nodes"]):
         soup = f"boot({node}, {soup})"
