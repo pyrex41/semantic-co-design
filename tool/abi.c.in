@@ -8,6 +8,7 @@
    specification has no result for this state and event, -2 a read outside the
    input, -3 more output than `capacity`. The function keeps no state between
    calls. Built with -DNODE_MAIN the same code is a line-oriented executable. */
+#define _POSIX_C_SOURCE 200809L   /* getline and ssize_t under -std=c11 with glibc */
 #include <stdint.h>
 
 enum { LIMIT = 65536, SLOTS = /* SLOTS */ };
@@ -22,7 +23,6 @@ static int64_t emitted, capacity;
 static int32_t failed;
 #define longjmp(target, code) (failed = (code), __builtin_trap())
 #else
-#define _POSIX_C_SOURCE 200809L
 #include <ctype.h>
 #include <errno.h>
 #include <inttypes.h>
