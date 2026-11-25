@@ -39,6 +39,14 @@
           python3 example/qualify.py
           touch "$out"
         '';
+        book-projections = nixpkgs.legacyPackages.${system}.runCommand "book-projections" (environment system) ''
+          cd ${self}
+          python3 -m experiments.patterns.projections.check
+          python3 -m experiments.patterns.projections.check_core
+          python3 -m experiments.patterns.projections.check_catalog
+          python3 -m experiments.patterns.projections.check_library
+          touch "$out"
+        '';
         staged-examples = nixpkgs.legacyPackages.${system}.runCommand "staged-examples" (environment system) ''
           cd ${self}
           python3 -m unittest specializer.test_backend

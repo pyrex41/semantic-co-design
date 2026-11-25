@@ -2,6 +2,8 @@
 
 A pattern is a good specialization candidate when an application knows part of the answer before the next request arrives. A parser can know its grammar, an evaluator can know the program, and a router can know the order of its handlers. Fix that information once and the caller can reuse the resulting library on many inputs.
 
+The [Shen and Maude first-projection catalog](projections/README.md) gives each of the 75 families a program you can execute, specialize and edit in either language. Its checker compares both interpreters with native code compiled from each residual.
+
 ## Book catalogs
 
 | Book | Implemented | What you can reuse |
