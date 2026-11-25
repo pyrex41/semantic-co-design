@@ -95,7 +95,7 @@ class Schema:
                 raise SchemaError(f"{path}: expected a list of {len(shape)}, got {value!r}")
             for n, (item, part) in enumerate(zip(value, shape)):
                 self.encode(item, part, out, f"{path}[{n}]")
-        elif shape == "num" and type(value) is int:
+        elif shape == "num" and type(value) is int and -2 ** 63 <= value < 2 ** 63:
             out.append(value)
         elif shape == "bool" and type(value) is bool:
             out.append(int(value))
