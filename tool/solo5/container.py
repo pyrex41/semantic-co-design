@@ -111,8 +111,9 @@ def check(work, natives, digests, host_traces, report):
     tender, path = binary.split()
     require(version and version[0].startswith("solo5-spt tender, version v0.9.3")
             and Path(path).name == "solo5-spt", f"solo5: the tender is {version} {path}")
-    hashes = dict(reversed(line.split()) for line in (out / "sha256.txt").read_text().splitlines())
-    require(set(hashes) == set(abis) | {f"{n}.host" for n in IMAGES},
+    listed = lambda name: dict(reversed(line.split()) for line in (out / name).read_text().splitlines())
+    hashes, hosts = listed("sha256.txt"), listed("host.sha256.txt")
+    require(set(hashes) == set(abis) and set(hosts) == {f"{n}.host" for n in IMAGES},
             "solo5: an image has no recorded hash")
     report(f"solo5: Solo5 {COMMIT[:12]} ({version[0]}) and {len(abis)} unikernels built by a Nix "
            f"derivation on {where}, as {(out / 'images-path.txt').read_text().strip()}; every "
@@ -130,7 +131,7 @@ def check(work, natives, digests, host_traces, report):
     recorded = json.loads((out / "spt.json").read_text())
     spt = judge("solo5-spt", recorded, natives, report, proof)
     linux = judge("host process on that Linux", json.loads((out / "host.json").read_text()),
-                  natives, report, {"kind": "host", "images": hashes, "tender": None})
+                  natives, report, {"kind": "host", "images": hosts, "tender": None})
     # The records of the host process are not accepted in place of the unikernel's:
     # as they are, relabelled, and with the image and tender entries of the real records.
     fake = json.loads((out / "host.json").read_text())

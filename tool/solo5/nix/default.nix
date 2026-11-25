@@ -105,7 +105,10 @@ let
           "$(solo5-elftool query-manifest $image | tr -d ' \n')"
       done > $out/images.txt
       printf '%s\n' ${solo5-src.rev} > $out/SOLO5_COMMIT
-      (cd $out && sha256sum *.spt *.hvt *.host > sha256.txt)
+      # The unikernels only. A host process links against $out's own library path, so
+      # its bytes depend on where the build writes; hashing it here would make this
+      # derivation fail `nix-build --check`. The runner hashes the host processes.
+      (cd $out && sha256sum *.spt *.hvt > sha256.txt)
     '';
     dontInstall = true;
   };
@@ -131,6 +134,7 @@ let
     # this build of it and no other) and the harness sources.
     solo5-spt --version > "$out/tender.txt" 2>&1 || true
     sha256sum "$(command -v solo5-spt)" >> "$out/tender.txt"
+    (cd ${images} && sha256sum *.host) > "$out/host.sha256.txt"
     sha256sum tool/solo5/run.py tool/solo5/scenarios.py tool/solo5/mutants.py tool/solo5/emit.py \
       tool/solo5/driver.c tool/solo5/host.c > "$out/sources.sha256"
     uname -srm > "$out/uname.txt"

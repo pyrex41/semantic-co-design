@@ -66,6 +66,10 @@ The loop holds no request table, repeats nothing and reorders nothing. Three cho
 | 64 completions are waiting | `@fail completion-queue-full` | **no** |
 | a row is wider than a block, the manifest or the step is inconsistent with the tables, a device is missing at boot | other `@fail` | **no** |
 
+Two things in the loop are for tests only. `hold=N.K` on the boot command line makes the driver stop for good after `K` effects of the `N`-th event, so that the harness can `SIGKILL` the tender at a known point instead of racing it. The console lines starting with `@` are the record of the run. Under `solo5-spt` a held boot used about 0.15 s of processor time in the recorded runs, against 0.01 s for the others and none as a host process. The likely cause, not investigated further, is that a held driver no longer reads the network, so a frame waiting on the tap makes every wait return at once until the harness kills it. The loop that runs outside tests reads every frame.
+
+The wait for the next timer is computed in ticks. Computed in nanoseconds, a due time far enough away wraps 64 bits; one that wraps to a past instant makes every `solo5_yield` return at once and the unikernel spin a core without ever firing the timer. One request frame could do that to the driver as first written (kept as the mutant `wrapping-deadline`).
+
 ### A read of a row the same step wrote
 
 The simulator separates issuing a write from the write becoming durable (`sync`), and `sync` is an action of its own: none happens between two effects of one step. So in every simulated schedule a step `[write K v] [read K]` reads the row as it was before the step. `solo5_block_write` is synchronous. The device would answer the read with `v`, a result no simulated run contains, and an invariant checked over every simulator schedule would say nothing about a node that saw it.
@@ -73,10 +77,6 @@ The simulator separates issuing a write from the write becoming durable (`sync`)
 The driver therefore refuses: it performs the write, stops before the read, and the next boot restarts. That is the simulator's crash between the two effects, so the real run is again a simulated one. The price is that such a step never completes on this shim. A read of another row in the same step is not affected. The mutant `reads-own-write` is the driver without the refusal (the driver as it was first written) and its run is rejected.
 
 The alternative, a simulator that lets a write become durable inside a step, would remove the refusal. It changes the simulator and the Maude environment and was not done; [tool/README.md](../README.md#simulator-limits) lists it.
-
-Two things in the loop are for tests only. `hold=N.K` on the boot command line makes the driver stop for good after `K` effects of the `N`-th event, so that the harness can `SIGKILL` the tender at a known point instead of racing it. The console lines starting with `@` are the record of the run.
-
-The wait for the next timer is computed in ticks. Computed in nanoseconds, a due time far enough away wraps 64 bits; one that wraps to a past instant makes every `solo5_yield` return at once and the unikernel spin a core without ever firing the timer. One request frame could do that to the driver as first written (kept as the mutant `wrapping-deadline`).
 
 ## How a run is compared with the simulator
 
@@ -88,7 +88,7 @@ The wait for the next timer is computed in ticks. Computed in nanoseconds, a due
 * the block image after every kill holds exactly the simulated disk's rows;
 * every boot starts with one `@boot` line for node 0 of 1 on the block file given, a killed boot has exit status -9 and a boot that stopped itself has 255;
 * for a node with a clock, the simulator's clock, moved by its own timers and by the ticks the driver logged, agrees with every logged tick;
-* and those ticks are milliseconds of the harness's clock (`CLOCK_MONOTONIC`, read by the harness): a timer armed by a request fires no sooner after the harness sent that request than its delay, and between two events no more ticks pass than the time from sending the first to reading the second, and no fewer than from reading the first to sending the second. The tolerance is 2 ms and 1 %. Both bounds hold for a correct driver whatever the delays in between, so they cannot fail spuriously.
+* and those ticks are milliseconds of the harness's clock (`CLOCK_MONOTONIC`, read by the harness): a timer armed by a request fires no sooner after the harness sent that request than its delay, and between two events no more ticks pass than the time from sending the first to reading the second, and no fewer than from reading the first to sending the second. The tolerance is 2 ms and 1 %. Both bounds hold for a correct driver however long the harness or the driver is kept waiting in between, so a busy machine does not fail them. They assume the harness and the driver read the same clock, which is so for the host process and for `solo5-spt`.
 
 The result is an ordinary `sim-trace/2` trace that replays, so the node's Shen invariants are evaluated on it unchanged.
 
@@ -141,7 +141,7 @@ The commands print these counts, and since each scenario states how many events 
 Two specifications that answer too early show the difference, on the unedited `driver.c`:
 
 * `reply-then-write` returns `[reply ok] [write]`. Killed after one effect, the client holds `ok 1` for key 8 and the block image has no row for key 8. That is in the frames and the image, on the host process and under `solo5-spt`. `inv.ok-is-durable` fails on its trace. This is the guarantee moving with the specification while the C stays the same.
-* `reply-before-ack` returns `[write] [reply ok]`. No kill point leaves `ok` without its row: killed after one effect the image has the row and the client nothing; after two, both. The check asserts that no `ok` in its run lacks its row. Its run is rejected against the unedited node because the effects differ, and `inv.ok-is-durable` does fail on its reconstructed trace, but only because the simulator places `sync` after the step. **That failure is a property of the simulator's model, not an observation of this run.** A shim whose writes complete later (a write cache, an asynchronous device) would make it real; this one cannot show it.
+* `reply-before-ack` returns `[write] [reply ok]`. No kill point leaves `ok` without its row. The retained run kills it after the first of its two effects: the image has the row and the client nothing, and the check asserts that no `ok` anywhere in that run lacks its row. (Killed after both effects, in a run made once on the host process and not retained, the client has `ok` and the image the row.) Its run is rejected against the unedited node because the effects differ, and `inv.ok-is-durable` does fail on its reconstructed trace, but only because the simulator places `sync` after the step. **That failure is a property of the simulator's model, not an observation of this run.** A shim whose writes complete later (a write cache, an asynchronous device) would make it real; this one cannot show it.
 
 ### Device failures
 
@@ -175,13 +175,13 @@ On Linux with Nix no container is needed: `nix build .#solo5-run`, run `result/b
 
 * the SHA-256 of `run.py`, `scenarios.py`, `mutants.py`, `emit.py`, `driver.c` and `host.c` as the runner executed them, against this checkout;
 * the SHA-256 of every image's `node.c` and `driver.c`, against the ones generated here;
-* the SHA-256 of every image file from the build, against the hash `run.py` took of the file it executed for each record;
+* the SHA-256 of every unikernel from the build (and of every Linux host process, taken by the runner), against the hash `run.py` took of the file it executed for each record;
 * the SHA-256 of the `solo5-spt` binary, against the hash `run.py` took of the tender it executed; the check prints it;
 * per boot, the argument vector and the lines the process printed outside its record: a unikernel's boot is a `solo5-spt` command and printed the Solo5 banner, a host process's is neither.
 
-This catches records of another checkout, another build, another driver, or the host process passed off as the unikernel (each tried and rejected, see above). It is not authentication: nothing is signed, and whoever writes the directory can write all of it. `SOLO5_RECORDS` moves the trust to whoever made the records, and the check's last line says so.
+This catches records of another checkout, another build, another driver, or the host process passed off as the unikernel. The host process's records in place of the unikernel's, and an edit of each of the last three entries, are retained checks. Records made by an earlier `run.py` were tried once and rejected for it. It is not authentication: nothing is signed, and whoever writes the directory can write all of it. `SOLO5_RECORDS` moves the trust to whoever made the records, and the check's last line says so.
 
-**Reproducibility.** The image derivation is bit-reproducible here: `nix-build tool/solo5/nix/pinned.nix -A solo5-images --check` in the container rebuilds it to the same output. The Solo5 derivation is not: `nix-build ... -A solo5 --check` reports that it may not be deterministic. The guest bindings, which are linked into the images, come out the same; the tender binaries differ between builds. So the image hashes identify the unikernels on any machine, while the tender is input-addressed: its store path names the recipe, and its printed hash names the one binary that ran.
+**Reproducibility.** The image derivation rebuilds to the same bytes in the container: `nix-build tool/solo5/nix/pinned.nix -A solo5-images --check` exits 0 (run twice). The Solo5 derivation does not: `nix-build ... -A solo5 --check` exits 104, "may not be deterministic". Of its 59 files, four differ between two builds: `bin/solo5-spt`, `bin/solo5-hvt`, `bin/solo5-hvt-debug` and `bin/solo5-elftool`. The guest bindings, which are what is linked into the images, are identical. So a unikernel's hash names a build that was repeated here, while the tender is input-addressed: its store path names the recipe, and the hash the check prints names the one binary that ran. That is why the hash of the tender is recorded with every run and the hashes of the host processes are taken by the runner and kept out of the image derivation (a host process links against its own output path).
 
 ## What carries over from simulation, and what does not
 
