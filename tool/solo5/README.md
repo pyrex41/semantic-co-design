@@ -9,7 +9,7 @@ nix develop -c python3 -m tool check solo5-cluster-host   # three Raft servers a
 nix develop -c python3 -m tool check solo5-cluster        # that, and three unikernels under solo5-spt
 ```
 
-`solo5` builds Solo5 and the unikernels with a Nix derivation and runs them on Linux. On macOS that happens in a Linux container (see [Where Solo5 runs](#where-solo5-runs)); without one the command fails and prints the command it could not run. `nix flake check` runs `solo5-host` as `checks.<system>.solo5-host`.
+`solo5` builds Solo5 and the unikernels with a Nix derivation and runs them on Linux. On macOS that happens in a Linux container (see [Where Solo5 runs](#where-solo5-runs)); without one the command fails and prints the command it could not run. `nix flake check` runs `solo5-host` as `checks.<system>.solo5-host` and `solo5-cluster-host` as `checks.<system>.solo5-cluster-host`.
 
 The last line of `solo5` is `solo5: ok` only when the command itself ran Solo5. Given records made elsewhere (`SOLO5_RECORDS`), it ends `solo5: ok (judged from the records in SOLO5_RECORDS; Solo5 was NOT run by this command)`.
 
@@ -210,7 +210,55 @@ Seven, in [cluster_scenarios.py](cluster_scenarios.py). They name roles (the lea
 
 The Raft log holds eight entries and every operation and every repeat of one is an entry; the workloads have at most six operations.
 
-CLUSTER_RESULTS
+### What the cluster checks establish
+
+The numbers are from one run of `python3 -m tool check solo5-cluster` on the commit that added this section (772 s). Each differs a little from run to run, because the runs do. The requirements do not: every count that is asserted is named as such.
+
+**`python3 -m tool check solo5-cluster-host`** (macOS or Linux, no Solo5; about four minutes):
+
+* 8 host processes are built: the Raft node, 4 edits of `driver.c` and 3 edits of `spec.shen`. Each `node.c` is the one the simulator's library for that source was compiled from (about 33,000 lines of C each; the unedited one is the text `tool check raft` simulates).
+* 35 runs, 5 of each scenario (asserted), 4,966 steps of the three nodes. Every run passes the three layers above. Asserted per run: the kills, restarts and cuts the scenario has, every operation answered and every get returning the value the scenario names (not asked of `lossy-kills-and-cuts`, which answered all 20 anyway).
+* The harness forwarded 2,926 frames, dropped 105, doubled 103, cut 129 and misdelivered 198. The nodes skipped 172 of the misdelivered frames for their address and handled none (asserted: a handled one fails the comparison); the other 26 have no skip line: they were written to the link of a node that was down, or were not read before a kill (the two are not told apart).
+* 125 `SIGKILL`s and 20 restarts from the block image. The 120 kills the harness made on its own schedule all landed between two steps. Of the 5 kills at a hold point, 3 were inside a step (asserted: at least one), with some effects performed and some not.
+* For those and for a hold after a whole step, where the last effect before the kill was a frame (1 case) or a block write (2), the record with that effect's `@did` line removed is found to have performed the effect, from the frame on the link or the row in the image, and reconstructs to the same trace bytes (asserted for at least one frame and one write). That is the only exercise of the rule for an effect performed and not logged: no kill in these runs produced the case by itself.
+* On all 35 traces the fourteen Raft invariants hold and the client history is linearizable. On the 874 distinct (state, event) pairs the runs reached, the compiled step equals `spec.shen` evaluated by shen-jit.
+* Teeth, on the record: 8 single edits of one record of `kill-the-leader` are each rejected with the message that belongs to the edit: a frame the harness wrote left out of its log; a forwarded frame logged as dropped; a frame a node sent left out of the log; a reply with another value; a row missing from a block image; a term changed on a console; the consoles of two nodes exchanged; an exit status that is not a kill.
+* Teeth, on the images. Each mutant image is run once on scenarios the unedited image also runs: the driver mutants on `elect-and-serve` and `lossy-links`, the edits of Raft on all seven. No scenario was written for a mutant.
+
+  | Mutant | What it is | Verdict | By |
+  |---|---|---|---|
+  | `delivers-any-address` | `driver.c`: a message is handled whatever node it is addressed to | rejected in both runs | layer 2: "the node handled ..., a frame addressed to node 0" |
+  | `sends-to-next-node` | `driver.c`: a message goes to the node after the one the step named | rejected in both runs | layer 2: the first frame on a link is to node 2 where the step sent to node 1 |
+  | `claims-another-sender` | `driver.c`: a message names its destination as its sender | rejected in both runs | layer 2: the frame carries another sender than the node |
+  | `swallows-send` | `driver.c`: sends to one of the two peers are reported and not made | rejected in both runs | layer 2: 35 frames on the link, 104 sends and outputs on the console |
+  | `recovery-forgets-vote` | `spec.shen`: a restarted server has no vote, whatever its disk says | rejected in the three scenarios that restart a node; passes the four that do not, where it never differs from the unedited node | Raft's `inv.recovery-restores-the-disk` on the trace of the real run |
+  | `leader-overwrites-last` | `spec.shen`: a leader puts a new entry in the place of its last one | rejected in all seven | Raft's `inv.leader-append-only`, `inv.log-matching`, `inv.leader-completeness`, `inv.state-machine-safety`, `inv.match-is-durable` |
+  | `local-get` | `spec.shen`: a leader answers a get from its own state without confirming that it leads | **NOT FOUND** by Raft's checks in any of the seven | only the step comparison with the unedited node sees it. No run sends a get to a leader that has been replaced: the client talks to the node that says it leads the highest term |
+
+  The first five are required by the check. An edit of Raft is run as itself: its record is compared with its own compiled step, which it passes, and what has to reject it is the invariants and the linearizability checker on the resulting trace. Compared with the unedited node instead, every run in which the edit acts differs step by step, which is how any edit at all is caught and says nothing about Raft. The three edits are 3 of the 22 in [mutants.json](../../targets/raft/mutants.json), picked before any was run here: two expected to show under restarts and writes, and one (`local-get`) that needs a deposed leader to be asked and was expected to be hard.
+
+**`python3 -m tool check solo5-cluster`** adds, on Linux (here: the same container as `tool check solo5`):
+
+* 8 unikernels and `raft.hvt` built by `nix-build tool/solo5/nix/pinned.nix -A solo5-cluster-run`, from `node.c` and `driver.c` files with the SHA-256 of this checkout's.
+* The same 35 runs and 29 mutant runs under `solo5-spt`: three tenders, three block files, three tap interfaces `tap0` to `tap2` with no bridge, the harness an `AF_PACKET` socket on each. 5,022 steps; 2,946 frames forwarded, 110 dropped, 107 doubled, 130 cut, 194 misdelivered of which 177 were skipped and none handled; 125 kills of a `solo5-spt` process, 3 inside a step, 20 restarts. Same requirements, same verdict on every mutant, `local-get` NOT FOUND there too. And again as Linux host processes in the same container (4,911 steps), with the same verdicts.
+* Every boot recorded as a unikernel is a `solo5-spt` command naming the `.spt` image and `--net:net=tapN` for node `N`, and printed the Solo5 banner. The host processes' records, relabelled, are not accepted in their place.
+* `solo5-hvt`: **blocked**. Tried once per run on `raft.hvt` as node 0 of 3; the tender says `Could not open: /dev/kvm: No such file or directory`. The image is linked and nothing more.
+
+In one earlier run under `solo5-spt`, made while this was written and not retained, a kill of the harness's own (the kill that ends `partition-heals`) did land inside a step, and the record reconstructed.
+
+Not in `nix flake check`: `solo5-cluster`, which needs the container. `checks.<system>.solo5-cluster-host` is the host-process half.
+
+### What the cluster runs do not establish
+
+* **Reproducibility from a seed.** See above. A failure seen once may not be seen again from the same seed; the record of the failing run is what there is, and the check does not retain records.
+* **Coverage.** Seven scenarios, five runs each, per kind of driver: 35 schedules, each shown to be a simulator schedule on which Raft's checks hold. The simulator's campaigns run hundreds of seeds with crashes inside steps, lost writes, one-way cuts, slow disks and skewed clocks; these runs have none of the last four. All three nodes read one clock, so no timer here runs fast or slow against another's. A block write never fails and is never lost at a kill.
+* **Timing.** Election timeouts are the specification's (150 to 349 ms), the harness delays a frame by at most 15 ms, the client waits 600 ms before sending an operation again, and no wait is longer than 10 s. On a machine too busy to run three processes and the harness inside those bounds an operation can go unanswered and a scenario's requirement fail without anything being wrong with Raft. It did not happen in the runs made while this was written (about 500 host-process runs on macOS with nothing else running, 70 in the container, 35 under `solo5-spt`). That is an observation about this machine, not something the check controls.
+* **Who sent a frame.** The receiver takes the sender from the frame. The harness checks that every frame a node put on its link names that node, so in these runs it always did; a network that lets a node write another's number is outside what is shown, as it is outside the simulator, which fills in the true sender.
+* **A real switch.** The links meet only in the harness. Nodes on a bridge, where frames are not inspected and a flooded frame is the kernel's doing, were not run.
+* **Kills at arbitrary instants** are exercised as far as they happened: between steps, and at hold points. See above for the one rule that only an edited record exercises. A kill during another node's recovery, two kills at once, and a kill of all three nodes before a restart are not in the scenarios; the kill inside a step is of a follower only.
+* **The client.** It learns who leads from the nodes' consoles, as the simulator's workload reads it from the simulated state. A real client cannot. At most six operations per run, because the log holds eight entries.
+* **Three of 22 Raft mutants** were run, and one of the three is not found. Nothing here says which of the other 19 a real run would show.
+* **Durability** is as for one node: a returned block write survives the death of the unikernel and the tender, not of the host.
 
 ## Where Solo5 runs
 
@@ -225,7 +273,7 @@ What this ARM64 Mac can do, each observed:
 | `nix build .#packages.aarch64-linux.solo5-images` on macOS | Fails: `Cannot build ... solo5-target-cc.drv. Reason: platform mismatch. Required system: 'aarch64-linux'. Current system: 'aarch64-darwin'`. No Linux builder is configured. |
 | The same derivations by `nix-build` in a `nixos/nix` container (Linux 7.2 aarch64 under OrbStack) | Built. |
 | `solo5-spt` in that container | Runs. This is the real tender and the real unikernel on a Linux kernel; the virtual machine under the container is the Mac's. |
-| `solo5-hvt` in that container | Not run: there is no `/dev/kvm`. The check prints the tender's own message. The hvt image is linked and its ABI note read, nothing more. |
+| `solo5-hvt` in that container | Not run: there is no `/dev/kvm`. Each of the two checks tries it once (on `accepted_job.hvt`, and on `raft.hvt` as node 0 of 3) and prints the tender's own message. The hvt images are linked, nothing more. |
 | virtio, muen, xen targets | Not built, not run. |
 
 The container is the pinned `nixos/nix` image with `/dev/net/tun` and `CAP_NET_ADMIN`, and it needs the network for the Nix binary cache. Its Nix store is kept in the Docker volume `sim-tool-solo5-nix` (about 1.5 GB) so that a second run downloads nothing and takes about two and a half minutes; `docker volume rm sim-tool-solo5-nix` removes it. A first run has to fetch a compiler and may not finish within the check's 580 seconds, in which case the check reports blocked and a second attempt continues from the volume.

@@ -22,8 +22,8 @@ Each line is established by the command beside it, run with `nix develop -c`, an
 | More than one node | Gossip on three nodes; Raft on three and five. | `python3 -m tool check gossip`, `python3 -m tool check raft` |
 | An interpreter specialized to its program | A durable workflow engine in ordinary Shen, specialized per workflow definition. The check shows mechanically that the definition language does not survive into the residual code. [README](targets/workflow/README.md) | `python3 -m tool check workflow` |
 | A protocol with published properties | Raft: the five properties of Figure 3, nine further rules and linearizability on seeded runs, with 22 mutants. [README](targets/raft/README.md) | `python3 -m tool check raft`, `python3 -m targets.raft.check mutants` |
-| The native code outside the simulator | An effect shim on Solo5: 19 scripted runs under `solo5-spt`, each shown to be a simulator run. [README](tool/solo5/README.md) | `python3 -m tool check solo5` (needs a Linux container on macOS), `python3 -m tool check solo5-host` |
-| Change a rule, see the change | Shown by the mutants: 8 for AcceptedJob, 2 for gossip, 21 for the workflow engine, 22 for Raft, 21 images for Solo5. Each is one edit, recompiled, and rejected by a named check on a retained seed or scenario. | the checks above |
+| The native code outside the simulator | An effect shim on Solo5: 19 scripted runs under `solo5-spt`, each shown to be a simulator run. Three Raft servers as three unikernels, the test harness as the network between them: 35 runs of seven scenarios, each shown to be a simulator run on which Raft's invariants and linearizability hold. [README](tool/solo5/README.md) | `python3 -m tool check solo5`, `python3 -m tool check solo5-cluster` (both need a Linux container on macOS); `python3 -m tool check solo5-host`, `python3 -m tool check solo5-cluster-host` |
+| Change a rule, see the change | Shown by the mutants: 8 for AcceptedJob, 2 for gossip, 21 for the workflow engine, 22 for Raft, 21 images for Solo5 and 7 for the Raft cluster on it (one of which, `local-get`, is NOT found there). Each is one edit, recompiled, and rejected by a named check on a retained seed or scenario. | the checks above |
 
 ## What is not established
 
@@ -31,8 +31,8 @@ Each line is established by the command beside it, run with `nix develop -c`, an
 * That the simulator and the Maude environment are the same model beyond the observation sets at the bounds compared. One author wrote both.
 * Safety beyond the seeds and bounds run. For Raft, the two best-known failures (Figure 8, the lost vote) are found only under fault profiles written to produce them.
 * Liveness, except as a measurement on seeds and as the absence of cycles in the workflow engine's bounded searches.
-* That every run of the Solo5 shim is a simulator run. It is shown for 19 scripted runs under `solo5-spt` and argued for the rest. `solo5-hvt` was not run. Durability on Solo5 means surviving the death of the unikernel, not loss of power on the host.
-* Raft or the workflow engine on Solo5. The shim has no `send`, and neither target was built as a unikernel.
+* That every run of the Solo5 shim is a simulator run. It is shown for 19 scripted single-node runs and 35 cluster runs under `solo5-spt` and argued for the rest. `solo5-hvt` was not run. Durability on Solo5 means surviving the death of the unikernel, not loss of power on the host.
+* Raft on Solo5 beyond seven scenarios. Three servers run as unikernels under `solo5-spt` with the harness as their only network; a run is recorded, not reproducible from its seed; clocks are not skewed and writes are not lost; of three Raft mutants tried on real images one is not found ([tool/solo5/README.md](tool/solo5/README.md#what-the-cluster-runs-do-not-establish)). The workflow engine was not built as a unikernel.
 * What specialization buys in speed. The one measurement is the workflow engine's step at about 1.8 times shen-jit ([receipt](targets/workflow/bench.json)); no unspecialized native engine exists to compare with.
 * Anything about real time, real networks, more than one disk per node, disk corruption, or a node with a source of randomness.
 

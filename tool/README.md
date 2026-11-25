@@ -15,9 +15,9 @@ nix develop -c python3 -m tool check gossip         # three nodes: send, timers,
 nix develop -c python3 -m tool compile accepted_job /tmp/out   # IR, C, library, executable
 ```
 
-Applications kept outside the kernel are run the same way: `tool check workflow` and `tool check raft` ([targets/](../targets/)), and `tool check solo5-host` and `tool check solo5` for the effect shim ([solo5/](solo5/README.md)).
+Applications kept outside the kernel are run the same way: `tool check workflow` and `tool check raft` ([targets/](../targets/)), and `tool check solo5-host` and `tool check solo5` for the effect shim, with `tool check solo5-cluster-host` and `tool check solo5-cluster` for three Raft servers on it ([solo5/](solo5/README.md)).
 
-`nix flake check` runs the four checks above as `checks.<system>.sim-tool`, and `workflow`, `raft`, `raft-mutants` and `solo5-host` as gates of their own. `tool check solo5` is not a flake check: it needs Linux, or a Linux container.
+`nix flake check` runs the four checks above as `checks.<system>.sim-tool`, and `workflow`, `raft`, `raft-mutants`, `solo5-host` and `solo5-cluster-host` as gates of their own. `tool check solo5` and `tool check solo5-cluster` are not flake checks: they need Linux, or a Linux container.
 
 ## 1. Specification convention
 
@@ -249,7 +249,8 @@ A new application is a directory `tool/examples/<name>/` with `node.json`, `spec
 | `python3 -m tool check workflow` | See [targets/workflow](../targets/workflow/README.md). |
 | `python3 -m tool check raft`, `python3 -m targets.raft.check mutants` | See [targets/raft](../targets/raft/README.md). |
 | `python3 -m tool check solo5-host`, `python3 -m tool check solo5` | See [solo5/](solo5/README.md). |
+| `python3 -m tool check solo5-cluster-host`, `python3 -m tool check solo5-cluster` | Three Raft servers as three processes, the harness as their network. See [solo5/](solo5/README.md#a-cluster). |
 
 A one-off run, not retained: 895 further random programs (seeds 120 to 1019, 53,700 rows) also agreed with shen-jit.
 
-Solo5: [solo5/](solo5/README.md) is an effect shim written against the Solo5 API, built as a unikernel by a Nix derivation and as a host process, with scripted runs of both (kills included) checked against the simulator by `python3 -m tool check solo5` and `solo5-host`. That README says which environment rules hold under which tender and what a returned block write is worth. The generated code uses only `sigsetjmp` (without the signal mask), integer arithmetic and the compiler's overflow builtins; a unikernel has no C library, so its build takes `sigsetjmp` from the compiler's builtins ([solo5/freestanding/setjmp.h](solo5/freestanding/setjmp.h)).
+Solo5: [solo5/](solo5/README.md) is an effect shim written against the Solo5 API, built as a unikernel by a Nix derivation and as a host process, with scripted runs of both (kills included) checked against the simulator by `python3 -m tool check solo5` and `solo5-host`. That README says which environment rules hold under which tender and what a returned block write is worth. The same driver carries `send` and `recv` between nodes with the simulator's addressing, and `python3 -m tool check solo5-cluster` runs three Raft servers on it ([A cluster](solo5/README.md#a-cluster)). The generated code uses only `sigsetjmp` (without the signal mask), integer arithmetic and the compiler's overflow builtins; a unikernel has no C library, so its build takes `sigsetjmp` from the compiler's builtins ([solo5/freestanding/setjmp.h](solo5/freestanding/setjmp.h)).
