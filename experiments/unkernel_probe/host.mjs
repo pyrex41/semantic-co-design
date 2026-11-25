@@ -119,6 +119,9 @@ export function install(cfg) {
 			st.snapFrom = from;
 			st.vm.snapshot({ stop: true }).then((snap) => cfg.onSnapshot(snap, st), (e) => end(`snapshot failed: ${e.message}`));
 		}
+		// A device (net.mjs) delivers what it has due. Not at the start of an idle wait: an IRQ bit
+		// set there, after the kernel decided to idle and before the wait exists, would wake nothing.
+		if (cfg.device && from !== "poll" && st.vm) cfg.device.pump(st, from);
 		if (cfg.endAtMs !== undefined && st.vns >= cfg.endAtMs * 1e6) end("end time");
 	};
 
@@ -160,7 +163,8 @@ export function install(cfg) {
 			const next = cfg.script[st.inputAt];
 			const limits = [waitNs, next ? next[0] * 1e6 - st.vns : Infinity,
 				cfg.snapAtMs !== undefined && !st.snapAsked ? cfg.snapAtMs * 1e6 - st.vns : Infinity,
-				cfg.endAtMs !== undefined ? cfg.endAtMs * 1e6 - st.vns : Infinity];
+				cfg.endAtMs !== undefined ? cfg.endAtMs * 1e6 - st.vns : Infinity,
+				cfg.device ? cfg.device.nextNs(st) - st.vns : Infinity];
 			const jump = Math.min(...limits);
 			if (jump === Infinity) {
 				end("quiescent");
@@ -188,11 +192,15 @@ export function install(cfg) {
 		}
 		return h.digest("hex").slice(0, 16);
 	};
+	const bytes = (p, n) => createHash("sha256").update(new Uint8Array(st.memory.buffer).subarray(Number(p), Number(p) + Number(n))).digest("hex").slice(0, 16);
 	const extraOf = {
 		clock_time_get: (args) => new DataView(st.memory.buffer).getBigUint64(args[2], true).toString(),
 		random_get: (args) => Buffer.from(new Uint8Array(st.memory.buffer).slice(args[0], args[0] + Math.min(args[1], 8))).toString("hex"),
 		fd_write: (args) => iov(args, Infinity),
 		fd_read: (args, ret) => (ret === 0 ? iov(args, new DataView(st.memory.buffer).getUint32(args[3], true)) : ""),
+		// kwnet: a digest of the frame the guest sent, or of the one it took.
+		wasm_driver_net_send: (args) => bytes(args[0], args[1]),
+		wasm_driver_net_recv: (args, ret) => (args[0] ? bytes(args[0], ret < args[1] ? ret : args[1]) : ""),
 	};
 
 	const dropped = { entropy: "random_get", yield: "sched_yield" }[fault];

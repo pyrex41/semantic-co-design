@@ -4,7 +4,7 @@
 
 > With the host's clock and entropy under our control, do two boots of the same guest running the same scripted workload reach bit-identical state?
 
-**Verdict: deterministic with the listed controls**, for one CPU, console-only I/O, no disk, no network, no vsock. Under the controlled host every boot of the workload ends with the same 128 MiB of linear memory, the same console bytes, the same sequence of host import calls and the same count of retired guest instructions: across processes, with the JIT off and on, and across snapshot and restore. That holds when every input reaches an idle guest (the main workload) and when input and the snapshot request reach a guest in the middle of a busy loop (a second, shorter workload). Under the stock host two boots differ, as expected. Nothing inside the pinned package is edited; the controls are about 230 lines wrapped around it.
+**Verdict: deterministic with the listed controls**, for one CPU, console-only I/O, no disk, no network, no vsock. Section 8 adds the network device: one guest against a scripted peer, and three guests on one virtual switch, are deterministic too, with one more control (when a frame is handed to the guest). Under the controlled host every boot of the workload ends with the same 128 MiB of linear memory, the same console bytes, the same sequence of host import calls and the same count of retired guest instructions: across processes, with the JIT off and on, and across snapshot and restore. That holds when every input reaches an idle guest (the main workload) and when input and the snapshot request reach a guest in the middle of a busy loop (a second, shorter workload). Under the stock host two boots differ, as expected. Nothing inside the pinned package is edited; the controls are about 230 lines wrapped around it.
 
 Four controls carry the result: the virtual clock, the virtual date, the idle wait taken off the real clock, and seeded entropy. Removing any one of them makes check.py fail. Two more are in the shim but are not shown to be needed by these workloads: `sched_yield` returning at once, and the seeded `Math.random` (section 3).
 
@@ -51,19 +51,19 @@ The digest of a boot is the sha256 of the whole linear memory at that point. A r
 
 ## 4. What was observed
 
-All numbers are from one `check.py --record` on aarch64-darwin, in [evidence/summary.json](evidence/summary.json). The stock numbers are different in every run; three recordings gave 2412, 2215 and 2317 differing pages.
+All numbers are from one `check.py --record` on aarch64-darwin, in [evidence/summary.json](evidence/summary.json). The stock numbers are different in every run; four recordings gave 2412, 2215, 2317 and 2393 differing pages.
 
 ### Baseline: stock host, JIT off, two boots at the same time
 
 | | boot A | boot B |
 |---|---|---|
-| memory sha256 | `e214f37a…` | `60da2f04…` |
-| console sha256 (5742 bytes each) | `28dcb1a6…` | `6ea98c67…` |
-| import calls | 24561 | 24423 |
-| retired instructions | 382760386 | 382760200 |
-| task switches / idle waits / yields | 1361 / 958 / 93 | 1364 / 912 / 93 |
+| memory sha256 | `35b81135…` | `df58d233…` |
+| console sha256 (5742 bytes each) | `b36884f5…` | `bb2c1326…` |
+| import calls | 24170 | 24242 |
+| retired instructions | 382773082 | 382759835 |
+| task switches / idle waits / yields | 1375 / 755 / 104 | 1347 / 764 / 108 |
 
-The memories differ in 2317 of 32768 4 KiB pages (7.1 %), 4448972 of 134217728 bytes (3.3 %), in 137 runs of pages. The import logs differ in value from call 7 (`random_get`, then every clock read) and in the call itself from call 301, where the two boots switch to different tasks; three calls later one switches again while the other reads the clock ([evidence/stock_divergence.txt](evidence/stock_divergence.txt)).
+The memories differ in 2393 of 32768 4 KiB pages (7.3 %), 4506790 of 134217728 bytes (3.4 %), in 140 runs of pages. The import logs differ in value from call 7 (`random_get`, then every clock read) and in the call itself from call 837, where the two boots switch to different tasks; three calls later they switch to different tasks again ([evidence/stock_divergence.txt](evidence/stock_divergence.txt)).
 
 ### Controlled host, every event reaching an idle guest
 
@@ -125,7 +125,7 @@ Two more: check.py's scratch directory has `--` in its name, which the first arg
 
 ## 5. What this does not show
 
-* **Disks, the network device, vsock and SMP were off.** The SDK completes block I/O from promises and raises the IRQ whenever they settle; `exec`/`spawn` and host mounts run over vsock the same way. Under this controlled host the guest never returns to the event loop while it can run, so such a completion would be seen only at an idle wait, and the shim's "idle with no timer means quiescent" rule would be wrong. Each device needs its own rule for when a completion is delivered in virtual time. SMP runs CPUs on threads and is out of scope.
+* **Disks, vsock and SMP were off** (the network device is section 8). The SDK completes block I/O from promises and raises the IRQ whenever they settle; `exec`/`spawn` and host mounts run over vsock the same way. Under this controlled host the guest never returns to the event loop while it can run, so such a completion would be seen only at an idle wait, and the shim's "idle with no timer means quiescent" rule would be wrong. Each device needs its own rule for when a completion is delivered in virtual time. SMP runs CPUs on threads and is out of scope.
 * **The JIT has one path that depends on the garbage collector.** `kw_host_jit_compile` refuses (returns -1 to the guest) when more than a limit of freed modules have not been collected yet, as counted by a `FinalizationRegistry`. It was not reached here (0 refused, 17 freed), but a long JIT run could reach it, and then the guest's path depends on V8's collector. The interpreter has no such path.
 * **Same machine, same Node binary.** Digests were not compared across machines or Node versions. The kernel is wasm and the shim removes time and entropy, so no difference is expected, but none was measured.
 * **`new Date()` and `performance.timeOrigin` are not replaced**, only `Date.now` and `performance.now`. The single-CPU kernel path uses only the latter two.
@@ -151,9 +151,114 @@ The alternative is a host written for simulation rather than a fork of the SDK. 
 
 ## 7. N guests on one virtual switch under one clock
 
-It looks feasible; it was not built or run here.
+It looks feasible; this section is the argument made before it was built. Section 8 builds the one-thread design and runs it.
 
 * The SDK's `NetDevice` is two calls: the guest's frames arrive at `send(frame)` synchronously inside an import, and `Kernel.receiveFrame(frame)` queues a frame and sets an IRQ bit. A switch is a function from (sender, frame, virtual send time) to (receiver, virtual delivery time).
 * Each guest is deterministic given the virtual times at which its inputs arrive. Section 4 shows that for console input, both for an idle guest and, in the running-guest rows, for a guest interrupted inside one busy loop under the instruction-driven clock. A frame would be delivered from the same two imports, through `receiveFrame` instead of `sendInput`; that path was not run.
 * "One kernel per thread" then gives two designs. In one thread, the shim parks a guest by returning a pending promise from `sched_yield` or the idle wait (both are JSPI imports; a busy guest yields every 20 ms of its own time) and always resumes the guest whose clock is furthest behind; this is a sequential discrete-event loop and is deterministic by construction, at the speed of one core. With one worker thread per guest, the guests run in parallel and block in their clock import (`Atomics.wait` is allowed in a worker) at the end of each window of virtual time; frames are exchanged between windows, which is deterministic as long as the link latency is at least one window (conservative parallel simulation with lookahead).
 * What is unknown: whether two kernels in one thread interleave correctly (the SDK's notes say its API tests run concurrently, its README says only one kernel can run per thread), the cost of 128 MiB of linear memory per guest, and whether the guest's network stack has a time source this probe did not exercise.
+
+## 8. Network: one guest, then three on one switch
+
+```sh
+nix develop .#unkernel -c python3 experiments/unkernel_probe/net_check.py            # 39 processes, about 45 s; `nix flake check` runs it (unkernel-net-probe)
+nix develop .#unkernel -c python3 experiments/unkernel_probe/net_check.py --record   # rewrite evidence/net_*
+```
+
+**Verdict, single guest: deterministic with the four controls of section 3 plus one delivery rule.** Three fresh processes agree on memory, console, import log, instruction count and the ordered frame trace, with frames reaching an idle guest and a running one, with the JIT on, and under random real delays in the host.
+
+**Verdict, several guests: deterministic in one thread.** Three kernels in one thread, run one at a time by a coordinator that always resumes the guest furthest behind in virtual time, agree across three fresh processes on every guest's memory, console, import log and instruction count and on the global frame trace. The same holds with seeded delay, drop, duplication and a partition at the switch. One guest per worker thread was not built.
+
+All numbers are from one `net_check.py --record` on aarch64-darwin, in [evidence/net_summary.json](evidence/net_summary.json), which names the package and the hashes of the sources it was recorded from.
+
+### What the pinned package gives
+
+* The base system's busybox has `ip`, `ifconfig`, `route`, `arp`, `arping`, `ping`, `nc` (`-l` and `-u` work), `wget`, `udhcpc`, `traceroute`, `netstat` and `nslookup`. `eth0` is up at boot, and three DHCP discovers leave it (at 1.6 ms, 1.0 s and 2.0 s of virtual time; the frames carry the vendor string `udhcp 1.37.0`). Nothing here answers them. The scripts set the address with `ip addr add`.
+* `net:` accepts a raw-frame `NetDevice` of our own: `send(frame)` is called synchronously inside the import `wasm_driver_net_send`, and `Kernel.receiveFrame(frame)` queues a frame, sets the IRQ bit and wakes an idle wait. The SDK's `NetStack` is not used, so none of its code is involved.
+* **Two kernels in one thread work.** [multi_stock.mjs](multi_stock.mjs) creates two at once on the stock host; both boot and answer a typed line (`{"created":2,"answered":[true,true]}`). The package's README says "Only one kernel can run per thread".
+* **The SDK's worker mode refuses a device of our own.** `createKernel({ worker: true, net: device })` fails with `BootError: createKernel({ worker: true }): net is a NetDevice or NetBackend object, which cannot cross to the worker; pass a spec instead: { kind: "net", backend: { kind: "direct" } } on Node, or { kind: "net", backend: { kind: "wisp", servers } }` (`checkWorkerOptions`, `dist/_chunks/core.mjs:14826`). That was tried once by hand and is not in net_check.py. The SDK's worker also runs the package's own entry, in a thread where host.mjs has replaced nothing. Worker threads of our own, each installing the controls and calling `createKernel` itself, were not tried.
+
+### The delivery rule
+
+The suspected source of nondeterminism was when a received frame lands relative to guest instructions. Under the controlled host the guest never returns to the event loop while it can run, so a frame can only land inside an import, and which import is ours to choose:
+
+* every frame for a guest gets a virtual due time when it is sent: the sender's virtual time plus a fixed latency (200000 ns unless stated);
+* it is handed over by `receiveFrame` in the first import of the receiver at which its virtual clock has reached that time: a clock read if the guest is running, the end of the idle wait if it is not (the wait's jump is cut short at the due time);
+* never at the start of an idle wait: an IRQ bit set after the kernel decided to idle and before the SDK's wait exists would wake nothing.
+
+host.mjs got a `device` hook for this and logs a digest of every frame sent and taken (9 added lines). [net.mjs](net.mjs) is the single guest. [netlib.mjs](netlib.mjs) has the frame trace and the scripted peer: 10.9.0.1, answering ARP, ICMP echo, UDP port 7, and TCP port 7007 with fixed initial sequence numbers (one answer, then FIN). [switch.mjs](switch.mjs) is the coordinator and the switch. No host socket is opened, and no timer is left to the real clock (`realTimers` is 0 in every record).
+
+A running guest gets a frame at its next clock read, which in the single-guest busy run was up to 853810 ns after the due time.
+
+### Single guest ([net_workload.json](net_workload.json), [net_busy.json](net_busy.json))
+
+The guest sets 10.9.0.2/24, pings the peer three times, sends a UDP line with `nc -u` and a TCP line with `nc`, and prints the answers (`echo:hello-udp`, `echo:hello-tcp`), its neighbour table and `/proc/net/dev`. The busy script pings five times at 0.2 s, and later does the TCP exchange, in the background while the shell runs a counting loop, with `--ns-per-insn 5`.
+
+| Run | Boots | Result |
+|---|---|---|
+| idle, to virtual 14 s | 3 fresh | identical: memory `9b695641…`, console `092c297e…` (6221 bytes), imports `3b047807…`, trace `d67404f9…`; 14342 import calls, 5319189 instructions, 554 idle waits, 13 frames sent and 8 received (7 at the end of an idle wait, 1 at a clock read) |
+| busy, to virtual 10 s | 3 fresh | identical: memory `fe2623aa…`, trace `bd4cdd62…`; 15795 import calls, 419464567 instructions, 14 frames sent, 9 received, all 9 at a clock read of a running guest |
+| busy, JIT on | 2 fresh | identical: memory `96445ace…`, 15952 import calls; console, instruction count and trace as with the JIT off |
+| attack: a random real delay of 0 to 3 ms (busy wait, `crypto.randomInt`) in every send and every delivery; idle and busy | 1 each | identical to the rows above in all five values and the trace |
+| host fault `yield` (the SDK's own `sched_yield`, which returns to the event loop) | 1 | not rejected: only the import log differs |
+| host fault `math-random` | 1 | not rejected: nothing differs |
+| host faults `idle-real`, `entropy` | 1 each | rejected, as in section 4 |
+| **fault `real-latency`**: the due time also gets 0 to 1 ms from the real clock | 2 fresh | **rejected**: memory, console, imports, instruction count and trace differ between the two |
+
+The first divergence under `real-latency` ([evidence/net_divergence.txt](evidence/net_divergence.txt)) is the first frame for the guest, the ARP reply: delivered at virtual 2020827666 ns in one boot and 2020456291 ns in the other. In the import log it is line 4697, the first clock read after the idle wait that the frame ended. So the delivery rule is needed, and it is the only control the network added.
+
+### Three guests ([multi_workload.json](multi_workload.json), [multi_busy.json](multi_busy.json))
+
+[switch.mjs](switch.mjs) keeps host.mjs's controls per guest, each with a virtual clock of its own; the replaced globals answer for the guest whose import is executing. A guest runs until it parks, at an idle wait or at `sched_yield` (both are JSPI imports: returning a pending promise suspends the guest). The coordinator then resumes the guest with the lowest virtual time, an idle guest counting as being at its next event (timer, console input or frame); ties go to the lower index. Guests are started the same way, so the second kernel is created when the first parks for the first time. Exactly one guest executes at a time, and which one runs next is a function of virtual state only. The switch sends a frame to the port that has the destination address, or to every other port if it is a broadcast.
+
+A (10.9.0.11) pings B three times and sends B a line over TCP; B (`nc -l -p 7007`) answers with a line of its own; C pings A and B twice each. In the busy script A runs a 20000-iteration loop while B pings it five times, then A talks to C over TCP, with `--ns-per-insn 5`.
+
+| Run | Runs | Result |
+|---|---|---|
+| idle, to virtual 12 s | 3 fresh | identical: memories `2a79d9a6…`, `850960e5…`, `850fec92…`, trace `216c86c8…`; 43 frames sent, 55 deliveries, 1341 changes of guest; 12751 / 11369 / 11794 import calls; every frame delivered at its due time |
+| one guest busy, to virtual 8 s | 3 fresh | identical: memories `879d3862…`, `8641569b…`, `ba3b4464…`, trace `9ffdd187…`; A retired 301886186 instructions and was parked at `sched_yield` 66 times; 10 frames reached A at a clock read |
+| one guest busy, JIT on | 2 fresh | identical; consoles, instruction counts and trace as with the JIT off |
+| attack: random real delays of 0 to 3 ms at every send, delivery and change of guest; idle and busy | 1 each | identical to the rows above |
+| fault `real-latency` | 2 fresh | rejected: most of the 16 compared values differ (15 in one recording); the traces differ from line 4, the first delivery |
+| seeded switch faults (`--drop 0.1 --dup 0.1 --jitter 300000 --partition 4500:5600`), seed 7 | 2 fresh | identical: trace `c1f0e2ff…`; 55 sent, 62 delivered, 10 dropped, 5 duplicated, 2 cut by the partition. A's ping reports 33 % loss, C's a duplicate, and the TCP exchange still completes with its SYN and two FINs dropped: the guests retransmit under the virtual clock ([evidence/net_multi_faults_seed7.trace](evidence/net_multi_faults_seed7.trace)) |
+| the same with seed 8 | 1 | another trace (`03319f06…`: 45 sent, 55 delivered, 5 dropped, 3 duplicated, 2 cut) |
+
+**The latency is not exact for a busy guest.** The kernel calls `sched_yield` only every 20 ms of guest time (`KW_YIELD_NS`, a constant in the kernel's wasm architecture patch), so a busy guest runs up to 20 ms past the others before the coordinator can park it, and a frame sent to it in that window arrives late. The largest lag in the busy run is 19646000 ns, against a latency of 200000 ns. The run is still deterministic, since the lag is a function of virtual state. With `--latency 25000000`, above the 20 ms quantum, the largest lag is 866530 ns (one run). A small bound at a small latency needs `KW_YIELD_NS` to be settable by the host, which is a kernel patch and a rebuild of the wasm; that was not attempted (no source build here).
+
+### Teeth
+
+| Change | Values that change |
+|---|---|
+| single: one bit of the peer's MAC address in the ARP reply | memory, console, imports, trace |
+| single: one bit of the UDP answer (its last byte) | console, imports, import calls, trace; **not the final memory** |
+| single: one bit of the padding of an ICMP reply | imports, trace; **not memory, not console** |
+| single: one frame delivered 1000 ns (one clock step) later | memory, console, imports, import calls, trace |
+| three guests: one bit of one frame (the last byte of delivery 40, for C) | C's memory and imports, trace |
+| three guests: that frame 1000 ns later | C's memory, console and imports, trace |
+
+Two rows say something about the witness: the memory at the end did not keep those bytes, so the memory digest alone misses a changed payload. The frame trace and the import log (which has a digest of each frame the guest takes) catch both.
+
+### Wall time
+
+One recording, interpreter unless stated. Wall time runs from the start of the script to the end record, so it includes compiling the kernel.
+
+| Run | Virtual | Wall ms | ms per virtual s | per guest |
+|---|---|---|---|---|
+| single, idle | 14 s | 169, 189, 176 | 12 | |
+| single, busy (419 M instructions) | 10 s | 2155, 2182, 2222 | 216 | |
+| single, busy, JIT | 10 s | 917, 953 | 92 | |
+| three guests, idle | 12 s | 469, 456, 466 | 39 | 13 |
+| three guests, one busy (302 M instructions) | 8 s | 1848, 2073, 2133 | 231 | 77 |
+| three guests, one busy, JIT | 8 s | 1110, 1110 | 139 | 46 |
+
+Each guest has 128 MiB of linear memory. The whole check took 45 s in the dev shell and 85 s as the flake check.
+
+### What this does not show
+
+* **One guest per worker thread** (guests in parallel, windows of virtual time) was not built. The one-thread coordinator runs at the speed of one core.
+* **More than three guests, longer runs, larger transfers.** The largest exchange is one TCP segment each way: no window, congestion or segmentation-offload behaviour was exercised.
+* **Independence from the coordinator's rule.** With a lag above zero the result depends on the order in which guests run. It is the same in every run because the rule is fixed; other rules were not compared.
+* **Snapshot and restore with the network device**, and a snapshot of several guests at one virtual time.
+* **The SDK's own `NetStack`** (DHCP, DNS, outbound TCP through host sockets) is not used and was not tested.
+* **IPv6 and a learning switch.** Each port has one fixed address.
+* **Other machines and Node versions**, as in section 5.

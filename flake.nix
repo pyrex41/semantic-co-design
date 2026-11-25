@@ -105,6 +105,13 @@
           python3 ${self}/experiments/unkernel_probe/check.py --no-stock
           touch "$out"
         '';
+        # The same with the network device: one guest against a scripted peer, then three guests on one
+        # virtual switch, each compared across fresh processes. About 45 s; no host socket is opened.
+        unkernel-net-probe = nixpkgs.legacyPackages.${system}.runCommand "unkernel-net-probe" (unkernel system) ''
+          export HOME=$TMPDIR
+          python3 ${self}/experiments/unkernel_probe/net_check.py
+          touch "$out"
+        '';
         native-replay = nixpkgs.legacyPackages.${system}.runCommand "native-replay" (environment system) ''
           python3 ${self}/logic/check.py
           python3 ${self}/native/check_accepted_job.py
