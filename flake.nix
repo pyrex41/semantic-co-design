@@ -47,6 +47,12 @@
           for example in vm decoder railway query; do
             python3 -m examples."$example".check
           done
+          python3 -m experiments.branching_vm.check
+          touch "$out"
+        '';
+        sim-tool = nixpkgs.legacyPackages.${system}.runCommand "sim-tool" (environment system) ''
+          cd ${self}
+          python3 -m tool check kernel sim accepted_job gossip
           touch "$out"
         '';
         native-replay = nixpkgs.legacyPackages.${system}.runCommand "native-replay" (environment system) ''

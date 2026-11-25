@@ -10,6 +10,9 @@ ARITHMETIC = {
 }
 
 
+LIMITS = {"slots": 1024, "depth": 128}
+
+
 def integer(n):
     if type(n) is not int or not -(1 << 63) <= n < 1 << 63:
         raise ValueError(f"expected signed 64-bit integer: {n!r}")
@@ -17,13 +20,13 @@ def integer(n):
 
 
 def slot(n):
-    if type(n) is not int or not 0 <= n < 1024:
+    if type(n) is not int or not 0 <= n < LIMITS["slots"]:
         raise ValueError("invalid scalar or bank number")
     return n
 
 
 def node(tree, arities, depth):
-    if depth > 128 or not isinstance(tree,list) or not tree or not isinstance(tree[0],str):
+    if depth > LIMITS["depth"] or not isinstance(tree,list) or not tree or not isinstance(tree[0],str):
         raise ValueError("invalid or deeply nested residual node")
     name = tree[0]
     if name not in arities or arities[name] not in (None,len(tree)-1):
@@ -33,7 +36,7 @@ def node(tree, arities, depth):
 
 EXPRESSIONS = {**dict.fromkeys(ARITHMETIC,2), "div":2, "mod":2, "var":1, "len":0,
                "at":1, "get":2, "u32":1}
-STATEMENTS = {"seq":None, "set":2, "put":3, "emit":1, "if":3, "while":2}
+STATEMENTS = {"seq":None, "set":2, "put":3, "emit":1, "if":3, "while":2, "trap":0}
 
 
 def expression(tree, depth):
@@ -68,6 +71,8 @@ def normalize(tree, depth=0):
             step = normalize(child,depth+1)
             steps.extend(step[1:] if step[0] == "seq" else [step])
         return ["seq",*steps]
+    if op == "trap":
+        return [op]
     if op == "emit":
         return [op,expr(tree[1])]
     if op in ("set","put"):
@@ -82,9 +87,20 @@ def normalize(tree, depth=0):
     return [op,condition,*branches]
 
 
-def generate(program):
-    program = normalize(program)
+def generate(program, *, template=None, slots=1024, depth=128, checked=False):
+    """Lower to C. A caller may supply its own driver template, slot count and nesting bound.
+
+    With `checked`, add sub mul div mod become calls of op_add ... op_mod, which the
+    template must define; that is where a caller gives arithmetic its own range and traps.
+    """
+    saved = dict(LIMITS)
+    LIMITS.update(slots=slots, depth=depth)
+    try:
+        program = normalize(program)
+    finally:
+        LIMITS.update(saved)
     banks = set()
+    trap = "exit(2);" if template is None else "TRAP();"
     def c_expr(tree):
         if type(tree) is int:
             return "INT64_MIN" if tree == -(2**63) else f"INT64_C({tree})"
@@ -100,6 +116,8 @@ def generate(program):
             return f"read_at(bank_{args[0]}, LIMIT, {c_expr(args[1])})"
         if op == "u32":
             return f"((int64_t)(uint32_t){c_expr(args[0])})"
+        if checked and op in ("add","sub","mul","div","mod"):
+            return f"op_{op}({c_expr(args[0])}, {c_expr(args[1])})"
         sign = ARITHMETIC[op][0] if op in ARITHMETIC else {"div":"/","mod":"%"}[op]
         return f"({c_expr(args[0])} {sign} {c_expr(args[1])})"
 
@@ -111,6 +129,8 @@ def generate(program):
         if op == "seq":
             for child in args:
                 statement(child,depth)
+        elif op == "trap":
+            line(trap)
         elif op == "emit":
             line(f"emit({c_expr(args[0])});")
         elif op == "set":
@@ -129,6 +149,7 @@ def generate(program):
     statement(program,1)
     declarations = [f"static int64_t bank_{b}[LIMIT];" for b in sorted(banks)]
     resets = [f"    memset(bank_{b}, 0, sizeof bank_{b});" for b in sorted(banks)]
-    template = Path(__file__).with_name("driver.c.in").read_text()
-    return template.replace("/* BANKS */","\n".join(declarations)).replace(
+    if template is None:
+        template = Path(__file__).with_name("driver.c.in").read_text()
+    return template.replace("/* SLOTS */", str(slots)).replace("/* BANKS */","\n".join(declarations)).replace(
         "/* PROGRAM */","\n".join(resets+lines))
