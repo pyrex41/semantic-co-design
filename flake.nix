@@ -128,6 +128,12 @@
           python3 ${self}/experiments/unkernel_probe/net_check.py
           touch "$out"
         '';
+        # The same guest with a block device (experiments/unkernel_probe/disk_check.py), offline.
+        unkernel-disk = nixpkgs.legacyPackages.${system}.runCommand "unkernel-disk" (unkernel system) ''
+          export HOME=$TMPDIR
+          python3 ${self}/experiments/unkernel_probe/disk_check.py
+          touch "$out"
+        '';
         native-replay = nixpkgs.legacyPackages.${system}.runCommand "native-replay" (environment system) ''
           python3 ${self}/logic/check.py
           python3 ${self}/native/check_accepted_job.py

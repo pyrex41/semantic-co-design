@@ -11,6 +11,11 @@
 //
 // cfg.fault removes one control again (check.py's seeded faults): entropy, date, jitter,
 // idle-real, icount, yield, math-random.
+//
+// cfg.devices (optional, disk.mjs) are host devices that complete in virtual time. Each has
+// dueNs() (its next virtual deadline, or Infinity), pump(vns, from) (called wherever input is
+// delivered) and waiting() (true while it owes the guest an event that only the host's event
+// loop will deliver; an idle wait then returns to the event loop with the clock standing still).
 import { createHash } from "node:crypto";
 import { openSync, writeSync, closeSync } from "node:fs";
 
@@ -107,8 +112,11 @@ export function install(cfg) {
 	/** Deliver what the script and the snapshot request have due at the current virtual time.
 	 * `from` is the import it happens in: a clock read (the guest is running), the start of an
 	 * idle wait, or the jump that ends one. */
+	const devices = cfg.devices ?? [];
+	const deviceDue = () => Math.min(Infinity, ...devices.map((d) => d.dueNs()));
 	const pump = (from) => {
 		const script = cfg.script;
+		for (const d of devices) d.pump(st.vns, from);
 		while (st.inputAt < script.length && st.vns >= script[st.inputAt][0] * 1e6) {
 			if (!st.vm) throw new Error("input due before createKernel() returned");
 			st.vm.write(script[st.inputAt++][1]);
@@ -158,10 +166,13 @@ export function install(cfg) {
 			}
 			if (!(r instanceof Promise)) return r;
 			st.idles++;
-			if (st.snapAsked && !timers.length) return r; // stopped at the snapshot: parked for good
+			// A device owes the guest an event from the host's own event loop: the virtual clock
+			// stands still and the wait is left to that event.
+			if (devices.some((d) => d.waiting())) return r;
+			if (st.snapAsked && !timers.length && deviceDue() === Infinity) return r; // stopped at the snapshot: parked for good
 			const waitNs = timers.length ? Math.ceil(Math.min(...timers.map((t) => t.ms)) * 1e6) : Infinity;
 			const next = cfg.script[st.inputAt];
-			const limits = [waitNs, next ? next[0] * 1e6 - st.vns : Infinity,
+			const limits = [waitNs, deviceDue() - st.vns, next ? next[0] * 1e6 - st.vns : Infinity,
 				cfg.snapAtMs !== undefined && !st.snapAsked ? cfg.snapAtMs * 1e6 - st.vns : Infinity,
 				cfg.endAtMs !== undefined ? cfg.endAtMs * 1e6 - st.vns : Infinity,
 				cfg.device ? cfg.device.nextNs(st) - st.vns : Infinity];
@@ -201,6 +212,11 @@ export function install(cfg) {
 		// kwnet: a digest of the frame the guest sent, or of the one it took.
 		wasm_driver_net_send: (args) => bytes(args[0], args[1]),
 		wasm_driver_net_recv: (args, ret) => (args[0] ? bytes(args[0], ret < args[1] ? ret : args[1]) : ""),
+		// kwblk's request: device, op, sector, bytes (the data is digested in disk.mjs's own log).
+		wasm_driver_block_submit: (args) => {
+			const dv = new DataView(st.memory.buffer), p = Number(args[0]);
+			return `dev${dv.getUint32(p, true)} op${dv.getUint32(p + 4, true)} sector${dv.getBigUint64(p + 8, true)} bytes${dv.getBigUint64(p + 16, true)}`;
+		},
 	};
 
 	const dropped = { entropy: "random_get", yield: "sched_yield" }[fault];
@@ -234,5 +250,5 @@ export function install(cfg) {
 		}
 		return instantiate.call(this, module, imports);
 	};
-	return { state: () => st, begin, end, realSetTimeout };
+	return { state: () => st, begin, end, realSetTimeout, realNow };
 }

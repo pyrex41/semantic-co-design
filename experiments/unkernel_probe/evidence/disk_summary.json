@@ -1,0 +1,3199 @@
+{
+ "unkernel": "0.2.0-261124-75694e2",
+ "kernel_wasm_sha256": "46dcb7263dbfb8d3dc593c3985616e99b3fa4ad967b960a034116f92544125b3",
+ "sources": {
+  "host.mjs": "883cf5c2e0a099c75511a4b7767064ec2b94b04dc4f6b547d69b6a6f3f0e6241",
+  "disk.mjs": "f21e33a272007fd5867fcfa29883e7ebfb9e536c772a581fb33658147ee204ae",
+  "disk_check.py": "4f05b345fa707d5062bacce5a3d1c2f601353b2dad36738ac33bb99669c57667",
+  "check.py": "fafdd850f61260a96405046e8e7f884ebda35b6f368ac68406b448acc2dee8b0",
+  "disk_workload.json": "6c1ca827ba6663ae092fd06def62d7d7c5c2e8950686a6d62b5eb4afdd2714d4",
+  "disk_continuation.json": "e25674bf08c32806dcbc5579ff14ed5f1531fabdb51c6b31795edda9f2c999ca",
+  "disk_crash.json": "e99975a81ebfada1d843c010d44bc57cab30a8b6037e311f505ac1532ba96803",
+  "disk_recover.json": "493805424f93906c46a964fac07515d284c75c43442e7b62f3a263e69de4cb1b"
+ },
+ "environment": {
+  "system": "arm64-darwin",
+  "node": "/nix/store/99558b5xw11mmfax1n4fzyfniga2mhac-nodejs-slim-24.19.0/bin/node",
+  "nixpkgs": "34ab99075ac4f7e40cf037eef32cb1c360bb85e9"
+ },
+ "sync": {
+  "runs": [
+   {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "sync",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "a59c0f619289931091e48f1122bb3086e464564dbba7f4b2fff2af1eba3bf495",
+    "console": "db7633e0b1e96c345a202bb04f17fcf1d12537c1fec28e47cbc0a493176110c3",
+    "consoleBytes": 7724,
+    "imports": "71fdf8542316d312844954b96fa19dcc95b65fc94952bb8fddcb2f19cc51a07f",
+    "importCalls": 29281,
+    "icount": 201700902,
+    "nsPerInsn": 0,
+    "virtualNs": 40000000000,
+    "idles": 1072,
+    "realTimers": 0,
+    "inputsDelivered": 7,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 7
+    },
+    "disk": "5e44d8ce29d01de0608b667b41c9e595e4bd49bc6e939aca81da8e8d25bf8425",
+    "diskImageBytes": 2741496,
+    "diskBlocks": 668,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "5e44d8ce29d01de0608b667b41c9e595e4bd49bc6e939aca81da8e8d25bf8425",
+    "diskLog": "b6728d05dcbe5c00d49559d33e58c29f7a9ba41e5c48e85c5660cf3b5f1e7c1c",
+    "diskOps": {
+     "read": 71,
+     "write": 64,
+     "flush": 32,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 3196928,
+     "write": 2768896
+    },
+    "diskGen": 1,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 0,
+    "blockStats": {
+     "reads": 71,
+     "writes": 64,
+     "flushes": 32,
+     "discards": 0,
+     "async": 0,
+     "bytesRead": 3196928,
+     "bytesWritten": 2768896,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   },
+   {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "sync",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "a59c0f619289931091e48f1122bb3086e464564dbba7f4b2fff2af1eba3bf495",
+    "console": "db7633e0b1e96c345a202bb04f17fcf1d12537c1fec28e47cbc0a493176110c3",
+    "consoleBytes": 7724,
+    "imports": "71fdf8542316d312844954b96fa19dcc95b65fc94952bb8fddcb2f19cc51a07f",
+    "importCalls": 29281,
+    "icount": 201700902,
+    "nsPerInsn": 0,
+    "virtualNs": 40000000000,
+    "idles": 1072,
+    "realTimers": 0,
+    "inputsDelivered": 7,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 7
+    },
+    "disk": "5e44d8ce29d01de0608b667b41c9e595e4bd49bc6e939aca81da8e8d25bf8425",
+    "diskImageBytes": 2741496,
+    "diskBlocks": 668,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "5e44d8ce29d01de0608b667b41c9e595e4bd49bc6e939aca81da8e8d25bf8425",
+    "diskLog": "b6728d05dcbe5c00d49559d33e58c29f7a9ba41e5c48e85c5660cf3b5f1e7c1c",
+    "diskOps": {
+     "read": 71,
+     "write": 64,
+     "flush": 32,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 3196928,
+     "write": 2768896
+    },
+    "diskGen": 1,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 0,
+    "blockStats": {
+     "reads": 71,
+     "writes": 64,
+     "flushes": 32,
+     "discards": 0,
+     "async": 0,
+     "bytesRead": 3196928,
+     "bytesWritten": 2768896,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   },
+   {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "sync",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "a59c0f619289931091e48f1122bb3086e464564dbba7f4b2fff2af1eba3bf495",
+    "console": "db7633e0b1e96c345a202bb04f17fcf1d12537c1fec28e47cbc0a493176110c3",
+    "consoleBytes": 7724,
+    "imports": "71fdf8542316d312844954b96fa19dcc95b65fc94952bb8fddcb2f19cc51a07f",
+    "importCalls": 29281,
+    "icount": 201700902,
+    "nsPerInsn": 0,
+    "virtualNs": 40000000000,
+    "idles": 1072,
+    "realTimers": 0,
+    "inputsDelivered": 7,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 7
+    },
+    "disk": "5e44d8ce29d01de0608b667b41c9e595e4bd49bc6e939aca81da8e8d25bf8425",
+    "diskImageBytes": 2741496,
+    "diskBlocks": 668,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "5e44d8ce29d01de0608b667b41c9e595e4bd49bc6e939aca81da8e8d25bf8425",
+    "diskLog": "b6728d05dcbe5c00d49559d33e58c29f7a9ba41e5c48e85c5660cf3b5f1e7c1c",
+    "diskOps": {
+     "read": 71,
+     "write": 64,
+     "flush": 32,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 3196928,
+     "write": 2768896
+    },
+    "diskGen": 1,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 0,
+    "blockStats": {
+     "reads": 71,
+     "writes": 64,
+     "flushes": 32,
+     "discards": 0,
+     "async": 0,
+     "bytesRead": 3196928,
+     "bytesWritten": 2768896,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   }
+  ],
+  "differ_on": []
+ },
+ "sdk_cowdisk": {
+  "runs": [
+   {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "sync",
+    "backend": "cow",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "6b3f1741cdd54ade9e1712553e92efb0253a2fa324f39d96fb7ca2568907af9c",
+    "console": "172f178031fd22ea8e98265d2b6c1a9643b0b224b01dd30541fd0e87992e2035",
+    "consoleBytes": 7741,
+    "imports": "8d13ba4aa18824cd504221e3a09304ac0784d948c905a080ffbdec7885e4b39a",
+    "importCalls": 29300,
+    "icount": 201713477,
+    "nsPerInsn": 0,
+    "virtualNs": 40000000000,
+    "idles": 1076,
+    "realTimers": 0,
+    "inputsDelivered": 7,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 7
+    },
+    "disk": "d15b464b9c458b33320ec8b6ee749024eb4b2bc7c133ceb603b63b5fd0dbea3e",
+    "diskImageBytes": 2741496,
+    "diskBlocks": 668,
+    "diskSizeBytes": 4294967296,
+    "blockStats": {
+     "reads": 70,
+     "writes": 64,
+     "flushes": 32,
+     "discards": 0,
+     "async": 0,
+     "bytesRead": 3196928,
+     "bytesWritten": 2768896,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   },
+   {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "sync",
+    "backend": "cow",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "6b3f1741cdd54ade9e1712553e92efb0253a2fa324f39d96fb7ca2568907af9c",
+    "console": "172f178031fd22ea8e98265d2b6c1a9643b0b224b01dd30541fd0e87992e2035",
+    "consoleBytes": 7741,
+    "imports": "8d13ba4aa18824cd504221e3a09304ac0784d948c905a080ffbdec7885e4b39a",
+    "importCalls": 29300,
+    "icount": 201713477,
+    "nsPerInsn": 0,
+    "virtualNs": 40000000000,
+    "idles": 1076,
+    "realTimers": 0,
+    "inputsDelivered": 7,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 7
+    },
+    "disk": "d15b464b9c458b33320ec8b6ee749024eb4b2bc7c133ceb603b63b5fd0dbea3e",
+    "diskImageBytes": 2741496,
+    "diskBlocks": 668,
+    "diskSizeBytes": 4294967296,
+    "blockStats": {
+     "reads": 70,
+     "writes": 64,
+     "flushes": 32,
+     "discards": 0,
+     "async": 0,
+     "bytesRead": 3196928,
+     "bytesWritten": 2768896,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   }
+  ]
+ },
+ "microtask": {
+  "runs": [
+   {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "microtask",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "5cdeb1bc241f7d00f7ea4d3bf62793739710f15acecdfda20a91b2685be65dbb",
+    "console": "beddb9e3331127d547da85114c8aebc54a026d8dae10d95c57becdb48702f770",
+    "consoleBytes": 7724,
+    "imports": "5388a9b8fdad1689f1941e43feb12aad1cbd277d85517a8131d96386c65eb503",
+    "importCalls": 30384,
+    "icount": 201701077,
+    "nsPerInsn": 0,
+    "virtualNs": 40000000000,
+    "idles": 1077,
+    "realTimers": 0,
+    "inputsDelivered": 7,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 7
+    },
+    "disk": "d107e9572ebeb137477fd20eca1f1246b4e7ff33b632c00ccf5b48c82d469c52",
+    "diskImageBytes": 2753808,
+    "diskBlocks": 671,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "d107e9572ebeb137477fd20eca1f1246b4e7ff33b632c00ccf5b48c82d469c52",
+    "diskLog": "df4f3bfa36ba96b418733eb7825884bad8ac48ad321798ba17b7053b41adf1d7",
+    "diskOps": {
+     "read": 71,
+     "write": 66,
+     "flush": 33,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 3196928,
+     "write": 2777088
+    },
+    "diskGen": 1,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 0,
+    "blockStats": {
+     "reads": 71,
+     "writes": 66,
+     "flushes": 33,
+     "discards": 0,
+     "async": 170,
+     "bytesRead": 3196928,
+     "bytesWritten": 2777088,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   },
+   {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "microtask",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "5cdeb1bc241f7d00f7ea4d3bf62793739710f15acecdfda20a91b2685be65dbb",
+    "console": "beddb9e3331127d547da85114c8aebc54a026d8dae10d95c57becdb48702f770",
+    "consoleBytes": 7724,
+    "imports": "5388a9b8fdad1689f1941e43feb12aad1cbd277d85517a8131d96386c65eb503",
+    "importCalls": 30384,
+    "icount": 201701077,
+    "nsPerInsn": 0,
+    "virtualNs": 40000000000,
+    "idles": 1077,
+    "realTimers": 0,
+    "inputsDelivered": 7,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 7
+    },
+    "disk": "d107e9572ebeb137477fd20eca1f1246b4e7ff33b632c00ccf5b48c82d469c52",
+    "diskImageBytes": 2753808,
+    "diskBlocks": 671,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "d107e9572ebeb137477fd20eca1f1246b4e7ff33b632c00ccf5b48c82d469c52",
+    "diskLog": "df4f3bfa36ba96b418733eb7825884bad8ac48ad321798ba17b7053b41adf1d7",
+    "diskOps": {
+     "read": 71,
+     "write": 66,
+     "flush": 33,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 3196928,
+     "write": 2777088
+    },
+    "diskGen": 1,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 0,
+    "blockStats": {
+     "reads": 71,
+     "writes": 66,
+     "flushes": 33,
+     "discards": 0,
+     "async": 170,
+     "bytesRead": 3196928,
+     "bytesWritten": 2777088,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   }
+  ]
+ },
+ "virtual": {
+  "runs": [
+   {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "virtual",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "ff4119de7361865bcd9f8141e90d42e8cccc5c79087d954ae20b8885609ef5fa",
+    "console": "63ffd9abd9b0d47a90bf9a59b6e875e2db303ae80d18371e94e6d9c8c18ff115",
+    "consoleBytes": 7724,
+    "imports": "a6102a44a9269b7627ffbd0c5a7eb7b086cab2b6c7e1e3cbb50dfe5cba8f550f",
+    "importCalls": 30514,
+    "icount": 201701171,
+    "nsPerInsn": 0,
+    "virtualNs": 40000000000,
+    "idles": 1165,
+    "realTimers": 0,
+    "inputsDelivered": 7,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 7
+    },
+    "disk": "b1b398ee4c2f1981bebe461826b13abbccdf84d18f613aae4d5e848c2248dc85",
+    "diskImageBytes": 2753808,
+    "diskBlocks": 671,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "b1b398ee4c2f1981bebe461826b13abbccdf84d18f613aae4d5e848c2248dc85",
+    "diskLog": "41dbab4308067bbe59eb5c31308589dec4126cff82a81ef75ad2b7ce8187756a",
+    "diskOps": {
+     "read": 70,
+     "write": 66,
+     "flush": 33,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 3196928,
+     "write": 2777088
+    },
+    "diskGen": 1,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 169,
+    "blockStats": {
+     "reads": 70,
+     "writes": 66,
+     "flushes": 33,
+     "discards": 0,
+     "async": 169,
+     "bytesRead": 3196928,
+     "bytesWritten": 2777088,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "latencyUs": [
+     200,
+     0
+    ],
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   },
+   {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "virtual",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "ff4119de7361865bcd9f8141e90d42e8cccc5c79087d954ae20b8885609ef5fa",
+    "console": "63ffd9abd9b0d47a90bf9a59b6e875e2db303ae80d18371e94e6d9c8c18ff115",
+    "consoleBytes": 7724,
+    "imports": "a6102a44a9269b7627ffbd0c5a7eb7b086cab2b6c7e1e3cbb50dfe5cba8f550f",
+    "importCalls": 30514,
+    "icount": 201701171,
+    "nsPerInsn": 0,
+    "virtualNs": 40000000000,
+    "idles": 1165,
+    "realTimers": 0,
+    "inputsDelivered": 7,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 7
+    },
+    "disk": "b1b398ee4c2f1981bebe461826b13abbccdf84d18f613aae4d5e848c2248dc85",
+    "diskImageBytes": 2753808,
+    "diskBlocks": 671,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "b1b398ee4c2f1981bebe461826b13abbccdf84d18f613aae4d5e848c2248dc85",
+    "diskLog": "41dbab4308067bbe59eb5c31308589dec4126cff82a81ef75ad2b7ce8187756a",
+    "diskOps": {
+     "read": 70,
+     "write": 66,
+     "flush": 33,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 3196928,
+     "write": 2777088
+    },
+    "diskGen": 1,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 169,
+    "blockStats": {
+     "reads": 70,
+     "writes": 66,
+     "flushes": 33,
+     "discards": 0,
+     "async": 169,
+     "bytesRead": 3196928,
+     "bytesWritten": 2777088,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "latencyUs": [
+     200,
+     0
+    ],
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   },
+   {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "virtual",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "ff4119de7361865bcd9f8141e90d42e8cccc5c79087d954ae20b8885609ef5fa",
+    "console": "63ffd9abd9b0d47a90bf9a59b6e875e2db303ae80d18371e94e6d9c8c18ff115",
+    "consoleBytes": 7724,
+    "imports": "a6102a44a9269b7627ffbd0c5a7eb7b086cab2b6c7e1e3cbb50dfe5cba8f550f",
+    "importCalls": 30514,
+    "icount": 201701171,
+    "nsPerInsn": 0,
+    "virtualNs": 40000000000,
+    "idles": 1165,
+    "realTimers": 0,
+    "inputsDelivered": 7,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 7
+    },
+    "disk": "b1b398ee4c2f1981bebe461826b13abbccdf84d18f613aae4d5e848c2248dc85",
+    "diskImageBytes": 2753808,
+    "diskBlocks": 671,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "b1b398ee4c2f1981bebe461826b13abbccdf84d18f613aae4d5e848c2248dc85",
+    "diskLog": "41dbab4308067bbe59eb5c31308589dec4126cff82a81ef75ad2b7ce8187756a",
+    "diskOps": {
+     "read": 70,
+     "write": 66,
+     "flush": 33,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 3196928,
+     "write": 2777088
+    },
+    "diskGen": 1,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 169,
+    "blockStats": {
+     "reads": 70,
+     "writes": 66,
+     "flushes": 33,
+     "discards": 0,
+     "async": 169,
+     "bytesRead": 3196928,
+     "bytesWritten": 2777088,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "latencyUs": [
+     200,
+     0
+    ],
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   }
+  ],
+  "spread": [
+   {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "virtual",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "7d833cb89a83e7000409e4d717a107524b9ce0c43a50f597bd09a3e356797200",
+    "console": "37e40063452a82a0180423fd8ef4124c2c41d5cfcc160a504e8ed82da1770fb5",
+    "consoleBytes": 7724,
+    "imports": "7938bcfdc79a26ff4108ce2b0904c9c8df95f59d5a5963b9f6edc2fb2b2a3e1d",
+    "importCalls": 30787,
+    "icount": 201700803,
+    "nsPerInsn": 0,
+    "virtualNs": 40000000000,
+    "idles": 1209,
+    "realTimers": 0,
+    "inputsDelivered": 7,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 7
+    },
+    "disk": "40c78ef3fe2ab5cc8b8595a7f4c86a1ce6943b56b555596a51709f0ed02b6632",
+    "diskImageBytes": 2753808,
+    "diskBlocks": 671,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "40c78ef3fe2ab5cc8b8595a7f4c86a1ce6943b56b555596a51709f0ed02b6632",
+    "diskLog": "9b08185e280110be9bb870f6bfb40e95df71c9e39851dc3fbc0448d9d730b694",
+    "diskOps": {
+     "read": 71,
+     "write": 66,
+     "flush": 33,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 3196928,
+     "write": 2777088
+    },
+    "diskGen": 1,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 170,
+    "blockStats": {
+     "reads": 71,
+     "writes": 66,
+     "flushes": 33,
+     "discards": 0,
+     "async": 170,
+     "bytesRead": 3196928,
+     "bytesWritten": 2777088,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "latencyUs": [
+     200,
+     5000
+    ],
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   },
+   {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "virtual",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "7d833cb89a83e7000409e4d717a107524b9ce0c43a50f597bd09a3e356797200",
+    "console": "37e40063452a82a0180423fd8ef4124c2c41d5cfcc160a504e8ed82da1770fb5",
+    "consoleBytes": 7724,
+    "imports": "7938bcfdc79a26ff4108ce2b0904c9c8df95f59d5a5963b9f6edc2fb2b2a3e1d",
+    "importCalls": 30787,
+    "icount": 201700803,
+    "nsPerInsn": 0,
+    "virtualNs": 40000000000,
+    "idles": 1209,
+    "realTimers": 0,
+    "inputsDelivered": 7,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 7
+    },
+    "disk": "40c78ef3fe2ab5cc8b8595a7f4c86a1ce6943b56b555596a51709f0ed02b6632",
+    "diskImageBytes": 2753808,
+    "diskBlocks": 671,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "40c78ef3fe2ab5cc8b8595a7f4c86a1ce6943b56b555596a51709f0ed02b6632",
+    "diskLog": "9b08185e280110be9bb870f6bfb40e95df71c9e39851dc3fbc0448d9d730b694",
+    "diskOps": {
+     "read": 71,
+     "write": 66,
+     "flush": 33,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 3196928,
+     "write": 2777088
+    },
+    "diskGen": 1,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 170,
+    "blockStats": {
+     "reads": 71,
+     "writes": 66,
+     "flushes": 33,
+     "discards": 0,
+     "async": 170,
+     "bytesRead": 3196928,
+     "bytesWritten": 2777088,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "latencyUs": [
+     200,
+     5000
+    ],
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   }
+  ]
+ },
+ "host_delay": {
+  "runs": [
+   {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "sync",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "a59c0f619289931091e48f1122bb3086e464564dbba7f4b2fff2af1eba3bf495",
+    "console": "db7633e0b1e96c345a202bb04f17fcf1d12537c1fec28e47cbc0a493176110c3",
+    "consoleBytes": 7724,
+    "imports": "71fdf8542316d312844954b96fa19dcc95b65fc94952bb8fddcb2f19cc51a07f",
+    "importCalls": 29281,
+    "icount": 201700902,
+    "nsPerInsn": 0,
+    "virtualNs": 40000000000,
+    "idles": 1072,
+    "realTimers": 0,
+    "inputsDelivered": 7,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 7
+    },
+    "disk": "5e44d8ce29d01de0608b667b41c9e595e4bd49bc6e939aca81da8e8d25bf8425",
+    "diskImageBytes": 2741496,
+    "diskBlocks": 668,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "5e44d8ce29d01de0608b667b41c9e595e4bd49bc6e939aca81da8e8d25bf8425",
+    "diskLog": "b6728d05dcbe5c00d49559d33e58c29f7a9ba41e5c48e85c5660cf3b5f1e7c1c",
+    "diskOps": {
+     "read": 71,
+     "write": 64,
+     "flush": 32,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 3196928,
+     "write": 2768896
+    },
+    "diskGen": 1,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 0,
+    "blockStats": {
+     "reads": 71,
+     "writes": 64,
+     "flushes": 32,
+     "discards": 0,
+     "async": 0,
+     "bytesRead": 3196928,
+     "bytesWritten": 2768896,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 3,
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   },
+   {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "microtask",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "5cdeb1bc241f7d00f7ea4d3bf62793739710f15acecdfda20a91b2685be65dbb",
+    "console": "beddb9e3331127d547da85114c8aebc54a026d8dae10d95c57becdb48702f770",
+    "consoleBytes": 7724,
+    "imports": "5388a9b8fdad1689f1941e43feb12aad1cbd277d85517a8131d96386c65eb503",
+    "importCalls": 30384,
+    "icount": 201701077,
+    "nsPerInsn": 0,
+    "virtualNs": 40000000000,
+    "idles": 1077,
+    "realTimers": 0,
+    "inputsDelivered": 7,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 7
+    },
+    "disk": "d107e9572ebeb137477fd20eca1f1246b4e7ff33b632c00ccf5b48c82d469c52",
+    "diskImageBytes": 2753808,
+    "diskBlocks": 671,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "d107e9572ebeb137477fd20eca1f1246b4e7ff33b632c00ccf5b48c82d469c52",
+    "diskLog": "df4f3bfa36ba96b418733eb7825884bad8ac48ad321798ba17b7053b41adf1d7",
+    "diskOps": {
+     "read": 71,
+     "write": 66,
+     "flush": 33,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 3196928,
+     "write": 2777088
+    },
+    "diskGen": 1,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 0,
+    "blockStats": {
+     "reads": 71,
+     "writes": 66,
+     "flushes": 33,
+     "discards": 0,
+     "async": 170,
+     "bytesRead": 3196928,
+     "bytesWritten": 2777088,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 3,
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   },
+   {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "virtual",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "ff4119de7361865bcd9f8141e90d42e8cccc5c79087d954ae20b8885609ef5fa",
+    "console": "63ffd9abd9b0d47a90bf9a59b6e875e2db303ae80d18371e94e6d9c8c18ff115",
+    "consoleBytes": 7724,
+    "imports": "a6102a44a9269b7627ffbd0c5a7eb7b086cab2b6c7e1e3cbb50dfe5cba8f550f",
+    "importCalls": 30514,
+    "icount": 201701171,
+    "nsPerInsn": 0,
+    "virtualNs": 40000000000,
+    "idles": 1165,
+    "realTimers": 0,
+    "inputsDelivered": 7,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 7
+    },
+    "disk": "b1b398ee4c2f1981bebe461826b13abbccdf84d18f613aae4d5e848c2248dc85",
+    "diskImageBytes": 2753808,
+    "diskBlocks": 671,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "b1b398ee4c2f1981bebe461826b13abbccdf84d18f613aae4d5e848c2248dc85",
+    "diskLog": "41dbab4308067bbe59eb5c31308589dec4126cff82a81ef75ad2b7ce8187756a",
+    "diskOps": {
+     "read": 70,
+     "write": 66,
+     "flush": 33,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 3196928,
+     "write": 2777088
+    },
+    "diskGen": 1,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 169,
+    "blockStats": {
+     "reads": 70,
+     "writes": 66,
+     "flushes": 33,
+     "discards": 0,
+     "async": 169,
+     "bytesRead": 3196928,
+     "bytesWritten": 2777088,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 3,
+    "latencyUs": [
+     200,
+     0
+    ],
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   },
+   {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "virtual",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "7d833cb89a83e7000409e4d717a107524b9ce0c43a50f597bd09a3e356797200",
+    "console": "37e40063452a82a0180423fd8ef4124c2c41d5cfcc160a504e8ed82da1770fb5",
+    "consoleBytes": 7724,
+    "imports": "7938bcfdc79a26ff4108ce2b0904c9c8df95f59d5a5963b9f6edc2fb2b2a3e1d",
+    "importCalls": 30787,
+    "icount": 201700803,
+    "nsPerInsn": 0,
+    "virtualNs": 40000000000,
+    "idles": 1209,
+    "realTimers": 0,
+    "inputsDelivered": 7,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 7
+    },
+    "disk": "40c78ef3fe2ab5cc8b8595a7f4c86a1ce6943b56b555596a51709f0ed02b6632",
+    "diskImageBytes": 2753808,
+    "diskBlocks": 671,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "40c78ef3fe2ab5cc8b8595a7f4c86a1ce6943b56b555596a51709f0ed02b6632",
+    "diskLog": "9b08185e280110be9bb870f6bfb40e95df71c9e39851dc3fbc0448d9d730b694",
+    "diskOps": {
+     "read": 71,
+     "write": 66,
+     "flush": 33,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 3196928,
+     "write": 2777088
+    },
+    "diskGen": 1,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 170,
+    "blockStats": {
+     "reads": 71,
+     "writes": 66,
+     "flushes": 33,
+     "discards": 0,
+     "async": 170,
+     "bytesRead": 3196928,
+     "bytesWritten": 2777088,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 3,
+    "latencyUs": [
+     200,
+     5000
+    ],
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   }
+  ]
+ },
+ "fault_real": {
+  "runs": [
+   {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "real",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "8bf2e9e62224d67de100547257c4d22512617b7b99118e5f782420a5887842b6",
+    "console": "a7be886aef3e9b8c09a7240262dc2355feb24240bbd85d3dd1bc34b3def37262",
+    "consoleBytes": 7724,
+    "imports": "849f677331074d647b504b45644f38867f3e180b583c38da23b209ae63ab4699",
+    "importCalls": 30882,
+    "icount": 201701237,
+    "nsPerInsn": 0,
+    "virtualNs": 40000000000,
+    "idles": 1212,
+    "realTimers": 0,
+    "inputsDelivered": 7,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 7
+    },
+    "disk": "8c0dbfd0ad2c025cd07ebcebde8441fa4bc4c22770608e7abd890fa408d51306",
+    "diskImageBytes": 2753808,
+    "diskBlocks": 671,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "8c0dbfd0ad2c025cd07ebcebde8441fa4bc4c22770608e7abd890fa408d51306",
+    "diskLog": "854a69ed2a16292eca9ef7512078d488b85295af9c930d92698148e0d4851074",
+    "diskOps": {
+     "read": 71,
+     "write": 66,
+     "flush": 33,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 3196928,
+     "write": 2781184
+    },
+    "diskGen": 1,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 0,
+    "blockStats": {
+     "reads": 71,
+     "writes": 66,
+     "flushes": 33,
+     "discards": 0,
+     "async": 170,
+     "bytesRead": 3196928,
+     "bytesWritten": 2781184,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   },
+   {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "real",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "89f09d0f61a356c7f89e4867254bc6cbd29b2f2f021f712cc240fd6bb08449cf",
+    "console": "bb28c5f04519e2e47bdf90cd9cdaaeee61b5098e61c932e80358c1501289a585",
+    "consoleBytes": 7724,
+    "imports": "49aa6b401ed03b226fb575e6a8347f89f355e8b30cd7ce87a79f277264e272a2",
+    "importCalls": 30945,
+    "icount": 201701177,
+    "nsPerInsn": 0,
+    "virtualNs": 40000000000,
+    "idles": 1214,
+    "realTimers": 0,
+    "inputsDelivered": 7,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 7
+    },
+    "disk": "50fd97e9d397422f0f7efc0a649e778a99ba91bfb824cf1ebcfbed6e37560a56",
+    "diskImageBytes": 2753808,
+    "diskBlocks": 671,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "50fd97e9d397422f0f7efc0a649e778a99ba91bfb824cf1ebcfbed6e37560a56",
+    "diskLog": "3570363d87e0321d7bcf897c0b3db606dc0632235570b731ad2c63d3975634ec",
+    "diskOps": {
+     "read": 71,
+     "write": 66,
+     "flush": 33,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 3196928,
+     "write": 2781184
+    },
+    "diskGen": 1,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 0,
+    "blockStats": {
+     "reads": 71,
+     "writes": 66,
+     "flushes": 33,
+     "discards": 0,
+     "async": 170,
+     "bytesRead": 3196928,
+     "bytesWritten": 2781184,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   },
+   {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "real",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "c3eaa4239be3d78732698538d62db758baebbccefc7f7dfee3ba86a533e3a77b",
+    "console": "778a908a436a24bc4458c4a0a000275a3ee8c006d19685ff4a6357a49b51d41a",
+    "consoleBytes": 7724,
+    "imports": "f634a0ffb9b3e751d5548344247f9a5744756bf5a99560e8311e55e281874842",
+    "importCalls": 31075,
+    "icount": 201701200,
+    "nsPerInsn": 0,
+    "virtualNs": 40000000000,
+    "idles": 1222,
+    "realTimers": 0,
+    "inputsDelivered": 7,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 7
+    },
+    "disk": "2af92591680c686a72cfcbdfe5be4d0f7dd2b34449b16370f8a00bb06336e1ed",
+    "diskImageBytes": 2753808,
+    "diskBlocks": 671,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "2af92591680c686a72cfcbdfe5be4d0f7dd2b34449b16370f8a00bb06336e1ed",
+    "diskLog": "ddf0f2e2e6bfa7c856519ef6e290a728a2e972f6a98c688b7a6290c7504cb49e",
+    "diskOps": {
+     "read": 70,
+     "write": 66,
+     "flush": 33,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 3196928,
+     "write": 2781184
+    },
+    "diskGen": 1,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 0,
+    "blockStats": {
+     "reads": 70,
+     "writes": 66,
+     "flushes": 33,
+     "discards": 0,
+     "async": 169,
+     "bytesRead": 3196928,
+     "bytesWritten": 2781184,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   }
+  ],
+  "rejected_by": [
+   "differ on memory",
+   "differ on console",
+   "differ on imports",
+   "differ on importCalls",
+   "differ on icount",
+   "differ on disk",
+   "differ on diskDurable",
+   "differ on diskLog"
+  ],
+  "log_diff": {
+   "calls": [
+    30882,
+    30945
+   ],
+   "first_value_difference": 4556,
+   "first_call_difference": 4556
+  },
+  "first_difference": [
+   "wasm_driver_block_reap()=15274864",
+   "wasm_driver_block_reap()=15277232"
+  ]
+ },
+ "real_starved": {
+  "runs": [
+   {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "real",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "69ad3cf5fe9501ca084ef3740e8bc216db8fc0d97dabbc36ab9ce6604aef692c",
+    "console": "5b51d8c4cb15b20bad683a9c0e3bdda736cff72d36213afe05209e4c091d2e2a",
+    "consoleBytes": 3807,
+    "imports": "ae3435d6dba7f93d907e997e87597f4b2d3e95dcc6e40432e918f14da3c13257",
+    "importCalls": 1333787,
+    "icount": 0,
+    "nsPerInsn": 0,
+    "virtualNs": 4000000000,
+    "idles": 20,
+    "realTimers": 0,
+    "inputsDelivered": 1,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 1
+    },
+    "disk": "444fba13c647360590a184240a532262b70ce22d5831287500d72b5f45464638",
+    "diskImageBytes": 2244912,
+    "diskBlocks": 547,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "444fba13c647360590a184240a532262b70ce22d5831287500d72b5f45464638",
+    "diskLog": "b990efcd1d7f6b471e1b5f4fed9edeca029f2c3801b5c0724800c0ab76e99fea",
+    "diskOps": {
+     "read": 1,
+     "write": 0,
+     "flush": 0,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 4096,
+     "write": 0
+    },
+    "diskGen": 0,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 1,
+    "completedVirtual": 0,
+    "blockStats": {
+     "reads": 1,
+     "writes": 0,
+     "flushes": 0,
+     "discards": 0,
+     "async": 1,
+     "bytesRead": 4096,
+     "bytesWritten": 0,
+     "inflight": 1,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   }
+  ]
+ },
+ "jit": {
+  "runs": [
+   {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "sync",
+    "backend": "mem",
+    "jit": true,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "4529fd3ca79330ec9c7e44fcb4b44d3ad61c0479515d128771a8f538634e11e2",
+    "console": "db7633e0b1e96c345a202bb04f17fcf1d12537c1fec28e47cbc0a493176110c3",
+    "consoleBytes": 7724,
+    "imports": "0fca82a273ddc367b6c70b0c75d83a478cb230d85f504c32207968fd48c111be",
+    "importCalls": 29341,
+    "icount": 201700902,
+    "nsPerInsn": 0,
+    "virtualNs": 40000000000,
+    "idles": 1072,
+    "realTimers": 0,
+    "inputsDelivered": 7,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 7
+    },
+    "disk": "5e44d8ce29d01de0608b667b41c9e595e4bd49bc6e939aca81da8e8d25bf8425",
+    "diskImageBytes": 2741496,
+    "diskBlocks": 668,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "5e44d8ce29d01de0608b667b41c9e595e4bd49bc6e939aca81da8e8d25bf8425",
+    "diskLog": "b6728d05dcbe5c00d49559d33e58c29f7a9ba41e5c48e85c5660cf3b5f1e7c1c",
+    "diskOps": {
+     "read": 71,
+     "write": 64,
+     "flush": 32,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 3196928,
+     "write": 2768896
+    },
+    "diskGen": 1,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 0,
+    "blockStats": {
+     "reads": 71,
+     "writes": 64,
+     "flushes": 32,
+     "discards": 0,
+     "async": 0,
+     "bytesRead": 3196928,
+     "bytesWritten": 2768896,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "jitStats": {
+     "compiled": 58,
+     "freed": 2,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 517943
+    }
+   },
+   {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "sync",
+    "backend": "mem",
+    "jit": true,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "4529fd3ca79330ec9c7e44fcb4b44d3ad61c0479515d128771a8f538634e11e2",
+    "console": "db7633e0b1e96c345a202bb04f17fcf1d12537c1fec28e47cbc0a493176110c3",
+    "consoleBytes": 7724,
+    "imports": "0fca82a273ddc367b6c70b0c75d83a478cb230d85f504c32207968fd48c111be",
+    "importCalls": 29341,
+    "icount": 201700902,
+    "nsPerInsn": 0,
+    "virtualNs": 40000000000,
+    "idles": 1072,
+    "realTimers": 0,
+    "inputsDelivered": 7,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 7
+    },
+    "disk": "5e44d8ce29d01de0608b667b41c9e595e4bd49bc6e939aca81da8e8d25bf8425",
+    "diskImageBytes": 2741496,
+    "diskBlocks": 668,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "5e44d8ce29d01de0608b667b41c9e595e4bd49bc6e939aca81da8e8d25bf8425",
+    "diskLog": "b6728d05dcbe5c00d49559d33e58c29f7a9ba41e5c48e85c5660cf3b5f1e7c1c",
+    "diskOps": {
+     "read": 71,
+     "write": 64,
+     "flush": 32,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 3196928,
+     "write": 2768896
+    },
+    "diskGen": 1,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 0,
+    "blockStats": {
+     "reads": 71,
+     "writes": 64,
+     "flushes": 32,
+     "discards": 0,
+     "async": 0,
+     "bytesRead": 3196928,
+     "bytesWritten": 2768896,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "jitStats": {
+     "compiled": 58,
+     "freed": 2,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 517943
+    }
+   },
+   {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "virtual",
+    "backend": "mem",
+    "jit": true,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "a934c454b41c4f08bb2da7681cada160f34668ac8e198866a99c84bb3085362b",
+    "console": "63ffd9abd9b0d47a90bf9a59b6e875e2db303ae80d18371e94e6d9c8c18ff115",
+    "consoleBytes": 7724,
+    "imports": "c2733c00756f0cda85747d136bf6c5f6b6cc84d5b17dd5231c52c7623f3c506e",
+    "importCalls": 30575,
+    "icount": 201701171,
+    "nsPerInsn": 0,
+    "virtualNs": 40000000000,
+    "idles": 1165,
+    "realTimers": 0,
+    "inputsDelivered": 7,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 7
+    },
+    "disk": "b1b398ee4c2f1981bebe461826b13abbccdf84d18f613aae4d5e848c2248dc85",
+    "diskImageBytes": 2753808,
+    "diskBlocks": 671,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "b1b398ee4c2f1981bebe461826b13abbccdf84d18f613aae4d5e848c2248dc85",
+    "diskLog": "41dbab4308067bbe59eb5c31308589dec4126cff82a81ef75ad2b7ce8187756a",
+    "diskOps": {
+     "read": 70,
+     "write": 66,
+     "flush": 33,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 3196928,
+     "write": 2777088
+    },
+    "diskGen": 1,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 169,
+    "blockStats": {
+     "reads": 70,
+     "writes": 66,
+     "flushes": 33,
+     "discards": 0,
+     "async": 169,
+     "bytesRead": 3196928,
+     "bytesWritten": 2777088,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "latencyUs": [
+     200,
+     0
+    ],
+    "jitStats": {
+     "compiled": 59,
+     "freed": 2,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 518796
+    }
+   },
+   {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "virtual",
+    "backend": "mem",
+    "jit": true,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "a934c454b41c4f08bb2da7681cada160f34668ac8e198866a99c84bb3085362b",
+    "console": "63ffd9abd9b0d47a90bf9a59b6e875e2db303ae80d18371e94e6d9c8c18ff115",
+    "consoleBytes": 7724,
+    "imports": "c2733c00756f0cda85747d136bf6c5f6b6cc84d5b17dd5231c52c7623f3c506e",
+    "importCalls": 30575,
+    "icount": 201701171,
+    "nsPerInsn": 0,
+    "virtualNs": 40000000000,
+    "idles": 1165,
+    "realTimers": 0,
+    "inputsDelivered": 7,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 7
+    },
+    "disk": "b1b398ee4c2f1981bebe461826b13abbccdf84d18f613aae4d5e848c2248dc85",
+    "diskImageBytes": 2753808,
+    "diskBlocks": 671,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "b1b398ee4c2f1981bebe461826b13abbccdf84d18f613aae4d5e848c2248dc85",
+    "diskLog": "41dbab4308067bbe59eb5c31308589dec4126cff82a81ef75ad2b7ce8187756a",
+    "diskOps": {
+     "read": 70,
+     "write": 66,
+     "flush": 33,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 3196928,
+     "write": 2777088
+    },
+    "diskGen": 1,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 169,
+    "blockStats": {
+     "reads": 70,
+     "writes": 66,
+     "flushes": 33,
+     "discards": 0,
+     "async": 169,
+     "bytesRead": 3196928,
+     "bytesWritten": 2777088,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "latencyUs": [
+     200,
+     0
+    ],
+    "jitStats": {
+     "compiled": 59,
+     "freed": 2,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 518796
+    }
+   }
+  ],
+  "same_as_interpreter": [
+   "console",
+   "icount",
+   "disk",
+   "diskDurable",
+   "diskLog"
+  ],
+  "virtual_same_as_interpreter": [
+   "console",
+   "icount",
+   "disk",
+   "diskDurable",
+   "diskLog"
+  ]
+ },
+ "snapshot": {
+  "sync": [
+   {
+    "mode": "controlled",
+    "why": "snapshot",
+    "completion": "sync",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "094ac6233dbee549724f2c1fc859c824e7dca54c742b5e34d242ee5fd2e8986f",
+    "console": "376cd7888d645381e0c3e5d7c5c2f5475b68e4d4232467ee0c04aef5b2139bcb",
+    "consoleBytes": 6470,
+    "imports": "c246be5f0eb763ae65d737ee76544295edfcb93c143a1b822f8021d0c6052839",
+    "importCalls": 13770,
+    "icount": 38900042,
+    "nsPerInsn": 5,
+    "virtualNs": 10050309415,
+    "idles": 389,
+    "realTimers": 0,
+    "inputsDelivered": 5,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 5
+    },
+    "snapshotFrom": "clock",
+    "snapshot": {
+     "memory": "822de79471fc30da3de73a794abd07c71bed997c2564735db91e3e766739b3c0",
+     "monotonicMs": 10050.249415,
+     "freeBytes": 114671616,
+     "file": "4a81de9b92def26a352e3c7430d601c35bce9b120c884412fdeb1987560cb2d8",
+     "fileBytes": 134218202,
+     "disks": [
+      {
+       "name": "probe memdisk",
+       "identity": "probe-memdisk",
+       "gen": 1
+      }
+     ],
+     "sealedDisk": "2f4bc6ee6c105e4d3c2742babdb4b2a1a3853ad7c483753d7b73ebecc8d32062"
+    },
+    "disk": "2f4bc6ee6c105e4d3c2742babdb4b2a1a3853ad7c483753d7b73ebecc8d32062",
+    "diskImageBytes": 2659416,
+    "diskBlocks": 648,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "2f4bc6ee6c105e4d3c2742babdb4b2a1a3853ad7c483753d7b73ebecc8d32062",
+    "diskLog": "4bf90963406dfa771aaa98892fe58940137b9680ed5f90486328e2c42cc80430",
+    "diskOps": {
+     "read": 48,
+     "write": 40,
+     "flush": 17,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 591872,
+     "write": 2613248
+    },
+    "diskGen": 1,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 0,
+    "blockStats": {
+     "reads": 48,
+     "writes": 40,
+     "flushes": 17,
+     "discards": 0,
+     "async": 0,
+     "bytesRead": 591872,
+     "bytesWritten": 2613248,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   },
+   {
+    "mode": "controlled",
+    "why": "snapshot",
+    "completion": "sync",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "094ac6233dbee549724f2c1fc859c824e7dca54c742b5e34d242ee5fd2e8986f",
+    "console": "376cd7888d645381e0c3e5d7c5c2f5475b68e4d4232467ee0c04aef5b2139bcb",
+    "consoleBytes": 6470,
+    "imports": "c246be5f0eb763ae65d737ee76544295edfcb93c143a1b822f8021d0c6052839",
+    "importCalls": 13770,
+    "icount": 38900042,
+    "nsPerInsn": 5,
+    "virtualNs": 10050309415,
+    "idles": 389,
+    "realTimers": 0,
+    "inputsDelivered": 5,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 5
+    },
+    "snapshotFrom": "clock",
+    "snapshot": {
+     "memory": "822de79471fc30da3de73a794abd07c71bed997c2564735db91e3e766739b3c0",
+     "monotonicMs": 10050.249415,
+     "freeBytes": 114671616,
+     "file": "4a81de9b92def26a352e3c7430d601c35bce9b120c884412fdeb1987560cb2d8",
+     "fileBytes": 134218202,
+     "disks": [
+      {
+       "name": "probe memdisk",
+       "identity": "probe-memdisk",
+       "gen": 1
+      }
+     ],
+     "sealedDisk": "2f4bc6ee6c105e4d3c2742babdb4b2a1a3853ad7c483753d7b73ebecc8d32062"
+    },
+    "disk": "2f4bc6ee6c105e4d3c2742babdb4b2a1a3853ad7c483753d7b73ebecc8d32062",
+    "diskImageBytes": 2659416,
+    "diskBlocks": 648,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "2f4bc6ee6c105e4d3c2742babdb4b2a1a3853ad7c483753d7b73ebecc8d32062",
+    "diskLog": "4bf90963406dfa771aaa98892fe58940137b9680ed5f90486328e2c42cc80430",
+    "diskOps": {
+     "read": 48,
+     "write": 40,
+     "flush": 17,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 591872,
+     "write": 2613248
+    },
+    "diskGen": 1,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 0,
+    "blockStats": {
+     "reads": 48,
+     "writes": 40,
+     "flushes": 17,
+     "discards": 0,
+     "async": 0,
+     "bytesRead": 591872,
+     "bytesWritten": 2613248,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   }
+  ],
+  "virtual": [
+   {
+    "mode": "controlled",
+    "why": "snapshot",
+    "completion": "virtual",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "31019f469017edc72353bc42c2c49146bc975dc2bef5289ab5b0972b8833eb33",
+    "console": "e8e2ff44f0927497833204fa010dbe99e742cbd331cd443845e993c9c0e77d12",
+    "consoleBytes": 6463,
+    "imports": "8cc7afd18558de7da4be1cc308c42b8f3dbe3b09868cfab350f8ec2160a0a2a1",
+    "importCalls": 15137,
+    "icount": 57294228,
+    "nsPerInsn": 5,
+    "virtualNs": 10142726310,
+    "idles": 453,
+    "realTimers": 0,
+    "inputsDelivered": 5,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 5
+    },
+    "snapshotFrom": "clock",
+    "snapshot": {
+     "memory": "86d4ed2118571b523e18bd8a57ac048a1316ea8bff417e2c65e7bd189d73e441",
+     "monotonicMs": 10142.66431,
+     "freeBytes": 114569216,
+     "file": "1b5912183841d49a63c2e30f01cf9bc1853b9cb66de1b9db56a4557fb7d98ad1",
+     "fileBytes": 134218202,
+     "disks": [
+      {
+       "name": "probe memdisk",
+       "identity": "probe-memdisk",
+       "gen": 1
+      }
+     ],
+     "sealedDisk": "68c8f3d631e4ece87bde04ffcc02af3ea760208cb612671135f469defe91f5f0"
+    },
+    "disk": "68c8f3d631e4ece87bde04ffcc02af3ea760208cb612671135f469defe91f5f0",
+    "diskImageBytes": 2659416,
+    "diskBlocks": 648,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "68c8f3d631e4ece87bde04ffcc02af3ea760208cb612671135f469defe91f5f0",
+    "diskLog": "7dae835133124f4e0f36557befd25e6980a1225c69be52e82687ea3c909792a1",
+    "diskOps": {
+     "read": 48,
+     "write": 40,
+     "flush": 16,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 591872,
+     "write": 2613248
+    },
+    "diskGen": 1,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 104,
+    "blockStats": {
+     "reads": 48,
+     "writes": 40,
+     "flushes": 16,
+     "discards": 0,
+     "async": 104,
+     "bytesRead": 591872,
+     "bytesWritten": 2613248,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "latencyUs": [
+     200,
+     0
+    ],
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   },
+   {
+    "mode": "controlled",
+    "why": "snapshot",
+    "completion": "virtual",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "31019f469017edc72353bc42c2c49146bc975dc2bef5289ab5b0972b8833eb33",
+    "console": "e8e2ff44f0927497833204fa010dbe99e742cbd331cd443845e993c9c0e77d12",
+    "consoleBytes": 6463,
+    "imports": "8cc7afd18558de7da4be1cc308c42b8f3dbe3b09868cfab350f8ec2160a0a2a1",
+    "importCalls": 15137,
+    "icount": 57294228,
+    "nsPerInsn": 5,
+    "virtualNs": 10142726310,
+    "idles": 453,
+    "realTimers": 0,
+    "inputsDelivered": 5,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 5
+    },
+    "snapshotFrom": "clock",
+    "snapshot": {
+     "memory": "86d4ed2118571b523e18bd8a57ac048a1316ea8bff417e2c65e7bd189d73e441",
+     "monotonicMs": 10142.66431,
+     "freeBytes": 114569216,
+     "file": "1b5912183841d49a63c2e30f01cf9bc1853b9cb66de1b9db56a4557fb7d98ad1",
+     "fileBytes": 134218202,
+     "disks": [
+      {
+       "name": "probe memdisk",
+       "identity": "probe-memdisk",
+       "gen": 1
+      }
+     ],
+     "sealedDisk": "68c8f3d631e4ece87bde04ffcc02af3ea760208cb612671135f469defe91f5f0"
+    },
+    "disk": "68c8f3d631e4ece87bde04ffcc02af3ea760208cb612671135f469defe91f5f0",
+    "diskImageBytes": 2659416,
+    "diskBlocks": 648,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "68c8f3d631e4ece87bde04ffcc02af3ea760208cb612671135f469defe91f5f0",
+    "diskLog": "7dae835133124f4e0f36557befd25e6980a1225c69be52e82687ea3c909792a1",
+    "diskOps": {
+     "read": 48,
+     "write": 40,
+     "flush": 16,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 591872,
+     "write": 2613248
+    },
+    "diskGen": 1,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 104,
+    "blockStats": {
+     "reads": 48,
+     "writes": 40,
+     "flushes": 16,
+     "discards": 0,
+     "async": 104,
+     "bytesRead": 591872,
+     "bytesWritten": 2613248,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "latencyUs": [
+     200,
+     0
+    ],
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   }
+  ]
+ },
+ "restore": {
+  "sync": [
+   {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "sync",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "777f0c31ce11e5b5723add5334fd321f250134ae74c3cdc93ec8424deef77113",
+    "console": "e849a392014f69735922d0a0e586be5d350011b6c754f920258061e2d7564aab",
+    "consoleBytes": 1270,
+    "imports": "6f421212654ea0e8c10567af2a54d707911b6f42c7885e79af97955b7b8c1c83",
+    "importCalls": 8164,
+    "icount": 201746671,
+    "nsPerInsn": 5,
+    "virtualNs": 7000000000,
+    "idles": 211,
+    "realTimers": 0,
+    "inputsDelivered": 2,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 2
+    },
+    "disk": "42da6c2b5e4d123436dc222279a57ba0f15adca56ccbb8adf610d2e725575a42",
+    "diskImageBytes": 2741496,
+    "diskBlocks": 668,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "42da6c2b5e4d123436dc222279a57ba0f15adca56ccbb8adf610d2e725575a42",
+    "diskLog": "dc06c98ca3053bbeae76628acdcbd1792893b65df16b5055fa0612b2ab90d4c3",
+    "diskOps": {
+     "read": 25,
+     "write": 23,
+     "flush": 14,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 2617344,
+     "write": 151552
+    },
+    "diskGen": 2,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 0,
+    "blockStats": {
+     "reads": 25,
+     "writes": 23,
+     "flushes": 14,
+     "discards": 0,
+     "async": 0,
+     "bytesRead": 2617344,
+     "bytesWritten": 151552,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   },
+   {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "sync",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "777f0c31ce11e5b5723add5334fd321f250134ae74c3cdc93ec8424deef77113",
+    "console": "e849a392014f69735922d0a0e586be5d350011b6c754f920258061e2d7564aab",
+    "consoleBytes": 1270,
+    "imports": "6f421212654ea0e8c10567af2a54d707911b6f42c7885e79af97955b7b8c1c83",
+    "importCalls": 8164,
+    "icount": 201746671,
+    "nsPerInsn": 5,
+    "virtualNs": 7000000000,
+    "idles": 211,
+    "realTimers": 0,
+    "inputsDelivered": 2,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 2
+    },
+    "disk": "42da6c2b5e4d123436dc222279a57ba0f15adca56ccbb8adf610d2e725575a42",
+    "diskImageBytes": 2741496,
+    "diskBlocks": 668,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "42da6c2b5e4d123436dc222279a57ba0f15adca56ccbb8adf610d2e725575a42",
+    "diskLog": "dc06c98ca3053bbeae76628acdcbd1792893b65df16b5055fa0612b2ab90d4c3",
+    "diskOps": {
+     "read": 25,
+     "write": 23,
+     "flush": 14,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 2617344,
+     "write": 151552
+    },
+    "diskGen": 2,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 0,
+    "blockStats": {
+     "reads": 25,
+     "writes": 23,
+     "flushes": 14,
+     "discards": 0,
+     "async": 0,
+     "bytesRead": 2617344,
+     "bytesWritten": 151552,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   }
+  ],
+  "virtual": [
+   {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "virtual",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "8ac301e6fd9102d813f9c73a3bbc19680fe2f7df0a8eb26aa0c60a1dfb275b4f",
+    "console": "02f47b54dc0a8eb361ece0398cbdfbde706ff77348f95db9db2c44815ca740b4",
+    "consoleBytes": 1277,
+    "imports": "f9865301098d393892613fca9463fd21f233ac99724be6bc0cc9525804617d53",
+    "importCalls": 8898,
+    "icount": 201746841,
+    "nsPerInsn": 5,
+    "virtualNs": 7000000000,
+    "idles": 270,
+    "realTimers": 0,
+    "inputsDelivered": 2,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 2
+    },
+    "disk": "fc28c413cca3775513c3cd5ce86eccebe4b98d4816f42b4a93d74cd1c5b5cd19",
+    "diskImageBytes": 2753808,
+    "diskBlocks": 671,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "fc28c413cca3775513c3cd5ce86eccebe4b98d4816f42b4a93d74cd1c5b5cd19",
+    "diskLog": "e58f9d6ab7254c85aa87529962f2b10f64e0e66cd1b8d115b01fde0396728812",
+    "diskOps": {
+     "read": 25,
+     "write": 26,
+     "flush": 17,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 2617344,
+     "write": 167936
+    },
+    "diskGen": 2,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 68,
+    "blockStats": {
+     "reads": 25,
+     "writes": 26,
+     "flushes": 17,
+     "discards": 0,
+     "async": 68,
+     "bytesRead": 2617344,
+     "bytesWritten": 167936,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "latencyUs": [
+     200,
+     0
+    ],
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   },
+   {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "virtual",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "8ac301e6fd9102d813f9c73a3bbc19680fe2f7df0a8eb26aa0c60a1dfb275b4f",
+    "console": "02f47b54dc0a8eb361ece0398cbdfbde706ff77348f95db9db2c44815ca740b4",
+    "consoleBytes": 1277,
+    "imports": "f9865301098d393892613fca9463fd21f233ac99724be6bc0cc9525804617d53",
+    "importCalls": 8898,
+    "icount": 201746841,
+    "nsPerInsn": 5,
+    "virtualNs": 7000000000,
+    "idles": 270,
+    "realTimers": 0,
+    "inputsDelivered": 2,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 2
+    },
+    "disk": "fc28c413cca3775513c3cd5ce86eccebe4b98d4816f42b4a93d74cd1c5b5cd19",
+    "diskImageBytes": 2753808,
+    "diskBlocks": 671,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "fc28c413cca3775513c3cd5ce86eccebe4b98d4816f42b4a93d74cd1c5b5cd19",
+    "diskLog": "e58f9d6ab7254c85aa87529962f2b10f64e0e66cd1b8d115b01fde0396728812",
+    "diskOps": {
+     "read": 25,
+     "write": 26,
+     "flush": 17,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 2617344,
+     "write": 167936
+    },
+    "diskGen": 2,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 68,
+    "blockStats": {
+     "reads": 25,
+     "writes": 26,
+     "flushes": 17,
+     "discards": 0,
+     "async": 68,
+     "bytesRead": 2617344,
+     "bytesWritten": 167936,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "latencyUs": [
+     200,
+     0
+    ],
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   }
+  ],
+  "other_image_same_generation": {
+   "mode": "controlled",
+   "why": "end time",
+   "completion": "sync",
+   "backend": "mem",
+   "jit": false,
+   "seed": 1,
+   "stepNs": 1000,
+   "memory": "d071ef523acc22eb727f665d26b07fa0ffe4a029e4e545c50e6c81a4faa23886",
+   "console": "ea9c2239b29ca07225bb8072663380dbdb462aca2e40212881c91d07c7cd01c0",
+   "consoleBytes": 1371,
+   "imports": "1fe8bb0f00a53d5367cf71fddc73b5f082614a943870de138983fd16c8b7a226",
+   "importCalls": 8179,
+   "icount": 201727952,
+   "nsPerInsn": 5,
+   "virtualNs": 7000000000,
+   "idles": 211,
+   "realTimers": 0,
+   "inputsDelivered": 2,
+   "deliveredFrom": {
+    "clock": 0,
+    "poll": 0,
+    "jump": 2
+   },
+   "disk": "94800ee67d824e2a019ce8d673c7796bce38c03559ce9fbed3e853fd719e13d9",
+   "diskImageBytes": 2745600,
+   "diskBlocks": 669,
+   "diskSizeBytes": 4294967296,
+   "diskDurable": "94800ee67d824e2a019ce8d673c7796bce38c03559ce9fbed3e853fd719e13d9",
+   "diskLog": "0074e20b14f939af1a920bdfbadb135fdde42c7c08684bef695eddb2bcfc29f2",
+   "diskOps": {
+    "read": 24,
+    "write": 23,
+    "flush": 14,
+    "discard": 0,
+    "zeroes": 0
+   },
+   "diskIoBytes": {
+    "read": 2613248,
+    "write": 159744
+   },
+   "diskGen": 2,
+   "unflushedWrites": 0,
+   "unflushedBytes": 0,
+   "pendingVirtual": 0,
+   "pendingReal": 0,
+   "completedVirtual": 0,
+   "blockStats": {
+    "reads": 24,
+    "writes": 23,
+    "flushes": 14,
+    "discards": 0,
+    "async": 0,
+    "bytesRead": 2613248,
+    "bytesWritten": 159744,
+    "inflight": 0,
+    "unreaped": 0
+   },
+   "hostDelayMs": 0,
+   "jitStats": {
+    "compiled": 0,
+    "freed": 0,
+    "refused": 0,
+    "failed": 0,
+    "bytes": 0
+   }
+  }
+ },
+ "power_cut": {
+  "runs": [
+   {
+    "mode": "controlled",
+    "why": "power cut at disk request 48",
+    "completion": "sync",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "f3632d29b33d364409a788a1cc240fe1b6064f76be972671f579d665bbdaed9e",
+    "console": "85bfdda77a068b77b6193f7e5a3ad108885d91d0c6de9bb56180cd08602fac99",
+    "consoleBytes": 5305,
+    "imports": "878bccf203835574831b016847291be16bbf4e50e6317a19a3f09a816d5558f8",
+    "importCalls": 7824,
+    "icount": 4793095,
+    "nsPerInsn": 0,
+    "virtualNs": 5120370000,
+    "idles": 213,
+    "realTimers": 0,
+    "inputsDelivered": 2,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 2
+    },
+    "disk": "a5694681aba424bfc82a1c87502febfb58a68470117de42b198b676fb5d46582",
+    "diskImageBytes": 2351616,
+    "diskBlocks": 573,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "07723112de1d95dd355c54e0fb8b1d5ec2e0fa4bdbfb3da6e269a08b3a2515cb",
+    "diskLog": "bc00ba9c0dd358b43e2ccf5eb939a6abbc550a86616cc84009f9f7e31d813ba9",
+    "diskOps": {
+     "read": 21,
+     "write": 21,
+     "flush": 6,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 95232,
+     "write": 2236416
+    },
+    "diskGen": 1,
+    "unflushedWrites": 1,
+    "unflushedBytes": 4096,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 0,
+    "blockStats": {
+     "reads": 21,
+     "writes": 21,
+     "flushes": 6,
+     "discards": 0,
+     "async": 0,
+     "bytesRead": 95232,
+     "bytesWritten": 2236416,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   },
+   {
+    "mode": "controlled",
+    "why": "power cut at disk request 48",
+    "completion": "sync",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "f3632d29b33d364409a788a1cc240fe1b6064f76be972671f579d665bbdaed9e",
+    "console": "85bfdda77a068b77b6193f7e5a3ad108885d91d0c6de9bb56180cd08602fac99",
+    "consoleBytes": 5305,
+    "imports": "878bccf203835574831b016847291be16bbf4e50e6317a19a3f09a816d5558f8",
+    "importCalls": 7824,
+    "icount": 4793095,
+    "nsPerInsn": 0,
+    "virtualNs": 5120370000,
+    "idles": 213,
+    "realTimers": 0,
+    "inputsDelivered": 2,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 2
+    },
+    "disk": "a5694681aba424bfc82a1c87502febfb58a68470117de42b198b676fb5d46582",
+    "diskImageBytes": 2351616,
+    "diskBlocks": 573,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "07723112de1d95dd355c54e0fb8b1d5ec2e0fa4bdbfb3da6e269a08b3a2515cb",
+    "diskLog": "bc00ba9c0dd358b43e2ccf5eb939a6abbc550a86616cc84009f9f7e31d813ba9",
+    "diskOps": {
+     "read": 21,
+     "write": 21,
+     "flush": 6,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 95232,
+     "write": 2236416
+    },
+    "diskGen": 1,
+    "unflushedWrites": 1,
+    "unflushedBytes": 4096,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 0,
+    "blockStats": {
+     "reads": 21,
+     "writes": 21,
+     "flushes": 6,
+     "discards": 0,
+     "async": 0,
+     "bytesRead": 95232,
+     "bytesWritten": 2236416,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   }
+  ],
+  "second_guest": [
+   {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "sync",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "6e0a51d99c0dba8c38f856062ddf6f3937d620bf7a765ea41087fb05a29c0ba1",
+    "console": "beee19e2b96149e7b3a448ea25f8a9eba9bd56c03ee3007e208b135cf879971c",
+    "consoleBytes": 5938,
+    "imports": "91e3dd7afea070ec046562246171c61fa6728949b1740cf1f8f7130537b288cf",
+    "importCalls": 9315,
+    "icount": 6175358,
+    "nsPerInsn": 0,
+    "virtualNs": 7000000000,
+    "idles": 274,
+    "realTimers": 0,
+    "inputsDelivered": 2,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 2
+    },
+    "disk": "15c8302b37ba3775cf277ca04326961727bdaa139e5df5ed6a1d0065017b8a0a",
+    "diskImageBytes": 2368032,
+    "diskBlocks": 577,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "15c8302b37ba3775cf277ca04326961727bdaa139e5df5ed6a1d0065017b8a0a",
+    "diskLog": "b970d091342ccdd25359a1792f10ba7ed91ce40bd37d5c8cb095c0f5b5d7a829",
+    "diskOps": {
+     "read": 22,
+     "write": 24,
+     "flush": 16,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 226304,
+     "write": 126976
+    },
+    "diskGen": 1,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 0,
+    "blockStats": {
+     "reads": 22,
+     "writes": 24,
+     "flushes": 16,
+     "discards": 0,
+     "async": 0,
+     "bytesRead": 226304,
+     "bytesWritten": 126976,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   },
+   {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "sync",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "6e0a51d99c0dba8c38f856062ddf6f3937d620bf7a765ea41087fb05a29c0ba1",
+    "console": "beee19e2b96149e7b3a448ea25f8a9eba9bd56c03ee3007e208b135cf879971c",
+    "consoleBytes": 5938,
+    "imports": "91e3dd7afea070ec046562246171c61fa6728949b1740cf1f8f7130537b288cf",
+    "importCalls": 9315,
+    "icount": 6175358,
+    "nsPerInsn": 0,
+    "virtualNs": 7000000000,
+    "idles": 274,
+    "realTimers": 0,
+    "inputsDelivered": 2,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 2
+    },
+    "disk": "15c8302b37ba3775cf277ca04326961727bdaa139e5df5ed6a1d0065017b8a0a",
+    "diskImageBytes": 2368032,
+    "diskBlocks": 577,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "15c8302b37ba3775cf277ca04326961727bdaa139e5df5ed6a1d0065017b8a0a",
+    "diskLog": "b970d091342ccdd25359a1792f10ba7ed91ce40bd37d5c8cb095c0f5b5d7a829",
+    "diskOps": {
+     "read": 22,
+     "write": 24,
+     "flush": 16,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 226304,
+     "write": 126976
+    },
+    "diskGen": 1,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 0,
+    "blockStats": {
+     "reads": 22,
+     "writes": 24,
+     "flushes": 16,
+     "discards": 0,
+     "async": 0,
+     "bytesRead": 226304,
+     "bytesWritten": 126976,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   }
+  ],
+  "second_guest_unflushed_kept": {
+   "mode": "controlled",
+   "why": "end time",
+   "completion": "sync",
+   "backend": "mem",
+   "jit": false,
+   "seed": 1,
+   "stepNs": 1000,
+   "memory": "8e9a74a2a1b11872096a1f3e3099fa5eef4250dd8e9a077b3f984ec17062f226",
+   "console": "3d47e64fe9a4f30fc40d477f9486d48048c22f509bdb7f0af5d7a943df7081c0",
+   "consoleBytes": 6053,
+   "imports": "0fc0922e96afc871f68ebf6b0f8b77eaed46ae2968ffd911e4a3f4a07681f77b",
+   "importCalls": 10416,
+   "icount": 112319316,
+   "nsPerInsn": 0,
+   "virtualNs": 7000000000,
+   "idles": 272,
+   "realTimers": 0,
+   "inputsDelivered": 2,
+   "deliveredFrom": {
+    "clock": 0,
+    "poll": 0,
+    "jump": 2
+   },
+   "disk": "72fb54b065733c2f741b155141a27bb4c5fde04a195c7e932de91c5c7cac52b1",
+   "diskImageBytes": 2404968,
+   "diskBlocks": 586,
+   "diskSizeBytes": 4294967296,
+   "diskDurable": "72fb54b065733c2f741b155141a27bb4c5fde04a195c7e932de91c5c7cac52b1",
+   "diskLog": "b039d6817d8749d193183ae176246a4ec27292d32e9c61df25463681ff6f30db",
+   "diskOps": {
+    "read": 39,
+    "write": 24,
+    "flush": 16,
+    "discard": 0,
+    "zeroes": 0
+   },
+   "diskIoBytes": {
+    "read": 2327552,
+    "write": 135168
+   },
+   "diskGen": 1,
+   "unflushedWrites": 0,
+   "unflushedBytes": 0,
+   "pendingVirtual": 0,
+   "pendingReal": 0,
+   "completedVirtual": 0,
+   "blockStats": {
+    "reads": 39,
+    "writes": 24,
+    "flushes": 16,
+    "discards": 0,
+    "async": 0,
+    "bytesRead": 2327552,
+    "bytesWritten": 135168,
+    "inflight": 0,
+    "unreaped": 0
+   },
+   "hostDelayMs": 0,
+   "jitStats": {
+    "compiled": 0,
+    "freed": 0,
+    "refused": 0,
+    "failed": 0,
+    "bytes": 0
+   }
+  }
+ },
+ "teeth": {
+  "one bit of one data write changed as stored": {
+   "differ_on": [
+    "console",
+    "imports",
+    "disk",
+    "diskDurable",
+    "diskLog"
+   ],
+   "run": {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "sync",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "a59c0f619289931091e48f1122bb3086e464564dbba7f4b2fff2af1eba3bf495",
+    "console": "4c4034f03b4270d6e352b6d856c8d9a46b3e65ffa8a8fe2d15f10afa8b3c09c1",
+    "consoleBytes": 7724,
+    "imports": "58fdddfe7dec65b456b550f19a99be11be7e37a9ccaccd93c67b619e0cf63a22",
+    "importCalls": 29281,
+    "icount": 201700902,
+    "nsPerInsn": 0,
+    "virtualNs": 40000000000,
+    "idles": 1072,
+    "realTimers": 0,
+    "inputsDelivered": 7,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 7
+    },
+    "disk": "509bd839e9578db178a06a06fe90142e2f12e767f4abdfedaa5c7cf573802602",
+    "diskImageBytes": 2741496,
+    "diskBlocks": 668,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "509bd839e9578db178a06a06fe90142e2f12e767f4abdfedaa5c7cf573802602",
+    "diskLog": "54df37a565b708952e92e1b2168c46ea91a81dfef4e48ec292e89558e89990f6",
+    "diskOps": {
+     "read": 71,
+     "write": 64,
+     "flush": 32,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 3196928,
+     "write": 2768896
+    },
+    "diskGen": 1,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 0,
+    "blockStats": {
+     "reads": 71,
+     "writes": 64,
+     "flushes": 32,
+     "discards": 0,
+     "async": 0,
+     "bytesRead": 3196928,
+     "bytesWritten": 2768896,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   }
+  },
+  "one byte of the initial image changed, in a block the guest never reads": {
+   "differ_on": [
+    "disk",
+    "diskDurable"
+   ],
+   "run": {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "sync",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "a59c0f619289931091e48f1122bb3086e464564dbba7f4b2fff2af1eba3bf495",
+    "console": "db7633e0b1e96c345a202bb04f17fcf1d12537c1fec28e47cbc0a493176110c3",
+    "consoleBytes": 7724,
+    "imports": "71fdf8542316d312844954b96fa19dcc95b65fc94952bb8fddcb2f19cc51a07f",
+    "importCalls": 29281,
+    "icount": 201700902,
+    "nsPerInsn": 0,
+    "virtualNs": 40000000000,
+    "idles": 1072,
+    "realTimers": 0,
+    "inputsDelivered": 7,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 7
+    },
+    "disk": "2e35fe44cc40327ad201d046a5aa2486764705932675d541a42bcf99af023b55",
+    "diskImageBytes": 2745600,
+    "diskBlocks": 669,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "2e35fe44cc40327ad201d046a5aa2486764705932675d541a42bcf99af023b55",
+    "diskLog": "b6728d05dcbe5c00d49559d33e58c29f7a9ba41e5c48e85c5660cf3b5f1e7c1c",
+    "diskOps": {
+     "read": 71,
+     "write": 64,
+     "flush": 32,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 3196928,
+     "write": 2768896
+    },
+    "diskGen": 1,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 0,
+    "blockStats": {
+     "reads": 71,
+     "writes": 64,
+     "flushes": 32,
+     "discards": 0,
+     "async": 0,
+     "bytesRead": 3196928,
+     "bytesWritten": 2768896,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   }
+  },
+  "virtual latency 201 us instead of 200": {
+   "differ_on": [
+    "memory",
+    "console",
+    "imports",
+    "importCalls",
+    "icount",
+    "disk",
+    "diskDurable",
+    "diskLog"
+   ],
+   "run": {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "virtual",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "664b20fe3be1e5b1bb6bf0710e05bdb397162da2e8245a0ca6007344b5157db7",
+    "console": "b5d054297a9463f679dcd1fb1a0e74ae178998eb7b8b0885d5943d0c88ce4111",
+    "consoleBytes": 7724,
+    "imports": "a15ff1a25e05d4ed6fd0e4d2122c7bfcadedd85b08681434fecd1b26dc0c106b",
+    "importCalls": 30539,
+    "icount": 201700953,
+    "nsPerInsn": 0,
+    "virtualNs": 40000000000,
+    "idles": 1167,
+    "realTimers": 0,
+    "inputsDelivered": 7,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 7
+    },
+    "disk": "ca50012dafbdb2963753d2b15f3a93756c337abbbe466e182eac6b6ffa7359b1",
+    "diskImageBytes": 2753808,
+    "diskBlocks": 671,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "ca50012dafbdb2963753d2b15f3a93756c337abbbe466e182eac6b6ffa7359b1",
+    "diskLog": "eafa84e0d5f58f3de32a86785ee4c5adec18789e6e02152f6ef7c31e55fb85d4",
+    "diskOps": {
+     "read": 70,
+     "write": 66,
+     "flush": 33,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 3196928,
+     "write": 2777088
+    },
+    "diskGen": 1,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 169,
+    "blockStats": {
+     "reads": 70,
+     "writes": 66,
+     "flushes": 33,
+     "discards": 0,
+     "async": 169,
+     "bytesRead": 3196928,
+     "bytesWritten": 2777088,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "latencyUs": [
+     201,
+     0
+    ],
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   }
+  },
+  "latency seed 8 instead of 7": {
+   "differ_on": [
+    "memory",
+    "console",
+    "imports",
+    "importCalls",
+    "icount",
+    "disk",
+    "diskDurable",
+    "diskLog"
+   ],
+   "run": {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "virtual",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "afbaab7b4fb31f221c02c02cacb422e5e5a4bbe9f13e64330f17dc8742f95366",
+    "console": "740e438cdf6172c5f9c47ad3e309733e58980a2a8ccea557128bfbf4b5e3b71d",
+    "consoleBytes": 7724,
+    "imports": "68e70a674e5285d4849e18e64f23e78e4de8fa26156f0f99c7b4f56334bfbdd2",
+    "importCalls": 30973,
+    "icount": 201700862,
+    "nsPerInsn": 0,
+    "virtualNs": 40000000000,
+    "idles": 1216,
+    "realTimers": 0,
+    "inputsDelivered": 7,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 7
+    },
+    "disk": "5ce2a5fa9a0eab251ea7e9747df32b2fea76a76eabf977e996fa5508d439775b",
+    "diskImageBytes": 2753808,
+    "diskBlocks": 671,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "5ce2a5fa9a0eab251ea7e9747df32b2fea76a76eabf977e996fa5508d439775b",
+    "diskLog": "8fefab22fcafc57406fca6c8da327ef6f612b4b71761585f9ed1b8641819cea6",
+    "diskOps": {
+     "read": 71,
+     "write": 66,
+     "flush": 33,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 3196928,
+     "write": 2777088
+    },
+    "diskGen": 1,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 170,
+    "blockStats": {
+     "reads": 71,
+     "writes": 66,
+     "flushes": 33,
+     "discards": 0,
+     "async": 170,
+     "bytesRead": 3196928,
+     "bytesWritten": 2777088,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "latencyUs": [
+     200,
+     5000
+    ],
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   }
+  },
+  "one bit of the first write changed as stored (the guest writes that block again)": {
+   "differ_on": [
+    "diskLog"
+   ],
+   "run": {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "sync",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "a59c0f619289931091e48f1122bb3086e464564dbba7f4b2fff2af1eba3bf495",
+    "console": "db7633e0b1e96c345a202bb04f17fcf1d12537c1fec28e47cbc0a493176110c3",
+    "consoleBytes": 7724,
+    "imports": "71fdf8542316d312844954b96fa19dcc95b65fc94952bb8fddcb2f19cc51a07f",
+    "importCalls": 29281,
+    "icount": 201700902,
+    "nsPerInsn": 0,
+    "virtualNs": 40000000000,
+    "idles": 1072,
+    "realTimers": 0,
+    "inputsDelivered": 7,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 7
+    },
+    "disk": "5e44d8ce29d01de0608b667b41c9e595e4bd49bc6e939aca81da8e8d25bf8425",
+    "diskImageBytes": 2741496,
+    "diskBlocks": 668,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "5e44d8ce29d01de0608b667b41c9e595e4bd49bc6e939aca81da8e8d25bf8425",
+    "diskLog": "f49e4350e01bc32e91f9b3f71dcb9f575d57863f040689a29de9953b7ba0fa74",
+    "diskOps": {
+     "read": 71,
+     "write": 64,
+     "flush": 32,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 3196928,
+     "write": 2768896
+    },
+    "diskGen": 1,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 0,
+    "blockStats": {
+     "reads": 71,
+     "writes": 64,
+     "flushes": 32,
+     "discards": 0,
+     "async": 0,
+     "bytesRead": 3196928,
+     "bytesWritten": 2768896,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   }
+  },
+  "one byte of console input changed": {
+   "differ_on": [
+    "memory",
+    "console",
+    "imports",
+    "icount",
+    "disk",
+    "diskDurable",
+    "diskLog"
+   ],
+   "run": {
+    "mode": "controlled",
+    "why": "end time",
+    "completion": "sync",
+    "backend": "mem",
+    "jit": false,
+    "seed": 1,
+    "stepNs": 1000,
+    "memory": "cb88952feaa78dbfbcec5a03d84643e855025c2d363dadfe5011bbace94bf09a",
+    "console": "9d2c523f520c38c52bdbfef8f391228686af9e54b085d4abea99bb7d39fbba3c",
+    "consoleBytes": 7724,
+    "imports": "ff0abf1801f76bbc1abf6fdf0ac33f791ba32f41efc83ce780e601cc244e250f",
+    "importCalls": 29281,
+    "icount": 201700934,
+    "nsPerInsn": 0,
+    "virtualNs": 40000000000,
+    "idles": 1072,
+    "realTimers": 0,
+    "inputsDelivered": 7,
+    "deliveredFrom": {
+     "clock": 0,
+     "poll": 0,
+     "jump": 7
+    },
+    "disk": "9e4305262e431cfd41b413a47acf16b6d2f48dc186966becfd7ff2170e1fe117",
+    "diskImageBytes": 2741496,
+    "diskBlocks": 668,
+    "diskSizeBytes": 4294967296,
+    "diskDurable": "9e4305262e431cfd41b413a47acf16b6d2f48dc186966becfd7ff2170e1fe117",
+    "diskLog": "75b96d4bfb56fa56598fe63f3d64fc7eae789f317927ca1d23e59f88c08ab642",
+    "diskOps": {
+     "read": 71,
+     "write": 64,
+     "flush": 32,
+     "discard": 0,
+     "zeroes": 0
+    },
+    "diskIoBytes": {
+     "read": 3196928,
+     "write": 2768896
+    },
+    "diskGen": 1,
+    "unflushedWrites": 0,
+    "unflushedBytes": 0,
+    "pendingVirtual": 0,
+    "pendingReal": 0,
+    "completedVirtual": 0,
+    "blockStats": {
+     "reads": 71,
+     "writes": 64,
+     "flushes": 32,
+     "discards": 0,
+     "async": 0,
+     "bytesRead": 3196928,
+     "bytesWritten": 2768896,
+     "inflight": 0,
+     "unreaped": 0
+    },
+    "hostDelayMs": 0,
+    "jitStats": {
+     "compiled": 0,
+     "freed": 0,
+     "refused": 0,
+     "failed": 0,
+     "bytes": 0
+    }
+   }
+  }
+ }
+}

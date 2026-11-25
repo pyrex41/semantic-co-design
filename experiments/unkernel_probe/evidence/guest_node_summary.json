@@ -364,11 +364,11 @@
     458776472
    ],
    "session_insns": 1667772817,
-   "session_wall_s": 4.450543458,
-   "wall_ns_per_row_first_run": 37585.231349693255,
-   "wall_ns_per_row_second_run": 38753.6145398773,
-   "wall_ns_per_step_first_run": 885.3627300613497,
-   "wall_ns_per_step_second_run": 789.7042423312884
+   "session_wall_s": 5.16464525,
+   "wall_ns_per_row_first_run": 43615.81800613497,
+   "wall_ns_per_row_second_run": 46139.02478527607,
+   "wall_ns_per_step_first_run": 1003.2645705521472,
+   "wall_ns_per_step_second_run": 1016.773009202454
   },
   "jit": {
    "bench_insns": [
@@ -396,18 +396,18 @@
     458776472
    ],
    "session_insns": 1667772817,
-   "session_wall_s": 2.06787675,
-   "wall_ns_per_row_first_run": 19553.40874233129,
-   "wall_ns_per_row_second_run": 18113.675858895705,
-   "wall_ns_per_step_first_run": 321.9486165644172,
-   "wall_ns_per_step_second_run": 290.2592024539877
+   "session_wall_s": 2.465654959,
+   "wall_ns_per_row_first_run": 23925.256871165646,
+   "wall_ns_per_row_second_run": 21427.424601226994,
+   "wall_ns_per_step_first_run": 385.18008588957053,
+   "wall_ns_per_step_second_run": 338.54447852760734
   },
-  "native_library_from_python_ns_per_step": 1171.2423310775102,
-  "native_line_executable_ns_per_row": 1721.9849082247063,
-  "native_ns_per_step": 244.76495656424825,
+  "native_library_from_python_ns_per_step": 1230.6239253461383,
+  "native_line_executable_ns_per_row": 2016.5081594626424,
+  "native_ns_per_step": 268.0149309823155,
   "perf_output_sha256": "271c62cc5a038d59ddae81438e534612557543ebf9b5fd2b770326ce1ae15dd5",
   "rows": 32600,
-  "wasmtime_from_python_ns_per_step": 16602.96533641011
+  "wasmtime_from_python_ns_per_step": 20009.790492019805
  },
  "environment": {
   "node": "/nix/store/0n6wnabi4grafrkvnla0ip529rqp6yxp-nodejs-24.19.0/bin/node",
@@ -425,7 +425,7 @@
   "entropy": [
    "memory",
    "imports",
-   "importCalls"
+   "icount"
   ],
   "idle-real": [
    "a timer left to the real clock"
@@ -694,7 +694,7 @@
   "guest_node_build.py": "c47652d9645b5b9235f1a9e36dfd440ad65d3296b9ff067c6c84d216a674dd2b",
   "guest_node_check.py": "b8086487b69c03c1daadb767a4dab2414658a0b861935f56922090a9d4235b8a",
   "guest_node_history.c": "66c3f5de9ea289a29c43d800bd51505d876cce5523a5130aee567a4639e3a818",
-  "host.mjs": "d237f264d1ce077f31dca1472b0cece9e84db0800999eb6d79fc05d5382cb048"
+  "host.mjs": "883cf5c2e0a099c75511a4b7767064ec2b94b04dc4f6b547d69b6a6f3f0e6241"
  },
  "teeth": {
   "input_byte": {

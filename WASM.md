@@ -10,7 +10,7 @@
 | 4 | NixOS virtual machines with real faults | `real-vm`, `real-vm-mutant` (Linux only) | **UNKNOWN**: never built or booted |
 | 5 | unkernel: Linux as a wasm module under a controlled host | `unkernel-probe` | run, passes; a probe of the substrate, the node is not in it |
 
-On the branch `wasm/uk-node` the node is in rung 5 as well: `accepted_job` as a static aarch64-linux program inside the guest equals the native build line for line and reruns bit-identically (flake check `uk-node`; [experiments/unkernel_probe/README.md](experiments/unkernel_probe/README.md), section 8).
+The node is in rung 5 as well: `accepted_job` as a static aarch64-linux program inside the guest equals the native build line for line and reruns bit-identically (flake check `uk-node`; [experiments/unkernel_probe/README.md](experiments/unkernel_probe/README.md), section 8).
 
 Rungs 1 to 4 run the same module and ask the same two questions of it: does it refine the Shen source in shen-jit, and do the Shen invariants hold. Rung 5 asks a different question, about a substrate, and nothing on rungs 1 to 4 depends on it.
 
@@ -229,3 +229,18 @@ This is about determinism only. It says nothing about Solo5 as a place to deploy
 | The compiled node inside unkernel | not attempted | |
 | Solo5 | not run | the comparison above is by design |
 | Reconciliation with `sim-tool` (`021f5fa`) | not attempted | six files changed on both sides; a second trace format and a changed AcceptedJob |
+
+## Rung 5 extended: disk, network, several guests, the node in the guest
+
+Run on 2026-11-24 and 25 on the same machine, after the sections above were written; where they say rung 5 covers a console only, this section supersedes them. Each lane was run by its author and all four checks were rerun together on the merged host (`check.py` 45, `net_check.py` 31, `disk_check.py` 51 and `guest_node_check.py` 27 comparisons, all as expected). No lane had an independent review. Details and every digest are in `experiments/unkernel_probe/README.md` sections 8 to 10.
+
+| What | Result | What broke it, and the control |
+|---|---|---|
+| Block device (ext4 on the bundled image) | identical boots, also across snapshot/restore and a power cut at one point | completions left to the host event loop are reaped in a different order (all eight digests differ in 10 of 10 runs); deliver each completion at a virtual time or inside the submit call |
+| Network device, one guest and a scripted peer | identical boots | frame arrival timed by the real clock diverges at the first frame; hand each frame over at a virtual due time inside an import |
+| Three guests on one switch, one thread | identical boots, and with seeded drop, duplicate, delay and partition | the same rule; a coordinator resumes the guest with the lowest virtual time |
+| `accepted_job` as a static aarch64-linux program in the guest | equals native on 169 rows and 5913 history steps; identical boots | files over 9p never mount, because the SDK retries on the real clock; put the SDK's timers on the virtual clock |
+
+None of the controls changes unkernel; all wrap its host from outside.
+
+Not established: more than three guests or one guest per thread; exact latency for a busy guest (the kernel yields every 20 ms of guest time, a compile-time constant, so a frame arrived 19.6 ms late against 0.2 ms); the real `tool/host` (Python and wasmtime) in the guest; disk and network together; I/O errors and torn writes; a sweep of power-cut points; another machine or Node version; SMP. A snapshot does not bind the disk image's content, and final memory alone misses some changes that the frame trace and request log catch. Solo5 is still not built or run.

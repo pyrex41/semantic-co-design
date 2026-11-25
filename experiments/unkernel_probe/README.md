@@ -4,9 +4,11 @@
 
 > With the host's clock and entropy under our control, do two boots of the same guest running the same scripted workload reach bit-identical state?
 
-**Verdict: deterministic with the listed controls**, for one CPU, console-only I/O, no disk, no network, no vsock. Section 8 adds the network device: one guest against a scripted peer, and three guests on one virtual switch, are deterministic too, with one more control (when a frame is handed to the guest). Under the controlled host every boot of the workload ends with the same 128 MiB of linear memory, the same console bytes, the same sequence of host import calls and the same count of retired guest instructions: across processes, with the JIT off and on, and across snapshot and restore. That holds when every input reaches an idle guest (the main workload) and when input and the snapshot request reach a guest in the middle of a busy loop (a second, shorter workload). Under the stock host two boots differ, as expected. Nothing inside the pinned package is edited; the controls are about 230 lines wrapped around it.
+**Verdict: deterministic with the listed controls**, for one CPU, console-only I/O, no disk, no network, no vsock. Sections 8 to 10 go past that scope (the compiled node in the guest, the network device, a block device). Section 9 adds the network device: one guest against a scripted peer, and three guests on one virtual switch, are deterministic too, with one more control (when a frame is handed to the guest). Under the controlled host every boot of the workload ends with the same 128 MiB of linear memory, the same console bytes, the same sequence of host import calls and the same count of retired guest instructions: across processes, with the JIT off and on, and across snapshot and restore. That holds when every input reaches an idle guest (the main workload) and when input and the snapshot request reach a guest in the middle of a busy loop (a second, shorter workload). Under the stock host two boots differ, as expected. Nothing inside the pinned package is edited; the controls are about 230 lines wrapped around it.
 
 Four controls carry the result: the virtual clock, the virtual date, the idle wait taken off the real clock, and seeded entropy. Removing any one of them makes check.py fail. Two more are in the shim but are not shown to be needed by these workloads: `sched_yield` returning at once, and the seeded `Math.random` (section 3).
+
+A block device is covered separately in [section 10](#10-disk): deterministic with one more control, the time at which a disk request completes.
 
 ```sh
 nix develop .#unkernel -c python3 experiments/unkernel_probe/check.py            # everything, about 75 s
@@ -125,7 +127,7 @@ Two more: check.py's scratch directory has `--` in its name, which the first arg
 
 ## 5. What this does not show
 
-* **Disks, vsock and SMP were off** (the network device is section 8). The SDK completes block I/O from promises and raises the IRQ whenever they settle; `exec`/`spawn` and host mounts run over vsock the same way. Under this controlled host the guest never returns to the event loop while it can run, so such a completion would be seen only at an idle wait, and the shim's "idle with no timer means quiescent" rule would be wrong. Each device needs its own rule for when a completion is delivered in virtual time. SMP runs CPUs on threads and is out of scope.
+* **Disks, vsock and SMP were off** (the network device is section 9, a block device section 10). The SDK completes block I/O from promises and raises the IRQ whenever they settle; `exec`/`spawn` and host mounts run over vsock the same way. Under this controlled host the guest never returns to the event loop while it can run, so such a completion would be seen only at an idle wait, and the shim's "idle with no timer means quiescent" rule would be wrong. Each device needs its own rule for when a completion is delivered in virtual time. SMP runs CPUs on threads and is out of scope.
 * **The JIT has one path that depends on the garbage collector.** `kw_host_jit_compile` refuses (returns -1 to the guest) when more than a limit of freed modules have not been collected yet, as counted by a `FinalizationRegistry`. It was not reached here (0 refused, 17 freed), but a long JIT run could reach it, and then the guest's path depends on V8's collector. The interpreter has no such path.
 * **Same machine, same Node binary.** Digests were not compared across machines or Node versions. The kernel is wasm and the shim removes time and entropy, so no difference is expected, but none was measured.
 * **`new Date()` and `performance.timeOrigin` are not replaced**, only `Date.now` and `performance.now`. The single-CPU kernel path uses only the latter two.
@@ -151,7 +153,7 @@ The alternative is a host written for simulation rather than a fork of the SDK. 
 
 ## 7. N guests on one virtual switch under one clock
 
-It looks feasible; this section is the argument made before it was built. Section 8 builds the one-thread design and runs it.
+It looks feasible; this section is the argument made before it was built. Section 9 builds the one-thread design and runs it.
 
 * The SDK's `NetDevice` is two calls: the guest's frames arrive at `send(frame)` synchronously inside an import, and `Kernel.receiveFrame(frame)` queues a frame and sets an IRQ bit. A switch is a function from (sender, frame, virtual send time) to (receiver, virtual delivery time).
 * Each guest is deterministic given the virtual times at which its inputs arrive. Section 4 shows that for console input, both for an idle guest and, in the running-guest rows, for a guest interrupted inside one busy loop under the instruction-driven clock. A frame would be delivered from the same two imports, through `receiveFrame` instead of `sendInput`; that path was not run.
@@ -369,3 +371,128 @@ Each guest has 128 MiB of linear memory. The whole check took 45 s in the dev sh
 * **The SDK's own `NetStack`** (DHCP, DNS, outbound TCP through host sockets) is not used and was not tested.
 * **IPv6 and a learning switch.** Each port has one fixed address.
 * **Other machines and Node versions**, as in section 5.
+
+## 10. Disk
+
+> Does the guest stay deterministic once it uses a block device?
+
+**Verdict: deterministic with the listed controls**, for one kwblk disk, one CPU, on one machine. The four controls of section 3 are enough when the host completes each disk request inside the submit call, which is what the SDK's own in-memory and file disks do. A disk that completes asynchronously needs a fifth control: **the host must decide when each completion is delivered, as a function of virtual time or guest progress**. Left to the host's event loop, three boots of the same workload gave three different memories, consoles and disk images. With either rule, every boot ends with the same memory, console, import log, instruction count, final disk image, flushed image and sequence of disk requests: across processes, with real delays injected into every request on a loaded machine, with the JIT, and across a snapshot taken while the guest was writing.
+
+```sh
+nix develop .#unkernel -c python3 experiments/unkernel_probe/disk_check.py            # 51 comparisons, 45 boots, about 15 s
+nix develop .#unkernel -c python3 experiments/unkernel_probe/disk_check.py --record   # rewrite evidence/disk_*
+nix build .#checks.aarch64-darwin.unkernel-disk -L                                    # the same, offline in the sandbox (41 s)
+```
+
+### What the base system offers, and what was attached
+
+* The base system's kernel has ext2, ext3, ext4 and erofs (`/proc/filesystems`) but no vfat, and its busybox has `mkfs.vfat` and `mkdosfs` but no `mke2fs`. So **nothing the guest can make can be mounted**: there is no mkfs for a file system the kernel has. `dd`, `sync`, `fsync`, `blkid`, `blkdiscard`, `fstrim`, `mount` and `umount` are there.
+* The pinned kernel module carries an ext4 image of its own (custom section `unkernel.datadisk`, read with the SDK's public `bundledBoot()` and `readKwsparse()`): 4 GiB sparse, 547 non-zero 4 KiB blocks, label `kwdata`, fixed UUID, with a journal. That is the initial disk, so nothing is built or downloaded. The base `/init` finds it by label and mounts it at `/data` (`ext4 rw,noatime,commit=1`) before the shell starts.
+* The disk is a `BlockDevice` of our own ([disk.mjs](disk.mjs), `MemDisk`) passed to the public `createKernel({ disks: [...] })`: a sparse in-memory image, a log of every request with a digest of its data, and a second image that takes writes only when the guest flushes. It advertises flush (`F_FLUSH`; the guest reports `write back` cache and `kwblk: wda: 4096 MiB, flush`), not discard or write-zeroes. The kernel exposes no FUA (`/sys/block/wda/queue/fua` read 0 and `queue/scheduler` read `none [mq-deadline] kyber` in an exploratory boot; those two lines are not in the retained evidence).
+* [disk_workload.json](disk_workload.json), 7 lines to virtual 40 s: write three small files and 256 KiB of `/dev/urandom`, `sync`, hash; append 40 lines to a file and `fsync` it; unmount, mount again elsewhere, hash the files read back from the disk; write 2 MiB in one background job while another spins, `rm`, `sync`; drop caches and hash again, print `/sys/block/wda/stat`; write a file without syncing, unmount, hash the first 64 KiB of the raw device. The three hashes of the random file agree ([evidence/disk_console_sync.txt](evidence/disk_console_sync.txt)).
+
+The image digest is the sha256 of the image's canonical bytes (the SDK's kwsparse encoding: size, then the non-zero blocks in order), so it identifies the content of the whole 4 GiB.
+
+### When a request completes: four rules
+
+`disk.mjs --completion`:
+
+| Rule | What the host does | Result |
+|---|---|---|
+| `sync` | completes inside `wasm_driver_block_submit` (returns 0) | deterministic with the four controls alone |
+| `microtask` | returns a resolved promise: the SDK's asynchronous path (submit returns 1, IRQ 3, `wasm_driver_block_reap`), the completion landing at the guest's next suspension | deterministic |
+| `virtual` | returns a promise that host.mjs resolves when the virtual clock passes submit time + 200 us (optionally + a seeded 0 to 5000 us), from a clock read or an idle jump | deterministic: **the control** for an asynchronous disk |
+| `real` | returns a promise resolved by a real timer of random length, 0 to 20 ms | **not deterministic**: the seeded fault |
+
+host.mjs gained two small hooks for this (`cfg.devices`): the idle wait also jumps to a device's next virtual deadline, and it leaves the wait to the host's event loop, with the virtual clock standing still, while a device says it owes an event only that loop can deliver.
+
+### What was observed
+
+All numbers are from one `disk_check.py --record` on aarch64-darwin, in [evidence/disk_summary.json](evidence/disk_summary.json). Every boot is a fresh process; up to four run at once. Compared in every row: memory, console, import log, number of import calls, instruction count, final image, flushed image, request log.
+
+| Run | Boots | Result |
+|---|---|---|
+| `sync` | 3 | identical: memory `a59c0f61…`, console `db7633e0…`, 29281 import calls, 201700902 instructions, image `5e44d8ce…` (668 non-zero blocks), 71 reads, 64 writes, 32 flushes (3196928 bytes read, 2768896 written), 0 asynchronous requests |
+| The SDK's `CowDisk` over the same image (in memory, no store) | 2 | identical: memory `6b3f1741…`, 29300 import calls, 201713477 instructions, image `d15b464b…`, 0 asynchronous requests. Another run than `sync` (this disk's flags are flush, discard and write-zeroes; ours are flush only) |
+| `microtask` | 2 | identical: memory `5cdeb1bc…`, 30384 import calls, 201701077 instructions, image `d107e957…`, 170 asynchronous requests (71 reads, 66 writes, 33 flushes) |
+| `virtual`, 200 us | 3 | identical: memory `ff4119de…`, 30514 import calls, 201701171 instructions, image `b1b398ee…`, 169 completions delivered at virtual times |
+| `virtual`, 200 to 5200 us seeded | 2 | identical: memory `7d833cb8…`, 30787 import calls, 201700803 instructions, image `40c78ef3…`, 170 completions |
+| **Attack**: each of the four rows above with a busy-wait of random length, 0 to 3 ms of real time, inside every request, while 4 processes spin | 1 each | the same digests as the undisturbed boots of that row, all eight keys |
+| JIT on, `sync` and `virtual` | 2 each | identical; 58 and 59 blocks compiled (517943 and 518796 bytes), 2 freed, 0 refused. Console, instruction count, image, flushed image and request log are those of the interpreter; memory and the import log differ from it, as in section 4 |
+| **`real`** | 3 | **all three differ on all eight keys**: 30860, 30880 and 30895 import calls; images `831ec3cb…`, `86e526d0…`, `5ba1afa6…`; three different consoles. Each boot finished the workload with nothing in flight |
+
+The three deterministic rules give three different runs (different memory, console and image: the virtual time at which things happen is in ext4's timestamps and in `/sys/block/wda/stat`), and the comparison tells them apart.
+
+### The mechanism of the divergence
+
+[evidence/disk_real_divergence.txt](evidence/disk_real_divergence.txt). At import calls 4545 to 4548, while `/init` mounts the disk, the guest submits four reads in a row (requests 15274864, 15277232, 15270128, 15272496: sectors 4194304, 4194424, 4104, 4224). All four are in flight when it goes idle (call 4554, `poll_oneoff`). The first import call that differs between two boots is **call 4556, `wasm_driver_block_reap()`: one boot reaps request 15277232, the other 15272496**. Nothing differs before it: same calls, same virtual clock values.
+
+So the cause is host event-loop ordering, not a clock read in the block path. `BlockHost.submit()` chains each request's completion on the device's promise (`r.then(...)`: write the status, push the request on `done`, raise IRQ 3 and wake the idle wait). Which promise settles first, and how many settle before the guest runs again, is decided by the host's timers. From that call on the two import logs are different sequences, and at the end memory, console and image differ. Two requests in flight are enough for this; kwblk's queue is 32 deep.
+
+A second way to fail was seen first: with the four controls alone and nothing else (`--real-starve 1`), the first read **never completes**. The controlled idle wait ends in the same microtask turn, so the event loop never runs and the real timer never fires: the virtual clock reaches the end time (4 s here) after 1333787 import calls with one read submitted, one in flight, and no user instruction retired. This is the gap section 5 predicted.
+
+### The controls, and proof that each is needed
+
+| Control | Proof |
+|---|---|
+| The four of section 3 (clock, date, idle wait, entropy) | section 4; they are on in every row above |
+| Completion of a disk request at a time the host computes from the virtual clock (`virtual`), or inside the submit call (`sync`), or at the next suspension (`microtask`) | removed by `--completion real`: rejected, all eight keys differ, first at a block reap |
+| The idle wait knows about pending disk completions (it jumps to the next one; it does not call the guest quiescent) | host.mjs `cfg.devices`. Needed by construction (a `virtual` completion due while the guest idles is resolved from that jump); no run here removes it alone |
+
+`virtual` is the rule to build on: it gives the disk a latency in guest time, it allows several requests in flight, and it is immune to the host by construction, since a completion is resolved only from an import call at which the virtual clock has passed its time. No change inside unkernel is needed: the device object decides when its promises settle, and that object is ours. (In the source, `js/core/block.ts`, `BlockHost.submit()`; pinned package `dist/_chunks/core.mjs`.)
+
+### Snapshot and restore with a disk
+
+What the SDK's rules are, as read in the pinned package (`dist/_chunks/core.mjs`); the table below says which were exercised:
+
+* `snapshot()` rejects unless every disk has `snapshotState()` and `snapshotSeal()`. The SDK's own in-memory `CowDisk` throws once written ("keeps its writes in memory only"; read, not run); ours implements both.
+* A snapshot holds no disk content: only what `snapshotState()` returned, `{name, identity, gen}`. Keeping the image that belongs to a snapshot is the host's job (`disk.mjs` saves it at the seal).
+* At the consistent point the snapshot is refused if a block request is in flight or unreaped. With `stop: true` the kernel syncs and drops caches first. No snapshot below was refused, so the refusal itself was not seen.
+* `createKernel({ restore })` compares each disk's identity and generation with the snapshot's.
+
+| Run | Boots | Result |
+|---|---|---|
+| Snapshot at virtual 10.05 s (`--ns-per-insn 5`), requested from a clock read while one job writes 2 MiB and another spins, `sync` | 2 | the same 134218202 bytes (`4a81de9b…`) at guest time 10050.249415 ms, after 13770 import calls, 38900042 instructions and 48 reads, 40 writes, 17 flushes; the same sealed image (`2f4bc6ee…`), generation 1 |
+| The same, `virtual` | 2 | the same 134218202 bytes (`1b591218…`) at guest time 10142.66431 ms (the kernel's sync before the snapshot takes virtual time here), 15137 import calls, 57294228 instructions, 104 asynchronous requests; sealed image `68c8f3d6…` |
+| Restore with the sealed image, then [disk_continuation.json](disk_continuation.json) for 7 virtual s (wait for the jobs, `sync`, hash, write a file, unmount), `sync` | 2 | identical: memory `777f0c31…`, 8164 import calls, 201746671 instructions, image `42da6c2b…`, 25 reads, 23 writes, 14 flushes |
+| The same, `virtual` | 2 | identical: memory `8ac301e6…`, 8898 import calls, 201746841 instructions, image `fc28c413…`, 68 asynchronous requests |
+| Restore with the disk at generation 2 | 1 | refused by the SDK: `disk wda (probe memdisk) was written after the snapshot (generation 2, the snapshot has 1)` |
+| Restore with **another image** under the same identity and generation | 1 | **not refused**: it boots and runs on a disk that is not the snapshot's (image `94800ee6…`). The SDK checks what the disk object says, not its content; a simulation has to bind the image digest to the snapshot itself |
+
+### Power cut
+
+The block interface shows the host five operations (read, write, flush, discard, write-zeroes) and nothing else: **flushes are visible as requests of their own, FUA is not** (the driver has none; the block layer turns it into flushes). An ext4 journal commit is seen as: write the journal blocks, flush, write the commit block, flush ([evidence/disk_requests_power_cut.txt](evidence/disk_requests_power_cut.txt)). So the host can keep exactly what the guest flushed.
+
+[disk_crash.json](disk_crash.json): write a file and `sync`; write a second and `fsync` it; write a third and 2 MiB more with no sync. `--crash-at-op 48` ends the run at the 48th disk request, the write of the commit block of the transaction that holds the third file, before the flush after it.
+
+| Run | Boots | Result |
+|---|---|---|
+| Power cut at request 48 | 2 | identical: virtual 5120.370 ms, 7824 import calls, 4793095 instructions, 21 reads, 21 writes, 6 flushes; written image `a5694681…`, flushed image `07723112…`; they differ by one unflushed write of 4096 bytes |
+| Second guest on the flushed image ([disk_recover.json](disk_recover.json)) | 2 | identical: memory `6e0a51d9…`, 9315 import calls, 6175358 instructions, image `15c8302b…`. ext4 says `recovery complete`; the synced and the fsynced file are there; the unsynced file and the 2 MiB file are not ([evidence/disk_console_after_power_cut.txt](evidence/disk_console_after_power_cut.txt)) |
+| Second guest on the written image (the unflushed block kept) | 1 | the unsynced file and the 2 MiB file are there. The one dropped block decides |
+
+Dropped here is everything after the last flush. Keeping an arbitrary subset of the unflushed writes (a torn or reordered cut) is the same mechanism and was not run.
+
+### Teeth
+
+| Change | Keys that change |
+|---|---|
+| one bit of the 256 KiB data write, as stored | console (the guest's hash of the file read back), import log, image, flushed image, request log. Memory does not differ (why not was not looked into) |
+| one byte of the initial image, in a block the guest never reads (offset 3 GiB + 5) | image and flushed image **only**: the image has to be compared on its own |
+| one bit of the first write, as stored (the guest writes that block again later) | request log **only**: the requests have to be compared on their own |
+| one byte of console input (`file-$f` to `file_$f`) | memory, console, import log, instruction count, image, flushed image, request log |
+| virtual latency 201 us instead of 200 | all eight |
+| latency seed 8 instead of 7 | all eight |
+| a forged image digest in the record | reported by the evidence comparison |
+
+### What this does not show
+
+* **One disk, one CPU, one machine, one Node binary.** Two disks, a distro image as the first disk, and SMP were not run.
+* **The stock host with a disk** was not booted; the baseline here is the controlled host with the `real` rule.
+* **The SDK's persistent disks were not run**: `FileDisk` (synchronous `pread`/`pwrite` on a real file, by its declaration), `CowDisk` with a store (its flush is an asynchronous save), and `HttpBase` (asynchronous reads over the network). The last two are asynchronous on the host's event loop, which is the case shown above to diverge; a deterministic host has to wrap or replace them.
+* **Discard and write-zeroes** were offered only in the `CowDisk` row; `MemDisk` implements them (`--discard 1`) but no row ran it.
+* **Request errors** (a failed read or write, a full device) and a disk larger than its backing were not injected.
+* **`Kernel.requestSync()`** (the host asking the guest to sync, IRQ 4) and `snapshot({ commit })` were not used.
+* **`microtask` under the JIT, and `real` under any setting but the one shown**, were not run. Three `real` boots differed every time it was tried (10 times in this session); nothing bounds how often they could agree by chance, and then disk_check.py would fail.
+* **A sweep of cut points.** One request number was cut at; every request number is a candidate, and each is deterministic by the same argument, but only one was run.
+* **Virtual latency is one number per request**, not a model of a device (no queueing, no dependence on size or operation).

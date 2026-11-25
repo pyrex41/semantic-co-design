@@ -4,27 +4,27 @@ frame trace
 lines: 21 and 21; first difference at line 5
   = tx g0 2003665998 342 de0e5f091743 udp 0.0.0.0>255.255.255.255 68>67 len 300
   = tx g0 2020099000 42 30b20c6d7f1e arp who-has 10.9.0.1
-  A rx g0 2020827666 42 e1a4f274a26a arp 10.9.0.1 is-at due 2020827666 at jump
-  A tx g0 2020830666 98 4d6b1738468b icmp echo 10.9.0.2>10.9.0.1 seq 0
-  B rx g0 2020456291 42 e1a4f274a26a arp 10.9.0.1 is-at due 2020456291 at jump
-  B tx g0 2020459291 98 4d6b1738468b icmp echo 10.9.0.2>10.9.0.1 seq 0
+  A rx g0 2020721959 42 e1a4f274a26a arp 10.9.0.1 is-at due 2020721959 at jump
+  A tx g0 2020724959 98 4d6b1738468b icmp echo 10.9.0.2>10.9.0.1 seq 0
+  B rx g0 2020958166 42 e1a4f274a26a arp 10.9.0.1 is-at due 2020958166 at jump
+  B tx g0 2020961166 98 4d6b1738468b icmp echo 10.9.0.2>10.9.0.1 seq 0
 
 import log
-lines: 14241 and 14273; first difference at line 4697
+lines: 14273 and 14266; first difference at line 4697
   = clock_time_get(1,1,1455248)=0 2020356000
   = poll_oneoff(1455312,1455408,2,1455472)=P 
-  A clock_time_get(1,1,1455248)=0 2020828666
-  A clock_time_get(1,1,1455248)=0 2020829666
-  B clock_time_get(1,1,1455248)=0 2020457291
-  B clock_time_get(1,1,1455248)=0 2020458291
+  A clock_time_get(1,1,1455248)=0 2020722959
+  A clock_time_get(1,1,1455248)=0 2020723959
+  B clock_time_get(1,1,1455248)=0 2020959166
+  B clock_time_get(1,1,1455248)=0 2020960166
 
 three guests, --net-fault real-latency, two runs
 
 frame trace
-lines: 102 and 100; first difference at line 4
+lines: 104 and 100; first difference at line 4
   = tx g1 1612000 342 987e095a426f udp 0.0.0.0>255.255.255.255 68>67 len 300
   = tx g2 1612000 342 cc963dd4c053 udp 0.0.0.0>255.255.255.255 68>67 len 300
-  A rx g0 2107375 342 987e095a426f udp 0.0.0.0>255.255.255.255 68>67 len 300 due 2107375 at wake
-  A rx g2 2116750 342 987e095a426f udp 0.0.0.0>255.255.255.255 68>67 len 300 due 2116750 at wake
-  B rx g0 1901625 342 cc963dd4c053 udp 0.0.0.0>255.255.255.255 68>67 len 300 due 1901625 at wake
-  B rx g1 1910333 342 cc963dd4c053 udp 0.0.0.0>255.255.255.255 68>67 len 300 due 1910333 at wake
+  A rx g1 1860792 342 c697e22a3534 udp 0.0.0.0>255.255.255.255 68>67 len 300 due 1860792 at wake
+  A rx g2 1867167 342 c697e22a3534 udp 0.0.0.0>255.255.255.255 68>67 len 300 due 1867167 at wake
+  B rx g0 1863583 342 987e095a426f udp 0.0.0.0>255.255.255.255 68>67 len 300 due 1863583 at wake
+  B rx g2 1871542 342 987e095a426f udp 0.0.0.0>255.255.255.255 68>67 len 300 due 1871542 at wake
