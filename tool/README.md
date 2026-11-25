@@ -245,4 +245,4 @@ A new application is a directory `tool/examples/<name>/` with `node.json`, `spec
 
 A one-off run, not retained: 895 further random programs (seeds 120 to 1019, 53,700 rows) also agreed with shen-jit.
 
-Not attempted: Solo5. The generated code uses only `setjmp`, integer arithmetic and the compiler's overflow builtins, but nothing here builds or runs a unikernel, and no effect shim exists whose compliance with the environment rules could be checked.
+Solo5: [solo5/](solo5/README.md) is an effect shim written against the Solo5 API, built as a unikernel by a Nix derivation and as a host process, with scripted runs of both (kills included) checked against the simulator by `python3 -m tool check solo5` and `solo5-host`. That README says which environment rules hold under which tender and what a returned block write is worth.
