@@ -11,6 +11,10 @@ replayed without the seed.
     run(...)                   seeded, timed schedule
     replay(...)                re-execute a recorded trace and compare every record
     explore(...)               every schedule of an untimed profile, by state
+
+The initial state of a node, which is also its memory after every crash, comes from
+`node_init` in the native library. Deliberately wrong worlds for the checks' teeth are
+in tool/sim/mutants.py; they override the small hooks at the end of `World`.
 """
 from collections import deque
 import hashlib
@@ -19,7 +23,7 @@ import random
 
 from ..compile import Trap
 
-FORMAT = "sim-trace/1"
+FORMAT = "sim-trace/2"
 STEP_KINDS = ("boot", "restart", "deliver", "local")
 
 
@@ -145,10 +149,10 @@ class ScriptDraw(Draw):
 
 
 class World:
-    def __init__(self, native, workload, profile, inits):
+    def __init__(self, native, workload, profile):
         self.native, self.schema, self.workload, self.profile = native, native.schema, workload, profile
         self.n = profile["nodes"]
-        self.inits = [tuple(state) for state in inits]
+        self.inits = [native.init(node, self.n) for node in range(self.n)]
         self.clock, self.ticks = 0, 0
         self.up = [True] * self.n
         self.state = list(self.inits)
@@ -164,7 +168,7 @@ class World:
             raise ValueError("partitions are part of timed schedules only")
 
     def clone(self):
-        other = object.__new__(World)
+        other = object.__new__(type(self))
         other.__dict__.update(self.__dict__)
         other.up, other.state = list(self.up), list(self.state)
         other.disk = [dict(d) for d in self.disk]
@@ -180,9 +184,13 @@ class World:
         return tuple((key, *vals) for key, vals in sorted(self.disk[node].items()))
 
     def snapshot(self):
+        """Node memories, durable rows, writes not yet synced and outputs still in flight."""
         return {"up": list(self.up),
                 "states": [None if s is None else self.schema.decode_state(s) for s in self.state],
-                "disks": [self.rows(node) for node in range(self.n)]}
+                "disks": [self.rows(node) for node in range(self.n)],
+                "pending": [[(key, *vals) for _, _, _, key, vals in self.writes[node]]
+                            for node in range(self.n)],
+                "outputs": order(o[2] for o in self.outs)}
 
     def key(self):
         """Identity of a state for exploration: contents only, no times or sequence numbers."""
@@ -247,13 +255,18 @@ class World:
         self.ticks += 1
         return self.clock + (delay if self.timed else 0), self.ticks
 
-    def take(self, items, content):
-        """Remove the oldest queued item with this content and advance the clock to it."""
+    def take(self, items, content, *, happens=True):
+        """Remove the oldest queued item with this content.
+
+        When the item happens (it is delivered) the clock advances to its due time. Losing
+        or duplicating it in flight is a fault and takes no time.
+        """
         found = min((i for i in items if i[2:] == content), default=None)
         if found is None:
             raise Divergence(f"nothing queued matches {content}")
         items.remove(found)
-        self.clock = max(self.clock, found[0])
+        if happens:
+            self.clock = max(self.clock, found[0])
         return found
 
     def request(self, node, event, draw):
@@ -273,7 +286,7 @@ class World:
                 self.step(node, event, draw, rec)
         elif kind == "sync":
             node = action[1]
-            at, _, token, key, vals = self.writes[node].pop(0)
+            at, _, token, key, vals = self.writes[node].pop(self.next_write(node))
             self.clock = max(self.clock, at)
             self.disk[node][key] = vals
             rec.update(node=node, event=(key, *vals))
@@ -286,7 +299,7 @@ class World:
         elif kind in ("drop", "dup"):
             self.budget[kind] -= 1
             items, content = (self.net, action[2:]) if action[1] == "net" else (self.outs, action[2:])
-            item = self.take(items, content)
+            item = self.take(items, content, happens=False)
             rec.update(event=content[-1])
             if kind == "drop":
                 self.dropped.add(content[-1])
@@ -299,7 +312,7 @@ class World:
             self.crash(action[1], draw, rec)
         elif kind == "restart":
             node = action[1]
-            self.up[node], self.state[node] = True, self.inits[node]
+            self.up[node], self.state[node] = True, self.inits[node]     # node_init, natively
             rec.update(node=node)
             if "restart" in self.schema.roles:
                 rec["event"] = (self.schema.roles["restart"].tag,)
@@ -326,16 +339,17 @@ class World:
         rec.update(pre=self.schema.decode_state(state), post=self.schema.decode_state(after),
                    effects=effects)
         cut = None
-        if self.budget["crash"] > 0 and effects:
+        if self.budget["crash"] > 0 and effects and self.mid_step_crashes:
             # 0: all effects happen. k: the node dies after the first k-1 effects.
             k = draw.choose("crash-after", len(effects) + 1)
             cut = k - 1 if k else None
-        for effect in effects if cut is None else effects[:cut]:
+        for effect in self.performed(effects, cut):
             self.effect(node, effect, draw)
         rec["applied"] = len(effects) if cut is None else cut
-        if cut is None:
-            self.state[node] = after
-        else:
+        self.state[node] = after
+        if cut is not None:
+            # The world as the applied effects left it, before the node's memory is gone.
+            rec["before_crash"] = self.snapshot()
             self.budget["crash"] -= 1
             self.crash(node, draw, rec)
 
@@ -374,14 +388,36 @@ class World:
         """Memory is lost. A prefix of the pending writes reaches the disk; the rest never do."""
         pending = self.writes[node]
         kept = draw.choose("persist", len(pending) + 1) if pending else 0
-        for _, _, _, key, vals in pending[:kept]:
+        durable, lost = self.persisted(pending, kept)
+        for _, _, _, key, vals in durable:
             self.disk[node][key] = vals
-        for _, _, _, key, vals in pending[kept:]:
+        for _, _, _, key, vals in lost:
             self.lostw.add((key, *vals))
         self.writes[node] = []
-        self.local = [i for i in self.local if i[2] != node]
+        self.forget(node)
         self.up[node], self.state[node] = False, None
         rec.update(crashed=True, persisted=kept, lost_writes=len(pending) - kept)
+
+    # ---- the environment's rules, one hook each (tool/sim/mutants.py breaks them one at a time)
+
+    mid_step_crashes = True
+
+    def performed(self, effects, cut):
+        """The effects that happen when the node dies after `cut` of them (None: no crash)."""
+        return effects if cut is None else effects[:cut]
+
+    def next_write(self, node):
+        """Which pending write a sync makes durable: the oldest."""
+        return 0
+
+    def persisted(self, pending, kept):
+        """At a crash the oldest `kept` pending writes reach the disk and the rest are lost."""
+        return pending[:kept], pending[kept:]
+
+    def forget(self, node):
+        """No completion crosses a crash: queued acknowledgements, read results, timers and
+        clock readings of the dead node are discarded. The specification may rely on it."""
+        self.local = [i for i in self.local if i[2] != node]
 
     def boot(self):
         """Every node handles `restart` once, with no faults, before the schedule starts."""
@@ -413,8 +449,8 @@ def digest(trace):
     return hashlib.sha256(dumps(trace).encode()).hexdigest()
 
 
-def start(native, workload, prof, inits, seed):
-    world = World(native, workload, prof, inits)
+def start(native, workload, prof, seed, world=World):
+    world = world(native, workload, prof)
     steps = [record(world, n, ["boot"], [], rec) for n, rec in enumerate(world.boot())]
     trace = {"format": FORMAT, "schema": native.schema.name, "seed": seed, "profile": prof,
              "steps": steps, "end": None}
@@ -439,57 +475,86 @@ def pick(world, actions, rng):
     return None
 
 
-def run(native, workload, prof, inits, seed):
+def idle(world):
+    """Nothing is queued and neither the outside nor a down node has a move left."""
+    return world.earliest() is None and not any(
+        action[0] in ("client", "restart") for action in world.enabled())
+
+
+def attempt(world, trace, action, draw):
+    """Apply one action and record it. A failure of the specification is recorded as a
+    final step of kind `error`, with the action and the draws that led to it."""
+    try:
+        rec = world.apply(action, draw)
+    except SimError as error:
+        rec = {"kind": "error", "error": str(error)}
+        trace["end"] = f"error: {error}"
+    trace["steps"].append(record(world, len(trace["steps"]), action, draw.used, rec))
+    return trace["end"] is None
+
+
+def run(native, workload, prof, seed, *, world=World):
     """One seeded schedule. The trace is a function of the arguments and nothing else."""
     rng = random.Random(seed)
-    world, trace = start(native, workload, prof, inits, seed)
-    try:
-        while len(trace["steps"]) < prof["max_steps"]:
-            action = pick(world, world.enabled(), rng)
-            if action is None:
-                trace["end"] = "quiescent"
-                break
-            draw = SeededDraw(rng, prof)
-            rec = world.apply(action, draw)
-            trace["steps"].append(record(world, len(trace["steps"]), action, draw.used, rec))
-        else:
+    world, trace = start(native, workload, prof, seed, world)
+    while trace["end"] is None:
+        if len(trace["steps"]) >= prof["max_steps"]:
             trace["end"] = "max_steps"
-    except SimError as error:
-        trace["end"] = f"error: {error}"
+            break
+        action = pick(world, world.enabled(), rng)
+        if action is None:
+            trace["end"] = "quiescent"
+            break
+        attempt(world, trace, action, SeededDraw(rng, prof))
     return json.loads(dumps(trace))
 
 
-def script(native, workload, prof, inits, actions, *, seed=None):
-    """Run a given list of (action, draws). Raises Divergence if one is not enabled."""
-    world, trace = start(native, workload, prof, inits, seed)
-    try:
-        for action, draws in actions:
-            action = freeze(action)
-            if action not in world.enabled():
-                raise Divergence(f"step {len(trace['steps'])}: {action} is not enabled")
-            draw = ScriptDraw(draws, prof["timed"])
-            rec = world.apply(action, draw)
-            if len(draw.used) != len(draws):
-                raise Divergence(f"step {len(trace['steps'])}: draws {draws} became {draw.used}")
-            trace["steps"].append(record(world, len(trace["steps"]), action, draw.used, rec))
-    except SimError as error:
-        trace["end"] = f"error: {error}"
+def script(native, workload, prof, actions, *, seed=None, world=World):
+    """Run a given list of (action, draws). Raises Divergence if one is not enabled.
+
+    The trace ends `error: ...` if the specification failed, `quiescent` if nothing is left
+    to do, and `open` otherwise.
+    """
+    world, trace = start(native, workload, prof, seed, world)
+    for action, draws in actions:
+        if trace["end"] is not None:
+            raise Divergence(f"step {len(trace['steps'])}: the run already ended {trace['end']}")
+        action = freeze(action)
+        if action not in world.enabled():
+            raise Divergence(f"step {len(trace['steps'])}: {action} is not enabled")
+        draw = ScriptDraw(draws, prof["timed"])
+        attempt(world, trace, action, draw)
+        if len(draw.used) != len(draws):
+            raise Divergence(f"step {len(trace['steps']) - 1}: draws {draws} became {draw.used}")
+    if trace["end"] is None:
+        trace["end"] = "quiescent" if idle(world) else "open"
     return json.loads(dumps(trace))
 
 
-def replay(native, workload, inits, trace):
-    """Re-execute a trace from its recorded actions and draws; every record must reappear."""
+def replay(native, workload, trace, *, world=World):
+    """Re-execute a trace and require every byte of it to reappear.
+
+    The steps are re-executed from their recorded actions and draws alone, so a specification
+    failure must happen again at the same step. A scripted trace (seed null) is then compared
+    whole, with its end recomputed. A seeded trace is also run again from its seed and profile:
+    that is what vouches for the seed, the rates, the step bound and the end, since a prefix
+    of a schedule is itself a valid script.
+    """
     if trace.get("format") != FORMAT:
         raise Divergence("not a simulator trace")
     actions = [(s["action"], s["draws"]) for s in trace["steps"] if s["action"] != ["boot"]]
-    again = script(native, workload, trace["profile"], inits, actions, seed=trace["seed"])
-    if again["end"] is None:
-        again["end"] = trace["end"]
+    again = script(native, workload, trace["profile"], actions, seed=trace["seed"], world=world)
     for old, new in zip(trace["steps"], again["steps"]):
         if old != new:
             raise Divergence(f"step {old['i']} differs on replay")
-    if dumps(again) != dumps(trace):
-        raise Divergence("the replayed trace differs from the recorded one")
+    if len(trace["steps"]) != len(again["steps"]):
+        raise Divergence("the replay has a different number of steps")
+    whole = again if trace["seed"] is None else run(native, workload, trace["profile"],
+                                                     trace["seed"], world=world)
+    if dumps(whole) != dumps(trace):
+        raise Divergence("the trace is not the one its seed, profile and end claim: "
+                         f"it says it ends {trace.get('end')!r} after {len(trace['steps'])} "
+                         f"steps, the rerun ends {whole['end']!r} after {len(whole['steps'])}")
     return again
 
 
@@ -509,26 +574,39 @@ def successors(world):
                              for alt in range(1, draw.arities[position])]
 
 
-def explore(native, workload, prof, inits, *, max_states=200000):
+def explore(native, workload, prof, *, max_states=200000, world=World):
     """Breadth-first over every schedule of an untimed profile.
 
-    Returns (observations, states, edges). SimError propagates: a reachable trap is a
-    failure. Raises OverflowError past max_states so a bound is never silently partial.
+    Returns (observations, facts). `facts` has the number of `states` and `edges`, every
+    (state, event) -> (state', effects) `pairs` the native step was run on, and
+    `max_pending`, the most writes ever waiting on one disk. SimError propagates: a
+    reachable trap is a failure. Raises OverflowError past max_states so a bound is never
+    silently partial.
     """
     if prof["timed"]:
         raise ValueError("exploration needs an untimed profile")
-    world = World(native, workload, prof, inits)
-    world.boot()
-    seen, queue, observations, edges = {world.key()}, deque([world]), set(), 0
+    world = world(native, workload, prof)
+    pairs = {}
+
+    def note(rec):
+        if "pre" in rec:
+            pairs[freeze((rec["pre"], rec["event"]))] = freeze((rec["post"], rec["effects"]))
+
+    for rec in world.boot():
+        note(rec)
+    seen, queue, observations, edges, most = {world.key()}, deque([world]), set(), 0, 0
     while queue:
         world = queue.popleft()
         observations.add(world.observe())
-        for _, _, after, _ in successors(world):
+        most = max(most, *(len(pending) for pending in world.writes))
+        for _, _, after, rec in successors(world):
             edges += 1
+            note(rec)
             key = after.key()
             if key not in seen:
                 if len(seen) >= max_states:
                     raise OverflowError(f"more than {max_states} states")
                 seen.add(key)
                 queue.append(after)
-    return observations, len(seen), edges
+    return observations, {"states": len(seen), "edges": edges, "pairs": pairs,
+                          "max_pending": most}

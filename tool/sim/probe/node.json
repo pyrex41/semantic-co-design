@@ -1,0 +1,20 @@
+{
+  "name": "probe",
+  "spec": "spec.shen",
+  "step": "probe.step",
+  "init": "probe.init",
+  "symbols": [],
+  "state": ["num", "num"],
+  "events": {
+    "restart": {"role": "restart"},
+    "go": {"role": "request", "fields": ["num"]},
+    "acked": {"role": "disk-ack", "fields": ["num"]},
+    "loaded": {"role": "disk-read-result", "fields": ["num", "num", "num", "num"]}
+  },
+  "effects": {
+    "read": {"role": "disk-read", "fields": ["num", "num"]},
+    "write": {"role": "disk-write", "fields": ["num", "num", "num"]},
+    "say": {"role": "output", "fields": ["num", "num"]}
+  },
+  "max_effects": 4
+}

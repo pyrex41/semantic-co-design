@@ -6,7 +6,6 @@ profiles, workloads, witnesses and mutants and calls these functions.
 from pathlib import Path
 
 from . import maude, shen, sim
-from .compile import initial_state
 
 HELPERS = Path(__file__).with_name("check.shen")
 
@@ -27,39 +26,91 @@ def step_pairs(traces):
         for step in trace["steps"]:
             if "pre" in step:
                 key = sim.freeze((step["pre"], step["event"]))
-                pairs[key] = sim.freeze((step["post"], step["effects"]))
+                result = sim.freeze((step["post"], step["effects"]))
+                require(pairs.setdefault(key, result) == result,
+                        f"the native step gave two results for {key}")
     return pairs
 
 
-def refinement(schema, traces, inits, *, source_file=None):
-    """At every simulated step the native result equals the Shen source run in shen-jit.
+def refinement(schema, native, pairs, *, nodes=1, source_file=None):
+    """The native step and the native initial state equal the Shen source run in shen-jit.
 
-    One shen-jit process evaluates all distinct (state, event) pairs. Returns the number
-    of pairs; raises CheckFailure with the first difference.
+    `pairs` maps (state, event) to the native result, as `step_pairs` collects them from
+    traces and `sim.explore` from a bounded search. One shen-jit process evaluates all of
+    them. Returns the number of pairs; raises CheckFailure with the first difference.
     """
     source_file = source_file or schema.directory / schema.manifest["spec"]
-    pairs = step_pairs(traces)
-    calls = [f"({schema.init} {node} {len(inits)})" for node in range(len(inits))]
+    calls = [f"({schema.init} {node} {nodes})" for node in range(nodes)]
     calls += [f"({schema.step} {shen.term(state)} {shen.term(event)})" for state, event in pairs]
     values = shen.evaluate([source_file], calls)
-    for node, init in enumerate(inits):
-        require(values[node] != shen.TRAP and schema.encode_state(values[node]) == tuple(init),
+    for node in range(nodes):
+        require(values[node] != shen.TRAP
+                and schema.encode_state(values[node]) == native.init(node, nodes),
                 f"refinement: init of node {node} differs from the Shen source")
-    for (state, event), native, source in zip(pairs, pairs.values(), values[len(inits):]):
-        require(native == source, f"refinement: on state {state} and event {event}\n"
-                                  f"  native {native}\n  shen   {source}")
+    for (state, event), result, source in zip(pairs, pairs.values(), values[nodes:]):
+        require(result == source, f"refinement: on state {state} and event {event}\n"
+                                  f"  native {result}\n  shen   {source}")
     return len(pairs)
 
 
+def shen_world(world):
+    return (world["up"], ["down" if s is None else s for s in world["states"]], world["disks"])
+
+
 def shen_trace(trace):
-    """A trace as the Shen value the invariants see: [[Kind Node Event Effects World] ...]."""
+    """A trace as the Shen value the invariants see: [[Kind Node Event Effects World] ...].
+
+    A step during which the node died is two steps here: what it did, with the world as its
+    applied effects left it, and then `crash` with the world after memory and pending writes
+    were lost. An invariant therefore never judges an effect against a disk that only the
+    crash produced.
+    """
     out = []
     for step in trace["steps"]:
-        world = step["world"]
-        states = ["down" if s is None else s for s in world["states"]]
-        effects = step.get("effects") or []
-        out.append((step["kind"], step.get("node", -1), step.get("event") or [],
-                    effects[:step.get("applied", 0)], (world["up"], states, world["disks"])))
+        effects = (step.get("effects") or [])[:step.get("applied", 0)]
+        node, event = step.get("node", -1), step.get("event") or []
+        if "before_crash" in step:
+            out.append((step["kind"], node, event, effects, shen_world(step["before_crash"])))
+            out.append(("crash", node, [], [], shen_world(step["world"])))
+        else:
+            out.append((step["kind"], node, event, effects, shen_world(step["world"])))
+    return out
+
+
+def effects_applied(schema, traces):
+    """What each step did to the world, read from the snapshots and not from `applied`.
+
+    For every step in which a node ran, the writes waiting on its disk and the outputs in
+    flight must have grown by exactly the first `applied` disk-write and output effects of
+    the step, measured before any crash. Returns, per trace, the list of
+    (step index, effects visible in the world) for the steps during which the node died.
+    """
+    out = []
+    for trace in traces:
+        before = {"pending": [[] for _ in range(trace["profile"]["nodes"])], "outputs": []}
+        cuts = []
+        for step in trace["steps"]:
+            if "effects" in step:
+                seen, node = step.get("before_crash", step["world"]), step["node"]
+                applied = step["effects"][:step["applied"]]
+                writes = [list(e[2:]) for e in applied if schema.effects[e[0]].role == "disk-write"]
+                outputs = [e for e in applied if schema.effects[e[0]].role == "output"]
+                new_writes = seen["pending"][node][len(before["pending"][node]):]
+                require(seen["pending"][node][:len(before["pending"][node])] == before["pending"][node]
+                        and new_writes == writes,
+                        f"step {step['i']} of seed {trace['seed']}: the trace says {len(writes)} "
+                        f"writes were issued, the disk queue grew by {new_writes}")
+                grown = list(seen["outputs"])
+                for old in before["outputs"]:
+                    require(old in grown, f"step {step['i']}: an output in flight disappeared")
+                    grown.remove(old)
+                require(sorted(map(str, grown)) == sorted(map(str, outputs)),
+                        f"step {step['i']} of seed {trace['seed']}: the trace says outputs "
+                        f"{outputs} were emitted, the world gained {grown}")
+                if "before_crash" in step:
+                    cuts.append((step["i"], len(new_writes) + len(grown)))
+            before = step["world"]
+        out.append(cuts)
     return out
 
 
@@ -99,9 +150,8 @@ def predicates(file, names, traces):
     return [values[n * width + 1:(n + 1) * width] for n in range(len(traces))]
 
 
-def maude_refinement(modules, schema, traces):
-    """The translated Maude step reduces every simulated (state, event) to the same result."""
-    pairs = step_pairs(traces)
+def maude_refinement(modules, schema, pairs):
+    """The translated Maude step reduces every (state, event) to the native result."""
     results = maude.reduce(modules, [
         f"f.{schema.step}({maude.term(state)}, {maude.term(event)})" for state, event in pairs])
     for (state, event), native, reduced in zip(pairs, pairs.values(), results):
@@ -110,23 +160,28 @@ def maude_refinement(modules, schema, traces):
     return len(pairs)
 
 
-def maude_agreement(schema, native, workload, maude_workload, prof, inits, *, source=None,
-                    max_states=200000, timeout=300):
+def maude_agreement(schema, native, workload, maude_workload, prof, *, source=None,
+                    max_states=200000, timeout=300, world=sim.World, edit=None):
     """Reachable observations of the Maude model and of the simulator, for one untimed profile.
 
     Returns (simulator set, Maude set, facts). Equality is the caller's assertion, so a
-    mutant can be required to differ.
+    mutant can be required to differ: `world` is the simulator to run (tool/sim/mutants.py)
+    and `edit` rewrites the Maude text before the search. `facts["pairs"]` are the native
+    steps the exploration executed, for the refinement checks.
     """
     source = schema.source if source is None else source
     modules = maude.step_module(source) + maude.environment_module(schema, prof, maude_workload)
-    explored, sim_states, edges = sim.explore(native, workload, prof, inits, max_states=max_states)
+    if edit:
+        modules = edit(modules)
+    explored, found = sim.explore(native, workload, prof, max_states=max_states, world=world)
     reached, states, trap = maude.search(modules, timeout=timeout)
     return explored, reached, {"maude_states": states, "maude_observations": len(reached),
-                               "sim_states": sim_states, "sim_edges": edges,
-                               "sim_observations": len(explored), "maude_trap": trap}
+                               "sim_states": found["states"], "sim_edges": found["edges"],
+                               "sim_observations": len(explored), "maude_trap": trap,
+                               "pairs": found["pairs"], "max_pending": found["max_pending"]}
 
 
-def shrink(native, workload, inits, trace, still_fails):
+def shrink(native, workload, trace, still_fails):
     """Remove steps one at a time while the failure remains.
 
     `still_fails(traces)` returns one boolean per candidate trace. The result is 1-minimal:
@@ -139,15 +194,11 @@ def shrink(native, workload, inits, trace, still_fails):
         for n in reversed(range(len(actions))):
             shorter = actions[:n] + actions[n + 1:]
             try:
-                candidates.append((shorter, sim.script(native, workload, prof, inits, shorter)))
+                candidates.append((shorter, sim.script(native, workload, prof, shorter)))
             except sim.Divergence:
                 continue
         verdicts = still_fails([t for _, t in candidates]) if candidates else []
         kept = next((shorter for (shorter, _), bad in zip(candidates, verdicts) if bad), None)
         if kept is None:
-            return sim.script(native, workload, prof, inits, actions)
+            return sim.script(native, workload, prof, actions)
         actions = kept
-
-
-def inits_of(schema, nodes, source=None):
-    return [initial_state(schema, node, nodes, source) for node in range(nodes)]

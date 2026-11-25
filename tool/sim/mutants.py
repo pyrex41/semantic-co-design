@@ -1,0 +1,54 @@
+"""Deliberately wrong simulators. Each breaks one rule of tool/sim's environment.
+
+They exist so that the checks of the simulator have teeth: a check that claims to depend
+on a rule must reject the world that breaks it (tool/sim_check.py), and an application
+whose safety rests on a rule can show that it does (examples/accepted_job/check.py).
+"""
+from . import World
+
+
+class AllEffectsOnCut(World):
+    """A node that "dies between two effects" still performs every effect of the step."""
+
+    def performed(self, effects, cut):
+        return effects
+
+
+class LateCut(World):
+    """The node dies one effect later than the trace says."""
+
+    def performed(self, effects, cut):
+        return effects if cut is None else effects[:cut + 1]
+
+
+class NoMidStepCrash(World):
+    """A node only ever dies between steps."""
+    mid_step_crashes = False
+
+
+class SyncsNewest(World):
+    """A sync makes the newest pending write durable, not the oldest."""
+
+    def next_write(self, node):
+        return -1
+
+
+class PersistsSuffix(World):
+    """At a crash the newest pending writes reach the disk, not the oldest."""
+
+    def persisted(self, pending, kept):
+        return pending[len(pending) - kept:], pending[:len(pending) - kept]
+
+
+class KeepsCompletions(World):
+    """Acknowledgements, read results and timers queued for a node survive its crash."""
+
+    def forget(self, node):
+        pass
+
+
+class FaultsTakeTime(World):
+    """Dropping or duplicating a message in flight advances the clock to its due time."""
+
+    def take(self, items, content, *, happens=True):
+        return super().take(items, content)
