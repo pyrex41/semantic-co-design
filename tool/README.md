@@ -245,4 +245,4 @@ A new application is a directory `tool/examples/<name>/` with `node.json`, `spec
 
 A one-off run, not retained: 895 further random programs (seeds 120 to 1019, 53,700 rows) also agreed with shen-jit.
 
-Not attempted: Solo5. The generated code uses only `setjmp`, integer arithmetic and the compiler's overflow builtins, but nothing here builds or runs a unikernel, and no effect shim exists whose compliance with the environment rules could be checked.
+Not attempted: Solo5. The generated code uses only `sigsetjmp` (without the signal mask), integer arithmetic and the compiler's overflow builtins, but nothing here builds or runs a unikernel, and no effect shim exists whose compliance with the environment rules could be checked.
