@@ -5,6 +5,8 @@ The kernel compiles a Shen specification to `node_step`. The simulator is one dr
 ```sh
 nix develop -c python3 -m tool check solo5-host   # host-process driver against the simulator
 nix develop -c python3 -m tool check solo5        # that, and the unikernels under solo5-spt
+nix develop -c python3 -m tool check solo5-cluster-host   # three Raft servers as three host processes
+nix develop -c python3 -m tool check solo5-cluster        # that, and three unikernels under solo5-spt
 ```
 
 `solo5` builds Solo5 and the unikernels with a Nix derivation and runs them on Linux. On macOS that happens in a Linux container (see [Where Solo5 runs](#where-solo5-runs)); without one the command fails and prints the command it could not run. `nix flake check` runs `solo5-host` as `checks.<system>.solo5-host`.
@@ -23,7 +25,10 @@ The last line of `solo5` is `solo5: ok` only when the command itself ran Solo5. 
 | [run.py](run.py) | Starts a driver, plays a scripted client, kills it, records console, frames and disk image. |
 | [compare.py](compare.py) | A record as a simulator trace, or the reason it is not one. |
 | [scenarios.py](scenarios.py), [mutants.py](mutants.py) | The images, the scripted runs, the broken drivers and specifications. |
-| [nix/](nix/) | Solo5, the images and the runner as Nix derivations. |
+| [cluster.py](cluster.py) | Starts several nodes, each on its own link, and is the switch between them and their client. Records every frame and what it did with it. |
+| [cluster_compare.py](cluster_compare.py) | The record of a cluster as one simulator trace, or the reason it is not one. |
+| [cluster_scenarios.py](cluster_scenarios.py), [cluster_check.py](cluster_check.py) | The Raft images, the cluster runs, the broken drivers and specifications, and the check. |
+| [nix/](nix/) | Solo5, the images and the runners as Nix derivations. |
 | [container.py](container.py) | Runs the Nix build and the runner in a Linux container. |
 | [timer/](timer/) | A node that only arms, cancels and reads the clock, to exercise those paths. |
 | [store/](store/) | A node that reads on request and writes and reads in one step, to exercise the disk paths AcceptedJob and the simulator's probe do not reach. |
@@ -41,6 +46,7 @@ One loop, one event at a time:
 | `disk-write Token Key v...` | `solo5_block_write` of block `Key`: the word 1, then the values | `[ack Token]`, once the call has returned |
 | `disk-read Token Key` | `solo5_block_read` of block `Key`. Refused, and the node stops, when the same step wrote block `Key` earlier (see [below](#a-read-of-a-row-the-same-step-wrote)) | `[result Token Key Found v...]`; a block of zeros is a missing row |
 | `output ...` | `solo5_net_write` of one broadcast frame, ethertype 0x88B5: a count, the tag code, the fields | nothing |
+| `send Dest ...` | `solo5_net_write` of one frame to the address of node `Dest`, from this node's address: a count, the tag code of the effect's `deliver` event, this node's number, the payload. `Dest` outside the cluster stops the node | nothing |
 | `timer-set Id Delay`, `timer-cancel Id` | an entry in a table of 16; `solo5_yield` to the earliest | `[timer Id]` when `solo5_clock_monotonic` reaches it |
 | `clock-read Token` | the `solo5_clock_monotonic` reading taken when the step's event was dequeued, in milliseconds | `[clock Token Now]` |
 
@@ -48,9 +54,10 @@ One loop, one event at a time:
 |---|---|
 | `restart` | boot, after `node_init` |
 | `request` | a frame of the same layout whose tag is a request event and whose fields are of the declared kinds; any other frame is logged and ignored |
+| `recv` | a frame of that layout whose tag is a recv event, whose fields are of the declared kinds, and whose destination is this node's address; one addressed elsewhere is logged (`@skip address`) and ignored |
 | `disk-ack`, `disk-read-result`, `timer`, `clock` | above |
 
-`send` and `recv` are refused by `emit.py`: one image is one node, and nothing here addresses another node.
+The address of node `N` is `02:53:35:00:00:NN`, and a node knows its own number from `node=` on the boot command line. This is the simulator's convention and no other: the first field of a `send` is the destination, and the receiver's event has the sender in that place ([tool/README.md](../README.md)). In the simulator the network fills in the sender. Here the sending driver writes it into the frame, so the receiver believes what the frame says, and it is the link between the nodes that has to keep a node from speaking under another's number. The cluster harness checks every frame for it; nothing in the driver does. `emit.py` refuses a `send` or `recv` whose first field is not a number. The address has one byte for the node, so a cluster has at most 256.
 
 The loop holds no request table, repeats nothing and reorders nothing. Three choices in it are policy and are stated here because a different shim could choose otherwise: completions are handled before timers and timers before frames; a clock reading is taken once per event; and whatever the driver cannot do stops the node (`solo5_abort`, exit status 255). Stopping is a crash before the effect that could not be performed, which a specification already has to survive, and the comparison maps it onto exactly that simulator crash.
 
@@ -62,6 +69,7 @@ The loop holds no request table, repeats nothing and reorders nothing. Three cho
 | a row key is outside the device | `@fail disk-key` | yes |
 | a step reads a row it wrote | `@fail read-after-write` | yes |
 | a seventeenth timer is armed | `@fail timer-table-full` | yes |
+| a send names a destination outside the cluster | `@fail send-destination` | **no**; and the simulator ends such a run with an error, not a crash |
 | a block holds neither zeros nor a row | `@fail unreadable-row` | **no** |
 | 64 completions are waiting | `@fail completion-queue-full` | **no** |
 | a row is wider than a block, the manifest or the step is inconsistent with the tables, a device is missing at boot | other `@fail` | **no** |
@@ -150,6 +158,60 @@ The scenarios make a block operation fail in two ways. A write is refused by giv
 
 The simulator has no failed operation. The driver's answer to one is to stop, and a stop is reconstructed as a crash before that effect. Nothing here covers a device that fails silently, returns wrong data, or tears a row.
 
+## A cluster
+
+`tool check solo5-cluster-host` and `tool check solo5-cluster` run three Raft servers ([targets/raft](../../targets/raft/README.md)), each the same image booted with `node=0`, `1` or `2` and `nodes=3`, each with its own block image and its own link. The link of a host process is a directory of datagram sockets; the link of a unikernel is a tap interface (`tap0`, `tap1`, `tap2`). No bridge joins the links. The harness ([cluster.py](cluster.py)) holds the other end of each, so a frame gets from one node to another only if the harness reads it from one link and writes it to another. It is the switch and it is the client.
+
+**What the harness does to a frame between nodes**, decided from the scenario's seed when the frame arrives: forward it after a delay drawn from a range; drop it; forward it twice, each copy with its own delay; or cut it, because a partition separates the two nodes at that moment. With a small probability a forwarded frame is also written to the link of the third node, which it is not addressed to, as a switch that has not learned an address floods. It kills a node with `SIGKILL` and boots it again on the same block image. As the client it sends each put or get to whichever node last said on its console that it leads the highest term, and sends it again under the same request number while there is no `ok`.
+
+**The record.** In the order the harness did them: every frame it read from a link and what it decided, every frame it wrote, every request, boot, kill, cut and heal, each with the harness's clock. Per node and boot: the console lines and when each was read, the exit status, the argument vector, and the rows in the block image after the kill.
+
+**A run is not reproducible from its seed.** The seed fixes the harness's decisions per frame, in the order frames arrive. When a timer fires, how long a step takes and in which order two nodes' frames arrive are the machine's. Two runs of one scenario and seed differ. What is checked is the record of the run that happened, and it is the reconstructed trace that replays, byte for byte, in the simulator.
+
+### How a cluster record is checked
+
+[cluster_compare.py](cluster_compare.py), in three layers:
+
+1. **Each node alone.** Every `@step` line on a node's console is the compiled step applied to the state the console showed before it and the event of the `@event` line. This needs no simulator and no other node.
+2. **Consoles against the harness's log**, without the simulator. The frames read from a node's link are, in order, exactly the sends and outputs its console says it performed: a send to node `D` is a frame to `D`'s address, from the node's own address, carrying the `deliver` event with the node as sender. Every request or message a node handled is a frame the harness had written to that node's link, addressed to that node. A node skipped no more frames for their address than the harness wrote to its link for another node.
+3. **One simulator trace.** Everything is put in one order that respects every "before" the record establishes (a console's order, the harness's order, a frame is sent before the harness reads it and written before the node handles it, a boot's steps lie between its boot and its kill) and is otherwise by the clock, which harness and nodes share. `tool.sim` is scripted in that order with three nodes. It computes each step with its own library, disks and network, and the record is accepted when every event a node handled is queued for that node in the simulator at that point, every step gives the state and effects on the console, the simulator's clock agrees with every tick (so no timer fired early), and after every kill the block image holds the simulated disk's rows.
+
+| In the run | In the trace |
+|---|---|
+| a node handles a request or a message | `deliver` |
+| a node handles a completion or a timer | `local` |
+| a block write returned | `sync`, straight after the step |
+| the harness read a reply | `output` |
+| the harness sent a request | `client` |
+| the harness dropped a frame, or cut it | `drop` |
+| the harness forwarded a frame twice | `dup` |
+| `SIGKILL` | `crash`; inside a step, the step with `crash-after` = effects performed |
+| the next boot | `restart` |
+
+Two things in this mapping are weaker than the run. A cut is a `drop` and not the simulator's `partition`: the harness decides when a frame arrives and the simulator when the step sends, so a frame in flight when a cut starts or ends would be judged differently by the two. And a frame the harness forwarded that the node never handled (it was down, or was killed first) is left undelivered in the simulator; it is not shown that the node could not have handled it.
+
+The trace is then judged by the Raft target's own checks, unchanged: `targets.raft.check.judge`, which evaluates the fourteen Shen invariants of [invariants.shen](../../targets/raft/invariants.shen) in shen-jit and runs the linearizability checker [lin.py](../../targets/raft/lin.py) on the client history. An operation is invoked where the harness sent the request and returns where the harness read the reply, so the real-time order the checker uses is the harness's.
+
+**A kill inside a step.** A node killed between an effect and the `@did` line that logs it has performed one effect more than its console says. The comparison counts that effect when the evidence shows it: one frame more on the node's link than its console accounts for, or the row in its block image. A timer set or cancelled leaves no evidence and makes no difference after a death. The harness's ordinary kills land where they land, and in the runs below every one of them landed between two steps. One scenario therefore boots a node with `hold=N.K`, so that it stops after `K` effects of its `N`-th event and is killed there, as the single-node scenarios do.
+
+### Scenarios
+
+Seven, in [cluster_scenarios.py](cluster_scenarios.py). They name roles (the leader, a follower, the node that is down), never a server number or a term. All of them have the harness misdeliver 5 % of the frames (10 % in the lossy ones) and delay each by up to 4 ms (15 ms).
+
+| Scenario | What happens | What it must show |
+|---|---|---|
+| `elect-and-serve` | a leader is elected; put, get, put, put, get | all five answered; the gets return 11 and 12 |
+| `kill-the-leader` | two puts, the leader is killed, a later term gets a leader; get, put, get, get | all six answered; the first get returns the value acknowledged before the kill |
+| `restart-from-disk` | a put, a follower is killed, a put, the follower is booted on its disk, the leader is killed; two gets | all four answered: the two servers left, one of them the restarted one, are the whole majority |
+| `kill-inside-a-step` | as above, and the follower's first boot after the kill stops inside its recovery or its catching up and is killed there; it is booted a third time | the same |
+| `partition-heals` | a put, the leader is cut off, the others elect a leader of a later term and take a put, the cut ends; a get | all three answered; the get returns the later value |
+| `lossy-links` | `elect-and-serve` with 10 % of the frames dropped and 10 % doubled | as `elect-and-serve` |
+| `lossy-kills-and-cuts` | lossy links, the leader killed, the dead node booted, a leader cut off, the cut healed | safety only: no operation has to be answered |
+
+The Raft log holds eight entries and every operation and every repeat of one is an entry; the workloads have at most six operations.
+
+CLUSTER_RESULTS
+
 ## Where Solo5 runs
 
 `~/projects/fenrir` pins Solo5 v0.9.3 (`38e0c348`) and builds it from source in its flake (`mkSolo5`: the spt and hvt tenders, `solo5-elftool`, the `<arch>-solo5-none-static-cc` wrappers) for x86_64-linux and aarch64-linux. It runs spt guests on Linux, including Linux/AArch64 inside the Docker server of this Mac from an Alpine image. Its hvt comparison needs `/dev/kvm` and its README says it has not been executed.
@@ -207,11 +269,11 @@ An invariant checked over simulator traces says something about a real run only 
 * **Kill points.** The process is killed only where the driver holds or is idle. A kill at an arbitrary instant, including inside a `pwrite64`, is not exercised. Two crashes during one recovery are not exercised.
 * **The first boot's restart step** cannot be cut: the simulator's boot has no crash. A record in which the node dies or stops there is rejected, not explained.
 * **One tender per block image.** The simulator has one node per disk, and its crash is certain death. Solo5 does not lock the block file: `tenders/common/block_attach.c` of the pinned source opens it with `open(path, O_RDWR)` and nothing else. Two tenders attached to one image (a supervisor that starts a replacement while the old tender hangs and is not dead) are two nodes on one disk. Each reads the table once at boot and then overwrites the other's rows, so an acknowledged job can be replaced and its key accepted again under another receipt; `inv.rows-are-immutable` and `inv.ok-is-durable` say nothing about it. A reviewer ran exactly this under `solo5-spt` and saw it; it is not a retained scenario. Single attachment is an assumption the operator has to enforce, for example with `flock` in the launcher. Neither Solo5 nor a specification can.
-* **The network.** One client, one link, no loss, no duplication, no reordering was observed or injected. The simulator allows all three; the real runs show none.
+* **The network.** In the 19 single-node scenarios: one client, one link, no loss, no duplication, no reordering observed or injected. In the cluster runs the only network is the harness, and loss, duplication, delay and cuts are what it chose to do; see [A cluster](#a-cluster) for what that does and does not show. Nodes joined by a real bridge or a real switch were not run.
 * **Time.** A timer armed by a request is shown, on the harness's clock, to fire no earlier than its delay; how late is not bounded. A timer armed by any other step (a restart, a completion, another timer) has no send time to measure from and is checked only in the driver's own ticks; the rate of those ticks is checked against the harness's clock in both directions. Under spt the clock is the host's `CLOCK_MONOTONIC` and keeps going across a restart. Under hvt (read from the source, not run) it starts again at each boot, so a specification that compares clock readings across a restart is wrong there. The simulator's clock never goes back.
 * **Device failures** are a refused write and a short read, each injected once. See [Device failures](#device-failures).
 * **Same code.** The unikernel and the simulator's library are compiled from the same `node.c` by different compilers for different targets (gcc, freestanding, aarch64 ELF; clang, Mach-O). The comparison covers the steps the scenarios reach: 203 events, 117 distinct (state, event) pairs.
-* **One node.** No `send`, no `recv`.
+* **Several nodes** only as in [A cluster](#a-cluster): three Raft servers, seven scenarios, the harness between them.
 * **Trust.** The harness reads the console, the frames, the image, the exit status and its own clock. A driver that lied consistently on the first three would pass; the mutants each lie on one. A directory of records is trusted as a whole (see [Where Solo5 runs](#where-solo5-runs)).
 
 ## The three cheats

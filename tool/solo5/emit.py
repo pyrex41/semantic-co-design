@@ -26,7 +26,6 @@ DISK, NET = "disk", "net"          # device names in the Solo5 manifest
 ROLES = ("none", "request", "recv", "disk-ack", "disk-read-result", "restart", "timer", "clock",
          "output", "send", "disk-write", "disk-read", "timer-set", "timer-cancel", "clock-read")
 NETWORK = ("request", "output", "send", "recv")     # the roles that need the network device
-MOST_NODES = 256                   # a node's address on the link is one byte (driver.c)
 LEAF = {"num": "n", "sym": "s", "bool": "b"}
 
 

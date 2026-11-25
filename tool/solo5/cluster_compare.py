@@ -240,21 +240,40 @@ def reconstruct(native, record):
                 parsed = message(schema, bytes.fromhex(entry["frame"]))
                 return sim.freeze(parsed[2]), parsed[0] == node and not entry["flood"]
 
-            at, floods = 0, sum(not content(index)[1] for index in given)
-            for position, step in enumerate(boot["steps"]):
-                if step["role"] not in ("request", "recv"):
-                    continue
-                while at < len(given) and content(given[at]) != (step["event"], True):
+            handled = [(position, step) for position, step in enumerate(boot["steps"])
+                       if step["role"] in ("request", "recv")]
+            floods = sum(not content(index)[1] for index in given)
+
+            def embed(mine_only):
+                """The handled events as a subsequence of the frames written to the link,
+                each matched to the earliest frame after the one before it: {step: log
+                index}, and the first step that has none."""
+                at, found = 0, {}
+                for position, step in handled:
+                    while at < len(given) and not (content(given[at])[0] == step["event"]
+                                                   and (content(given[at])[1] or not mine_only)):
+                        at += 1
+                    if at == len(given):
+                        return found, step
+                    found[position] = given[at]
                     at += 1
-                if at == len(given):
-                    stray = [index for index in given if content(index) == (step["event"], False)]
-                    to = stray and message(schema, bytes.fromhex(log[stray[0]]["frame"]))[0]
-                    need(not stray, f"{where}: the node handled {step['event']} (event "
-                                    f"{step['n']}), a frame addressed to node {to}")
-                    need(False, f"{where}: the node handled {step['event']} (event {step['n']}), "
-                                "which the harness had not written to its link")
-                fed[node, number, position] = given[at]
-                at += 1
+                return found, None
+
+            found, missing = embed(True)
+            if missing is not None:
+                # Not among the frames for this node. Among all the frames on its link?
+                anything, never = embed(False)
+                stray = [(position, index) for position, index in anything.items()
+                         if not content(index)[1]]
+                need(never is not None or not stray,
+                     f"{where}: the node handled {boot['steps'][stray[0][0]]['event']} (event "
+                     f"{boot['steps'][stray[0][0]]['n']}), a frame addressed to node "
+                     f"{message(schema, bytes.fromhex(log[stray[0][1]]['frame']))[0]}"
+                     if stray else "")
+                need(False, f"{where}: the node handled {missing['event']} (event {missing['n']}), "
+                            "which the harness had not written to its link")
+            for position, index in found.items():
+                fed[node, number, position] = index
             skipped = boot["skips"].count("address")
             need(skipped <= floods, f"{where}: the node skipped {skipped} frames for their "
                                     f"address; the harness wrote {floods} such frames to its link")

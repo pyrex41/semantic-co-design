@@ -9,7 +9,10 @@
 
      block device   a file opened O_RDWR; one pread or pwrite of one block, nothing synced
      net device     a datagram socket bound to DIR/node; a frame is one datagram, sent to
-                    DIR/client and dropped when nobody listens (a tap with no carrier)
+                    DIR/client and dropped when nobody listens (a tap with no carrier).
+                    Several nodes are several processes, each with its own DIR: a node's
+                    link reaches whoever holds DIR/client and nothing else, so whatever
+                    passes between two nodes passes through that process
      clock          CLOCK_MONOTONIC
      yield          poll on the socket until the deadline
      console        standard output */
@@ -159,9 +162,13 @@ int main(int argc, char **argv) {
             address(&net.peer, value, "client");
             unlink(self.sun_path);
             net.fd = socket(AF_UNIX, SOCK_DGRAM, 0);
+            int space = 1 << 18;
             if (net.fd < 0 || bind(net.fd, (struct sockaddr *)&self, sizeof self) != 0
                     || fcntl(net.fd, F_SETFL, O_NONBLOCK) != 0)
                 die("cannot bind", self.sun_path);
+            /* A tap interface queues a thousand frames for its reader; the default queue
+               of a datagram socket on macOS holds 4096 bytes, about thirty of ours. */
+            (void)setsockopt(net.fd, SOL_SOCKET, SO_RCVBUF, &space, sizeof space);
         } else {
             die("unknown option", argv[at]);
         }

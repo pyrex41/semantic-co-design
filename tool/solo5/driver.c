@@ -222,7 +222,7 @@ static void address(uint8_t *to, int64_t node) {
 /* A message to one node. The frame carries the event the receiver handles: the tag the
    manifest gives as `deliver`, this node in the destination's place, then the payload. */
 static void message(const struct kind *kind, const int64_t *fields) {
-    size_t size = BODY + 8 * (size_t)(1 + kind->width);
+    size_t length = BODY + 8 * (size_t)(1 + kind->width);
     if (fields[0] < 0 || fields[0] >= cluster || fields[0] > 255) fail("send-destination");
     for (size_t i = 0; i < FRAME_MIN; ++i) frame[i] = 0;
     address(frame, fields[0]);
@@ -233,7 +233,7 @@ static void message(const struct kind *kind, const int64_t *fields) {
     pack(frame + BODY, kind->deliver);
     pack(frame + BODY + 8, self);
     for (int i = 1; i < kind->width; ++i) pack(frame + BODY + 8 * (1 + i), fields[i]);
-    (void)solo5_net_write(net, frame, size < FRAME_MIN ? FRAME_MIN : size);
+    (void)solo5_net_write(net, frame, length < FRAME_MIN ? FRAME_MIN : length);
 }
 
 static void timer_clear(int64_t id) {

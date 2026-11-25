@@ -72,6 +72,14 @@
           python3 -m tool check solo5-host
           touch "$out"
         '';
+        # Three Raft servers on that shim, as three host processes with the harness as the
+        # network between them: tool/solo5/README.md, "A cluster". Timers run on the
+        # machine's clock, so this gate depends on the machine not being starved.
+        solo5-cluster-host = nixpkgs.legacyPackages.${system}.runCommand "solo5-cluster-host" (environment system) ''
+          cd ${self}
+          python3 -m tool check solo5-cluster-host
+          touch "$out"
+        '';
         # The Raft target, as two checks so that each stays under ten minutes. TLC on the
         # published raft.tla is not one of them: see targets/raft/README.md, section 10.
         raft = nixpkgs.legacyPackages.${system}.runCommand "raft" (environment system) ''

@@ -148,6 +148,101 @@ let
     echo "status $status" >> "$out/hvt.txt"
     rm -f "$disk"
   '';
+  # ---- the cluster: three Raft servers (tool/solo5/cluster_scenarios.py)
+
+  # The same, and the Raft target the cluster images are compiled from.
+  cluster-source = fs.toSource {
+    root = ../../..;
+    fileset = fs.difference
+      (fs.unions [ ../../../tool ../../../specializer ../../../targets/__init__.py ../../../targets/raft ])
+      (fs.fileFilter (file: file.hasExt "md" || file.hasExt "nix" || file.hasExt "pyc") ../../..);
+  };
+
+  # NAME.spt and NAME.host for every cluster image, and raft.hvt.
+  cluster-images = pkgs.stdenv.mkDerivation {
+    name = "sim-tool-solo5-cluster-images";
+    src = cluster-source;
+    nativeBuildInputs = [ pkgs.python3 solo5 ];
+    PYTHONDONTWRITEBYTECODE = "1";
+    dontConfigure = true;
+    dontStrip = true;
+    dontPatchELF = true;
+    dontFixup = true;
+    buildPhase = ''
+      cmp tool/solo5/include/solo5.h ${solo5-src}/include/solo5.h
+      python3 -m tool.solo5.emit --cluster build
+      guest=$(basename ${solo5}/bin/*-solo5-none-static-cc)
+      flags="-std=c11 -O2 -Wall -Wextra -Werror -Wno-unused-parameter -Wno-unused-variable"
+      mkdir -p $out
+      $guest -c -std=c11 -O2 -fno-builtin -fno-tree-loop-distribute-patterns \
+        tool/solo5/freestanding/lib.c -o build/lib.o
+      one() {
+        dir=$1
+        name=$(basename $dir)
+        solo5-elftool gen-manifest $dir/manifest.json $dir/manifest.c
+        $guest -c $flags -I $dir $dir/driver.c -o $dir/driver.o
+        $guest -c $flags -Wno-unused-function -I tool/solo5/freestanding $dir/node.c -o $dir/node.o
+        $guest -c $dir/manifest.c -o $dir/manifest.o
+        objects="$dir/driver.o $dir/node.o $dir/manifest.o build/lib.o"
+        $guest -z solo5-abi=spt $objects -o $out/$name.spt
+        if [ $name = raft ]; then $guest -z solo5-abi=hvt $objects -o $out/$name.hvt; fi
+        $CC $flags -I tool/solo5/include -I $dir $dir/driver.c tool/solo5/host.c $dir/node.c \
+          -o $out/$name.host
+      }
+      pids=""
+      for dir in build/*/; do one $dir & pids="$pids $!"; done
+      for pid in $pids; do wait $pid; done
+      cp build/node.c.sha256.json build/driver.c.sha256.json $out/
+      for image in $out/*.spt $out/*.hvt; do
+        printf '%s %s %s\n' "$(basename $image)" "$(solo5-elftool query-abi $image | tr -d ' \n')" \
+          "$(solo5-elftool query-manifest $image | tr -d ' \n')"
+      done > $out/images.txt
+      printf '%s\n' ${solo5-src.rev} > $out/SOLO5_COMMIT
+      (cd $out && sha256sum *.spt *.hvt > sha256.txt)
+    '';
+    dontInstall = true;
+  };
+
+  # Runs every cluster scenario RUNS times under solo5-spt, one tap interface per node,
+  # and as Linux host processes, and writes the records. Needs root, /dev/net/tun and
+  # CAP_NET_ADMIN.
+  cluster-run = pkgs.writeShellScriptBin "sim-tool-solo5-cluster-run" ''
+    set -eu
+    out=''${1:?usage: sim-tool-solo5-cluster-run OUTPUT-DIRECTORY RUNS [IMAGE ...]}
+    runs=''${2:?usage: sim-tool-solo5-cluster-run OUTPUT-DIRECTORY RUNS [IMAGE ...]}
+    shift 2
+    export PATH=${lib.makeBinPath [ pkgs.python3 pkgs.iproute2 pkgs.coreutils solo5 ]}:$PATH
+    export PYTHONDONTWRITEBYTECODE=1
+    for tap in tap0 tap1 tap2; do
+      ip link show $tap >/dev/null 2>&1 || ip tuntap add $tap mode tap
+      ip link set dev $tap up
+    done
+    ip -o link show | grep -o 'tap[0-9]*:' | tr -d ':' | tr '\n' ' ' > "$out/taps.txt"
+    cd ${cluster-source}
+    python3 -m tool.solo5.cluster spt ${cluster-images} "$out/spt.json" "$runs" "$@"
+    python3 -m tool.solo5.cluster host ${cluster-images} "$out/host.json" "$runs" "$@"
+    cp ${cluster-images}/images.txt ${cluster-images}/node.c.sha256.json \
+      ${cluster-images}/driver.c.sha256.json ${cluster-images}/SOLO5_COMMIT \
+      ${cluster-images}/sha256.txt "$out/"
+    echo ${cluster-images} > "$out/images-path.txt"
+    solo5-spt --version > "$out/tender.txt" 2>&1 || true
+    sha256sum "$(command -v solo5-spt)" >> "$out/tender.txt"
+    (cd ${cluster-images} && sha256sum *.host) > "$out/host.sha256.txt"
+    sha256sum tool/solo5/cluster.py tool/solo5/cluster_compare.py tool/solo5/cluster_scenarios.py \
+      tool/solo5/run.py tool/solo5/compare.py tool/solo5/emit.py tool/solo5/driver.c \
+      tool/solo5/host.c > "$out/sources.sha256"
+    uname -srm > "$out/uname.txt"
+    # The hvt image: boot node 0 of 3 for a few seconds if this machine has a hypervisor
+    # for it. Status 124 means it was still running when the time was up.
+    disk=$(mktemp)
+    head -c 8192 /dev/zero > "$disk"
+    status=0
+    timeout 5 solo5-hvt --mem=32 --block:disk="$disk" --net:net=tap0 ${cluster-images}/raft.hvt \
+      node=0 nodes=3 > "$out/hvt.txt" 2>&1 || status=$?
+    echo "status $status" >> "$out/hvt.txt"
+    rm -f "$disk"
+    for tap in tap0 tap1 tap2; do ip tuntap del $tap mode tap || true; done
+  '';
 in
 {
   inherit solo5-src;
@@ -155,4 +250,6 @@ in
   inherit solo5;
   solo5-images = images;
   solo5-run = run;
+  solo5-cluster-images = cluster-images;
+  solo5-cluster-run = cluster-run;
 }
