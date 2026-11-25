@@ -17,8 +17,7 @@ static int freestanding_jump_code;
 
 #define setjmp(buffer) (__builtin_setjmp(buffer) ? freestanding_jump_code : 0)
 #define longjmp(buffer, code) (freestanding_jump_code = (code), __builtin_longjmp((buffer), 1))
-#define sigsetjmp(buffer, savemask) \
-    ((void)sizeof(char[(savemask) == 0 ? 1 : -1]), setjmp(buffer))
+#define sigsetjmp(buffer, savemask) ((void)sizeof(char[(savemask) == 0 ? 1 : -1]), setjmp(buffer))
 #define siglongjmp(buffer, code) longjmp(buffer, code)
 
 #endif

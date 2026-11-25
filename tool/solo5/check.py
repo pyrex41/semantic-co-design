@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 from tempfile import TemporaryDirectory
 
@@ -107,6 +108,51 @@ CLANG = ["-std=c11", "-O2", "-Wall", "-Wextra", "-Werror", "-Wno-unused-paramete
 
 def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+JUMPS = re.compile(r"\b(?:sig)?(?:setjmp|longjmp|jmp_buf)\b")
+
+
+def code_of(text):
+    """C text without its comments and its #include lines."""
+    return re.sub(r"^\s*#\s*include\b.*$", "", re.sub(r"/\*.*?\*/", "", text, flags=re.S), flags=re.M)
+
+
+def missing_jumps(node_c, header):
+    """The names of the <setjmp.h> family that `node_c` uses and `header` does not define.
+
+    A unikernel has no C library. Its node.c is compiled against freestanding/setjmp.h,
+    and only the Linux build of the images does that: the host images here are compiled
+    against the system's <setjmp.h>, which has every spelling. So when the ABI template
+    took up sigsetjmp, every check that runs without a container still passed while the
+    unikernels no longer compiled. This reads the two texts instead of compiling them.
+    """
+    header = code_of(header)
+    given = {name for name in JUMPS.findall(header)
+             if re.search(rf"^\s*(#\s*define\s+{name}\(|typedef\b[^;]*\b{name}\[)", header, re.M)}
+    return set(JUMPS.findall(code_of(node_c))) - given
+
+
+def guest_headers(work, report):
+    """Every node.c finds its jumps in the freestanding header, and the check can fail."""
+    header = (HERE / "freestanding" / "setjmp.h").read_text()
+    used = set()
+    for name in IMAGES:
+        node_c = (work / "src" / name / "node.c").read_text()
+        used |= set(JUMPS.findall(code_of(node_c)))
+        missing = missing_jumps(node_c, header)
+        require(not missing, f"{name}: node.c uses {sorted(missing)}, which "
+                             "tool/solo5/freestanding/setjmp.h does not define: the unikernel "
+                             "would not compile")
+    # The mutant: the header as it was while the template used setjmp and longjmp.
+    before = "\n".join(line for line in header.splitlines()
+                       if not re.match(r"\s*(#\s*define|typedef)\b.*\bsig", line))
+    lacking = missing_jumps((work / "src" / "accepted_job" / "node.c").read_text(), before)
+    require(lacking == {"sigjmp_buf", "sigsetjmp", "siglongjmp"},
+            f"a freestanding header without the sig spellings lacks {sorted(lacking)}")
+    report(f"guest headers: every name of <setjmp.h> that a node.c uses ({', '.join(sorted(used))}) "
+           f"is defined by freestanding/setjmp.h, the only one a unikernel is compiled against; "
+           f"a header with setjmp and longjmp alone is rejected for {', '.join(sorted(lacking))}")
 
 
 def prepare(work):
@@ -491,6 +537,7 @@ def tampering(label, records, natives, report):
 
 def host(work, report):
     natives, digests, images = prepare(work)
+    guest_headers(work, report)
     edited = sum("driver" in image or "spec" in image for image in IMAGES.values())
     report(f"images: {len(IMAGES)} host processes built from driver.c, host.c and node.c "
            f"({edited} of them with one edit of the driver or of the specification); each "
