@@ -212,7 +212,7 @@ The Raft log holds eight entries and every operation and every repeat of one is 
 
 ### What the cluster checks establish
 
-The numbers are from one run of `python3 -m tool check solo5-cluster` on the commit that added this section (772 s). Each differs a little from run to run, because the runs do. The requirements do not: every count that is asserted is named as such.
+The numbers are from one run of `python3 -m tool check solo5-cluster` on commit `af38ebd` (772 s); a second run, on `0b38a87`, took 697 s and gave the same verdicts with other counts. Each differs a little from run to run, because the runs do. The requirements do not: every count that is asserted is named as such.
 
 **`python3 -m tool check solo5-cluster-host`** (macOS or Linux, no Solo5; about four minutes):
 
