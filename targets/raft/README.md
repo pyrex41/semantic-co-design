@@ -3,7 +3,7 @@
 One Raft server written as an ordinary Shen step function ([spec.shen](spec.shen)), compiled to native code by `tool/`, run in 3-server and 5-server clusters under the deterministic simulator, judged by invariants written in Shen ([invariants.shen](invariants.shen)) and by an independent linearizability checker ([lin.py](lin.py)), searched exhaustively in small bounds by Maude, and set beside TLC on the published `raft.tla`.
 
 ```sh
-nix develop -c python3 -m tool check raft                    # the retained check, about 6 minutes
+nix develop -c python3 -m tool check raft                    # the retained check, 5.5 to 7 minutes here
 nix develop -c python3 -m tool compile raft /tmp/raft        # IR, C, library, executable
 nix develop -c nix shell --inputs-from . 'nixpkgs#tlaplus' -c python3 -m targets.raft.tla.check
 nix develop -c python3 -m targets.raft.check story local-get three     # a retained failing trace, readable
@@ -145,7 +145,7 @@ TLC, published raft.tla, 3 servers, 1 value, max term 2, log 1, messages 1: 2816
   mutant commit-by-counting: NOT rejected within this bound (2379781 distinct states, 96s)
 ```
 
-The bound is small because `raft.tla` carries history variables and a message bag. With two messages in flight instead of one, TLC had 2.7 million distinct states after a minute and a growing queue; that run was stopped and is not reported as a result.
+TLC stops a mutant at its first violation with two workers, so those two state counts differ by a few hundred between runs (121,322 and 178 in a second run); the other figures are the same. The bound is small because `raft.tla` carries history variables and a message bag. With two messages in flight instead of one, TLC had 2.7 million distinct states after a minute and a growing queue; that run was stopped and is not reported as a result.
 
 Comparison of the invariant sets: the five named properties are checked on both sides, as history properties over simulator traces on one and as state or action properties over all reachable states of the bound on the other. The Shen side adds durability before replies, the commit rule and linearizability of a client history, none of which `raft.tla` can state (it has no disk and no client replies). The TLA+ side covers every interleaving of its bound, which the seeded simulation does not. Nothing here relates `raft.tla` to `spec.shen`: they are two descriptions of one protocol by different authors, checked against the same named properties.
 
