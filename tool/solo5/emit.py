@@ -7,7 +7,8 @@
                      simulator (same specializer, same template), with its SHA-256 beside it
     node_tables.h    the manifest as C tables: widths, tag codes, roles, leaf kinds
     manifest.json    the Solo5 application manifest (which devices the image declares)
-    driver.c         a copy of the driver, edited when a mutant is asked for
+    driver.c         a copy of the driver, edited when a mutant is asked for, with its
+                     SHA-256 beside it
 
 Nothing here needs a C compiler or shen-jit, so the same step runs in a Nix build sandbox.
 """
@@ -124,7 +125,9 @@ def emit(schema, directory, *, source=None, mutant=None):
     (directory / "node.c.sha256").write_text(digest + "\n")
     (directory / "node_tables.h").write_text(tables(schema))
     (directory / "manifest.json").write_text(json.dumps(solo5_manifest(schema), indent=2) + "\n")
-    (directory / "driver.c").write_text(driver_c(mutant))
+    driver = driver_c(mutant)
+    (directory / "driver.c").write_text(driver)
+    (directory / "driver.c.sha256").write_text(hashlib.sha256(driver.encode()).hexdigest() + "\n")
     return digest
 
 
@@ -144,6 +147,9 @@ def main(argv):
     if len(argv) == 2 and argv[0] == "--all":
         digests = emit_all(argv[1])
         (Path(argv[1]) / "node.c.sha256.json").write_text(json.dumps(digests, sort_keys=True) + "\n")
+        drivers = {name: (Path(argv[1]) / name / "driver.c.sha256").read_text().strip()
+                   for name in digests}
+        (Path(argv[1]) / "driver.c.sha256.json").write_text(json.dumps(drivers, sort_keys=True) + "\n")
         return 0
     if len(argv) != 2:
         print(__doc__)

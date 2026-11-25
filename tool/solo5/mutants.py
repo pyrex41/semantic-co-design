@@ -56,6 +56,59 @@ DRIVERS = {
     "stale-clock": {
         "old": "        int64_t event[3] = {EV_CLOCK, fields[0], now};",
         "new": "        int64_t event[3] = {EV_CLOCK, fields[0], now - 1};"},
+    # A unit of specification time is half a millisecond: every timer fires after half
+    # its delay, and the driver's own log is consistent with itself.
+    "half-tick": {
+        "old": "#define TICK_NS UINT64_C(1000000) ",
+        "new": "#define TICK_NS UINT64_C(500000) "},
+    # ... or two milliseconds: the clock a step reads runs at half speed.
+    "slow-tick": {
+        "old": "#define TICK_NS UINT64_C(1000000) ",
+        "new": "#define TICK_NS UINT64_C(2000000) "},
+    # The deadline of a wait is computed in nanoseconds, where a far due time wraps to a
+    # past instant: the wait returns at once, for ever. (The driver as it was.)
+    "wrapping-deadline": {
+        "old": "        if (timer >= 0 && (uint64_t)timers[timer].due < deadline / TICK_NS)\n",
+        "new": "        if (timer >= 0 && (uint64_t)timers[timer].due * TICK_NS < deadline)\n"},
+    # A block write that failed is acknowledged all the same.
+    "acks-failed-write": {
+        "old": "    if (solo5_block_write(disk, offset, block, disk_info.block_size) != SOLO5_R_OK)\n"
+               "        fail(\"block-write\");\n",
+        "new": "    (void)solo5_block_write(disk, offset, block, disk_info.block_size);\n"},
+    # A block read that failed yields whatever the buffer held.
+    "ignores-failed-read": {
+        "old": "    if (solo5_block_read(disk, block_offset(fields[1]), block, disk_info.block_size) != SOLO5_R_OK)\n"
+               "        fail(\"block-read\");\n",
+        "new": "    (void)solo5_block_read(disk, block_offset(fields[1]), block, disk_info.block_size);\n"},
+    # A read of a row the same step wrote is answered by the device, with the new row.
+    # (The driver as it was: no simulated schedule gives that answer.)
+    "reads-own-write": {
+        "old": "        if (written[i] == fields[1]) fail(\"read-after-write\");\n",
+        "new": "        (void)i;\n"},
+    # Semantics in the shim, 1: the loop remembers the last request and drops a repeat.
+    "dedupes-requests": {
+        "old": "                if (valid) {\n"
+               "                    handle(event, 1 + kind->width);\n",
+        "new": "                static int64_t last[1 + EVENT_WIDTH];\n"
+               "                static int have;\n"
+               "                int repeat = have;\n"
+               "                for (int i = 0; i < 1 + kind->width; ++i)\n"
+               "                    if (last[i] != event[i]) repeat = 0;\n"
+               "                if (valid && repeat) {\n"
+               "                    text(\"@skip duplicate\");\n"
+               "                    number((int64_t)size);\n"
+               "                    end();\n"
+               "                    return;\n"
+               "                }\n"
+               "                if (valid) {\n"
+               "                    for (int i = 0; i < 1 + kind->width; ++i) last[i] = event[i];\n"
+               "                    have = 1;\n"
+               "                    handle(event, 1 + kind->width);\n"},
+    # Semantics in the shim, 2: the loop sends every output twice, in case one is lost.
+    "repeats-output": {
+        "old": "    (void)solo5_net_write(net, frame, size < FRAME_MIN ? FRAME_MIN : size);",
+        "new": "    (void)solo5_net_write(net, frame, size < FRAME_MIN ? FRAME_MIN : size);\n"
+               "    (void)solo5_net_write(net, frame, size < FRAME_MIN ? FRAME_MIN : size);"},
 }
 
 
@@ -65,8 +118,14 @@ def specs():
     from ..sim_check import TRAPPING
     reply = MUTANTS["reply-before-ack"]
     return {
-        # AcceptedJob answering before its row is acknowledged.
+        # AcceptedJob answering in the step that issues the write, after the write. In
+        # the simulator the row is still pending when the reply is made. On this shim it
+        # is not: the block write has returned before the next effect starts.
         "accepted_job~reply-before-ack": (reply["old"], reply["new"]),
+        # AcceptedJob answering first and writing second. Killed between the two, the
+        # client holds `ok` and the block image has no row, on any shim.
+        "accepted_job~reply-then-write": (reply["old"],
+                                          "[[reply Req ok Slot] [write 0 Slot Key Digest]]"),
         # The simulator's probe without a clause for an acknowledgement: the first one
         # is a Shen error.
         "probe~no-ack-clause": (TRAPPING, ")"),

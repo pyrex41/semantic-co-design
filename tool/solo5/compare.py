@@ -13,8 +13,12 @@ and the network. The record is accepted only if
   driver performed as many of them as the simulated node did before it died;
 * the frames the client received are exactly the outputs performed, in order;
 * the rows in the block image after every kill are the simulated disk's rows;
+* a boot that was killed ended by SIGKILL, and one that stopped itself by Solo5's abort;
 * for a node with a clock, the simulator's clock, moved only by its own timers and by
-  the ticks the driver logged, agrees with every logged tick.
+  the ticks the driver logged, agrees with every logged tick;
+* and those ticks are milliseconds of the harness's own clock: a timer armed by a request
+  fires no sooner after the harness sent that request than its delay, and between two
+  events no more and no fewer ticks pass than the harness's clock allows.
 
 The first three are read from the driver's console, the fourth from the image file and
 the frames from the client's socket, so a driver that misreports is caught by the other
@@ -29,8 +33,17 @@ How a real run is mapped onto simulator actions:
     packet received        output
     killed mid-step        the step with crash-after = effects performed, every write
                            issued before the cut persisted
+    stopped itself (@fail) the same: the node dies before the effect it could not perform
     killed while idle      crash
     next boot              restart
+
+One thing in this mapping is the simulator's and not the device's. The simulator has no
+`sync` between two effects of a step, so a step that writes a row and then sends a
+packet is reconstructed with the row still pending when the packet is made, although
+the device held the row by then. The trace is a schedule the simulator has and it ends
+in the same world; it is not a picture of when the device did what within a step. For
+the one case where the difference could be observed by the node, a read of a row the
+same step wrote, the driver stops instead of reading (driver.c).
 """
 import json
 
@@ -110,13 +123,17 @@ def clocked(times, origin):
 
 def parse(schema, boot):
     """The console lines of one boot as steps."""
-    out = {"init": None, "steps": [], "hold": None, "skips": [], "fail": None}
+    out = {"boot": None, "init": None, "steps": [], "hold": None, "skips": [], "fail": None}
     steps = out["steps"]
     try:
-        for line in boot["lines"]:
+        for index, line in enumerate(boot["lines"]):
             head, *words = line.split()
+            need((head == "@boot") == (index == 0), "the console does not start with one @boot line")
+            need(out["hold"] is None and out["fail"] is None and not (steps and steps[-1]["trap"]),
+                 f"a console line after the node stopped: {line}")
             if head == "@boot":
                 need(words[0] == schema.name, f"the image is {words[0]}, not {schema.name}")
+                out["boot"] = tuple(map(int, words[1:]))
             elif head == "@init":
                 out["init"] = tuple(map(int, words))
             elif head == "@event":
@@ -127,7 +144,8 @@ def parse(schema, boot):
                 event = (kind.tag, *schema.decode(rest, kind.fields))
                 need(next(rest, None) is None and number == len(steps) + 1, f"malformed {line}")
                 steps.append({"n": number, "t": tick, "event": event, "role": kind.role,
-                              "post": None, "effects": (), "applied": 0, "trap": None})
+                              "post": None, "effects": (), "applied": 0, "trap": None,
+                              "line": index})
             elif head == "@step":
                 state, effects = schema.decode_output(list(map(int, words)))
                 steps[-1].update(post=schema.decode_state(state), effects=effects)
@@ -146,6 +164,7 @@ def parse(schema, boot):
                 need(head == "@idle", f"unknown console line {line}")
     except (SchemaError, StopIteration, ValueError, IndexError) as error:
         raise Mismatch(f"the console does not decode: {error}") from None
+    need(out["boot"] is not None, "the console does not start with one @boot line")
     return out
 
 
@@ -159,17 +178,78 @@ def image_rows(schema, rows):
     return tuple((row[0], *schema.decode(iter(row[1:]), kind.fields[2:])) for row in rows)
 
 
+ABORT = 255            # SOLO5_EXIT_ABORT: the exit status of a node that stopped itself
+SLACK = 2.0            # milliseconds: a tick is a whole millisecond, rounded down
+DRIFT = 0.01           # and two readings of one clock, taken by two processes
+
+
+def wall(schema, boots, record):
+    """The driver's ticks against the harness's clock. See the module comment.
+
+    The harness knows when it sent a request (no later than the driver handled it) and
+    when it read a console line (no earlier than the driver wrote it). Both bounds below
+    are therefore sound whatever the delays in between: a correct driver cannot fail them.
+    """
+    for number, (boot, raw) in enumerate(zip(boots, record["boots"])):
+        steps, sent = boot["steps"], iter(raw["sent_at"])
+        for step in steps:
+            step["read"] = raw["at"][step["line"]]
+            step["sent"] = next(sent) if step["role"] == "request" else None
+        armed = {}                           # timer -> (when its request was sent, delay)
+        for step in steps:
+            if step["role"] == "timer" and step["event"][1] in armed:
+                since, delay = armed.pop(step["event"][1])
+                waited = step["read"] - since
+                need(waited >= max(delay, 0) * (1 - DRIFT) - SLACK,
+                     f"boot {number}: timer {step['event'][1]} was armed with a delay of {delay} ms "
+                     f"by a request sent {waited:.0f} ms, by the harness's clock, before it fired")
+            for effect in step["effects"][:step["applied"]]:
+                if role(schema, effect) in ("timer-set", "timer-cancel"):
+                    armed.pop(effect[1], None)
+                    if role(schema, effect) == "timer-set" and step["sent"] is not None:
+                        armed[effect[1]] = (step["sent"], effect[2])
+        for i, first in enumerate(steps):
+            for then in steps[i + 1:]:
+                ticks = then["t"] - first["t"]
+                if first["sent"] is not None:
+                    most = then["read"] - first["sent"]
+                    need(ticks <= most * (1 + DRIFT) + SLACK,
+                         f"boot {number}: {ticks} ticks passed between events {first['n']} and "
+                         f"{then['n']}, and at most {most:.0f} ms of the harness's clock")
+                if then["sent"] is not None:
+                    least = then["sent"] - first["read"]
+                    need(ticks >= least * (1 - DRIFT) - SLACK,
+                         f"boot {number}: {ticks} ticks passed between events {first['n']} and "
+                         f"{then['n']}, and at least {least:.0f} ms of the harness's clock")
+
+
+def quiet(plans, record):
+    """A boot whose plan says `idle_cpu` had nothing to do for most of its life: it must
+    not have used more processor time than that many seconds."""
+    for number, (plan, raw) in enumerate(zip(plans, record["boots"])):
+        limit = plan.get("idle_cpu")
+        need(limit is None or raw["cpu"] <= limit,
+             f"boot {number}: the driver used {raw['cpu']:.2f} s of processor time while it had "
+             f"nothing to do; the limit is {limit} s")
+
+
 def reconstruct(native, record, *, stops=False):
     """The simulator trace of a recorded run. Raises Mismatch when there is none.
 
     `stops` allows the run to end with the node stopping itself because a step had no
-    result; the simulated run must then end in the same error.
+    result; the simulated run must then end in the same error. A node that stops itself
+    because the driver cannot perform an effect (`@fail`) needs no permission: it is
+    the simulator's crash before that effect.
     """
     schema = native.schema
     need(record["schema"] == schema.name, "the record is of another node")
     for number, raw in enumerate(record["boots"]):
         need("error" not in raw, f"boot {number} could not be played: {raw.get('error')}")
+        need(len(raw["at"]) == len(raw["lines"]) and len(raw["sent_at"]) == len(raw["sent"])
+             and list(raw["at"]) == sorted(raw["at"]) and list(raw["sent_at"]) == sorted(raw["sent_at"]),
+             f"boot {number}: the harness's clock readings do not fit its console lines and requests")
     boots = [parse(schema, raw) for raw in record["boots"]]
+    disk = any(k.role == "disk-write" for k in schema.effects.values())
     timed = bool({"timer", "clock"} & set(schema.roles))
     requests = [step["event"] for boot in boots for step in boot["steps"] if step["role"] == "request"]
     prof = sim.profile(timed=True, budget={"crash": len(boots)}, max_steps=10 ** 6)
@@ -187,14 +267,20 @@ def reconstruct(native, record, *, stops=False):
         need(action in world.enabled(), f"{where}: the simulator cannot do {action} here")
         times.append(when)
         draw = PlanDraw(cut)
+        before[0] = world.inits[0] if action[0] == "restart" else world.state[0]
         sim.attempt(world, trace, action, draw)
         actions.append((action, list(draw.used)))
         return trace["steps"][-1]
+
+    before = [None]            # the node's memory when the last scripted step began
 
     def same(where, step, rec):
         if step["trap"] is not None:
             need(rec["kind"] == "error", f"{where}: the driver's step had no result (code "
                                          f"{step['trap']}); the simulator's had one")
+            code = native.code(schema.encode_input(before[0], step["event"]))
+            need(code == step["trap"], f"{where}: the driver's step failed with code "
+                                       f"{step['trap']}, the simulator's with {code}")
             return
         need(rec["kind"] != "error", f"{where}: the simulator's step has no result: {rec.get('error')}")
         for name in ("event", "post", "effects", "applied"):
@@ -206,8 +292,18 @@ def reconstruct(native, record, *, stops=False):
 
     for number, (boot, raw) in enumerate(zip(boots, record["boots"])):
         last, steps = number == len(boots) - 1, boot["steps"]
-        need(boot["fail"] is None, f"boot {number}: the driver stopped: {boot['fail']}")
+        need(boot["boot"][:2] == (0, 1) and boot["boot"][2:] == (512 * raw["blocks"], 512 if disk else 0),
+             f"boot {number}: booted as {boot['boot']}: not node 0 of 1 on the block file given")
         need(boot["init"] == tuple(native.init(0, 1)), f"boot {number}: the initial state differs")
+        # The node stopped itself: where, and how the process then ended.
+        failed = boot["fail"] is not None
+        need(not failed or (steps and steps[-1]["post"] is not None and raw["hold"] is None
+                            and steps[-1]["applied"] < len(steps[-1]["effects"])),
+             f"boot {number}: the driver stopped ({boot['fail']}) outside the effects of a step")
+        stopped = failed or bool(steps and steps[-1]["trap"] is not None)
+        need(raw["status"] == (ABORT if stopped else -9),
+             f"boot {number}: exit status {raw['status']}; a node that "
+             + ("stopped itself exits with 255" if stopped else "was killed has -9"))
         need(restart is None or (steps and steps[0]["event"] == restart),
              f"boot {number}: the node did not handle restart first")
         handled = [step["event"] for step in steps if step["role"] == "request"]
@@ -227,10 +323,10 @@ def reconstruct(native, record, *, stops=False):
             where = f"boot {number} event {step['n']} {step['event']}"
             when = step["t"] if timed else None
             cut = None
-            if hold and step is steps[-1] and step["applied"] < len(step["effects"]):
+            if (hold or failed) and step is steps[-1] and step["applied"] < len(step["effects"]):
                 cut = step["applied"]
             if index == 0 and restart is not None:
-                need(number or cut is None, f"{where}: a kill inside the first restart step "
+                need(number or cut is None, f"{where}: a death inside the first restart step "
                                             "cannot be scripted in the simulator")
                 rec = act(where, ("restart", 0), when, cut) if number else trace["steps"][0]
             elif step["role"] == "request":
@@ -254,7 +350,7 @@ def reconstruct(native, record, *, stops=False):
                     act(where, ("output", effect))
         if not last and not dead:
             act(f"boot {number}: the kill", ("crash", 0))
-        if any(k.role == "disk-write" for k in schema.effects.values()):
+        if disk:
             need(sim.freeze(world.rows(0)) == image_rows(schema, raw["rows"]),
                  f"boot {number}: after the kill the block image holds {raw['rows']}, the "
                  f"simulated disk {list(world.rows(0))}")
@@ -268,4 +364,6 @@ def reconstruct(native, record, *, stops=False):
         sim.replay(native, workload, trace, world=World)
     except sim.Divergence as error:
         raise Mismatch(f"the reconstructed trace does not replay: {error}") from None
+    if timed:
+        wall(schema, boots, record)
     return trace, {"boots": boots, "requests": requests, "workload": workload, "world": World}

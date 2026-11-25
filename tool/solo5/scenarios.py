@@ -14,14 +14,18 @@ from .mutants import DRIVERS, specs
 
 TOOL = Path(__file__).parent.parent
 NODES = {"accepted_job": "examples/accepted_job/node.json", "probe": "sim/probe/node.json",
-         "timer": "solo5/timer/node.json"}
+         "timer": "solo5/timer/node.json", "store": "solo5/store/node.json"}
 # Which driver mutants are built for which node: the ones whose effect that node can show.
 DRIVER_MUTANTS = {
     "accepted_job": ["ack-without-write", "torn-row", "stale-read", "late-cut", "keeps-old-state",
-                     "swallows-output", "accepts-any-field"],
+                     "swallows-output", "accepts-any-field", "acks-failed-write",
+                     "dedupes-requests", "repeats-output"],
     "probe": ["late-cut"],
-    "timer": ["early-timer", "ignores-cancel", "stale-clock"],
+    "timer": ["early-timer", "ignores-cancel", "stale-clock", "half-tick", "slow-tick",
+              "wrapping-deadline"],
+    "store": ["reads-own-write", "ignores-failed-read"],
 }
+NUM_MAX = 2 ** 61 - 1                  # the largest integer a specification computes with
 
 IMAGES = {name: {"node": name} for name in NODES}
 for _node, _mutants in DRIVER_MUTANTS.items():
@@ -96,6 +100,57 @@ JOB = {
                    ["raw", ETHER + "88b5" + word(3) + word(10) + "00" * 30],
                    submit(0, 7, 11)]},
     ]},
+    # The same frame three times in one boot. Whether a repeated request is answered
+    # again is the specification's decision (here: yes, from the stored row), so a loop
+    # that drops a repeat, or one that sends an answer twice, is told apart from this one.
+    "job-same-request-three-times": {"image": "accepted_job", "boots": [
+        {"moves": [submit(0, 7, 11), submit(0, 7, 11), submit(0, 7, 11)]},
+    ]},
+    # The device refuses a write (see `fsize` in tool/solo5/run.py). The node must stop
+    # without acknowledging, the client must not hear `ok`, and the next boot, on a
+    # device that works, must accept the retry.
+    "job-device-refuses-a-write": {"image": "accepted_job", "boots": [
+        {"moves": [submit(0, 7, 11)]},
+        {"fsize": 0, "moves": [submit(1, 8, 11)]},
+        {"moves": [submit(2, 8, 11)]},
+    ]},
+}
+
+
+# ---- the store: reads on request, a write and a read in one step, a failing device
+
+def put(key, value):
+    return ["send", ["put", key, value]]
+
+
+def get(key):
+    return ["send", ["get", key]]
+
+
+def swap(key, other, value):
+    return ["send", ["swap", key, other, value]]
+
+
+STORE = {
+    # One step writes row 1 and then reads row 1. The device would answer with the new
+    # value, which no simulated schedule does, so the driver stops before the read. The
+    # write was performed: the next boot reads 5.
+    "store-read-of-a-row-the-step-wrote": {"image": "store", "boots": [
+        {"moves": [put(1, 4), swap(1, 1, 5)]},
+        {"moves": [get(1)]},
+    ]},
+    # One step writes row 1 and then reads row 2: nothing to refuse.
+    "store-write-then-read-of-another-row": {"image": "store", "boots": [
+        {"moves": [put(2, 9), swap(1, 2, 5), get(1)]},
+    ]},
+    # A read the device fails (the block file is cut down to one block under the running
+    # process, and row 3 is read), then a write to a row outside the device. Both stop
+    # the node. Row 0, written before, is still there.
+    "store-failed-read-and-row-outside-the-device": {"image": "store", "boots": [
+        {"moves": [put(0, 7), ["shrink", 1], get(3)]},
+        {"moves": [put(99, 1)]},
+        {"moves": [get(0), get(3)]},
+    ]},
 }
 
 # ---- the simulator's probe: one request makes write, say, write, say
@@ -129,9 +184,23 @@ TIMER = {
         {"moves": [["send", ["arm", 1, 400]]]},
         {"moves": [["send", ["arm", 2, 100]], ["events", 6], ["sleep", 0.6]]},
     ]},
+    # The driver's timer table has 16 entries. The seventeenth timer stops the node, and
+    # none of the sixteen fires after the restart.
+    "timer-table-full": {"image": "timer", "boots": [
+        {"moves": [["send", ["arm", n, 600000]] for n in range(1, 18)]},
+        {"moves": [["send", ["arm", 1, 100]], ["events", 6], ["sleep", 0.3]]},
+    ]},
+    # Due times far away: one chosen so that the due time in nanoseconds, taken modulo
+    # 2^64, is the first millisecond of the clock (see `due` in tool/solo5/run.py), and
+    # the largest delay there is. The node must wait for them without using the processor.
+    "timer-far-due-time": {"image": "timer", "boots": [
+        {"idle_cpu": 0.3,
+         "moves": [["send", ["arm", 1, {"due": 18446744073710}]], ["send", ["arm", 2, NUM_MAX]],
+                   ["sleep", 3.0]]},
+    ]},
 }
 
-SCENARIOS = {**JOB, **PROBE, **TRAP, **TIMER}
+SCENARIOS = {**JOB, **PROBE, **TRAP, **STORE, **TIMER}
 
 # Scenarios replayed on mutant images: the comparison must reject each of these runs.
 MUTANT_RUNS = {
@@ -143,10 +212,19 @@ MUTANT_RUNS = {
     "accepted_job~swallows-output": "job-kill-between-write-and-reply",
     "accepted_job~accepts-any-field": "job-frames-that-are-not-requests",
     "accepted_job~reply-before-ack": "job-kill-between-write-and-reply",
+    "accepted_job~reply-then-write": "job-kill-between-write-and-reply",
+    "accepted_job~acks-failed-write": "job-device-refuses-a-write",
+    "accepted_job~dedupes-requests": "job-same-request-three-times",
+    "accepted_job~repeats-output": "job-same-request-three-times",
+    "store~reads-own-write": "store-read-of-a-row-the-step-wrote",
+    "store~ignores-failed-read": "store-failed-read-and-row-outside-the-device",
     "probe~late-cut": "probe-kill-after-2-of-4-effects",
     "timer~early-timer": "timer-order-and-cancel",
     "timer~ignores-cancel": "timer-order-and-cancel",
     "timer~stale-clock": "timer-order-and-cancel",
+    "timer~half-tick": "timer-order-and-cancel",
+    "timer~slow-tick": "timer-order-and-cancel",
+    "timer~wrapping-deadline": "timer-far-due-time",
 }
 for _image, _scenario in MUTANT_RUNS.items():
     SCENARIOS[f"{_scenario}@{_image}"] = {**SCENARIOS[_scenario], "image": _image, "mutant": True}

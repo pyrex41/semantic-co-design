@@ -14,6 +14,13 @@
    it cannot do (a row outside the device, a failed write, a step with no result) stops
    the node; that is a crash, which the specification already has to survive.
 
+   One thing it refuses although the device could do it: a read of a row that the same
+   step wrote earlier. The block write is synchronous, so the device would answer with
+   the new row. The simulator has no schedule in which a write becomes durable between
+   two effects of one step, so that answer is one no simulated run contains, and an
+   invariant checked in simulation would say nothing about it. The node stops instead,
+   which is a crash at that effect and is simulated.
+
    The same file is linked twice: with the Solo5 bindings into a unikernel, and with
    host.c, which provides the same API over a file and a datagram socket.
 
@@ -28,7 +35,8 @@
      @idle                                     nothing left to do; waiting
      @hold N K                                 stopped after K effects of event N (see hold=)
      @skip WHY LEN                             a frame that is not a request was ignored
-     @fail WHY                                 the node stops
+     @fail WHY                                 the node stops; inside a step, before the
+                                               effect that follows the last @did
 
    Boot arguments: node=N nodes=M (passed to node_init), hold=N.K (stop for good after
    K effects of the N-th event, so that a test can kill the tender at a known point). */
@@ -58,6 +66,8 @@ static struct solo5_block_info disk_info;
 static struct solo5_net_info net_info;
 static uint8_t block[BLOCK_MAX], frame[FRAME_MAX];
 static int64_t events, now, hold_event, hold_count;
+static int64_t written[MAX_EFFECTS + 1];           /* keys the step in progress has written */
+static int written_count;
 static int busy = 1;
 
 /* ---- console */
@@ -147,6 +157,8 @@ static void disk_write(const int64_t *fields, int width) {
     for (int i = 2; i < width; ++i) pack(block + 8 * (i - 1), fields[i]);
     if (solo5_block_write(disk, offset, block, disk_info.block_size) != SOLO5_R_OK)
         fail("block-write");
+    if (written_count == MAX_EFFECTS) fail("more-effects-than-declared");
+    written[written_count++] = fields[1];
     if (EV_DISK_ACK) {
         int64_t event[2] = {EV_DISK_ACK, fields[0]};
         complete(event, 2);
@@ -157,6 +169,8 @@ static void disk_read(const int64_t *fields) {
     const struct kind *result = find(EVENTS, NEVENTS, EV_DISK_READ_RESULT);
     int64_t event[VECTOR];
     if (result == NULL) fail("no-read-result-event");
+    for (int i = 0; i < written_count; ++i)      /* see the note at the top of this file */
+        if (written[i] == fields[1]) fail("read-after-write");
     if (solo5_block_read(disk, block_offset(fields[1]), block, disk_info.block_size) != SOLO5_R_OK)
         fail("block-read");
     int64_t present = unpack(block);
@@ -246,6 +260,7 @@ static void handle(const int64_t *event, int width) {
     end();
     for (int i = 0; i < STATE_WIDTH; ++i) state[i] = output[i];
     int64_t count = output[STATE_WIDTH], at = STATE_WIDTH + 1;
+    written_count = 0;
     for (int64_t k = 0; k < count; ++k) {
         if (events == hold_event && k == hold_count) hold(k);
         const struct kind *kind = find(EFFECTS, NEFFECTS, output[at]);
@@ -372,8 +387,10 @@ int solo5_app_main(const struct solo5_start_info *info) {
             text("@idle");
             end();
         }
+        /* Wake for the earliest timer when it is due within a second, else in a second.
+           The comparison is in ticks: a due time in nanoseconds can exceed 64 bits. */
         solo5_time_t deadline = clock + UINT64_C(1000000000);
-        if (timer >= 0 && (uint64_t)timers[timer].due * TICK_NS < deadline)
+        if (timer >= 0 && (uint64_t)timers[timer].due < deadline / TICK_NS)
             deadline = (uint64_t)timers[timer].due * TICK_NS;
         solo5_yield(deadline, NULL);
     }

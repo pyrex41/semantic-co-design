@@ -11,14 +11,31 @@ The record of a boot has three independent parts: the driver's console lines, th
 the client received, and the rows found in the block image after the process was killed.
 Nothing here interprets them; tool/solo5/compare.py does.
 
+Beside them the harness notes what only it can know: when it sent each request and when
+it read each console line, on its own clock (CLOCK_MONOTONIC, in milliseconds); the
+processor time the process used; its exit status; its argument vector; whatever else it
+printed (a tender's banner); and the SHA-256 of the image and of the tender it executed.
+
+A boot may be given a device that fails. `fsize: 0` gives the process a file size limit
+of zero with SIGXFSZ ignored, so that every write to the block file fails (EFBIG) and
+nothing else does: reads, the console and the network are not regular files being
+extended. The limit is set once the node has booted, with prlimit(2), because the spt
+tender itself writes a file while it starts; where there is no prlimit (macOS, host
+process only) it is set before exec. The move `shrink N` truncates the block file to N
+blocks while the process runs, so that a read beyond them comes back short; the file
+gets its size back before its rows are read.
+
     host   the image is `<name>.host`, a host process (driver.c + host.c); the block device
            is a file and the network a pair of datagram sockets in a directory
     spt    the image is `<name>.spt`, run by solo5-spt; the block device is a file and the
            network a tap interface, which this process reaches through an AF_PACKET socket
 """
+import hashlib
 import json
 import os
 from pathlib import Path
+import resource
+import shutil
 import signal
 import socket
 import struct
@@ -40,6 +57,34 @@ STOPS = ("@hold", "@trap", "@fail")
 
 class RunError(RuntimeError):
     pass
+
+
+def clock():
+    """The harness's clock in milliseconds: CLOCK_MONOTONIC, which is also what host.c
+    reads and what solo5-spt gives its guest."""
+    return time.clock_gettime(time.CLOCK_MONOTONIC) * 1000.0
+
+
+def sha(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+PRLIMIT = hasattr(resource, "prlimit")
+
+
+def refuse_writes():
+    """In the child, before exec: exceeding the file size limit is an error (EFBIG)
+    instead of a fatal signal, and, where the limit cannot be set later, it is zero now."""
+    signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+    signal.signal(signal.SIGXFSZ, signal.SIG_IGN)
+    if not PRLIMIT:
+        resource.setrlimit(resource.RLIMIT_FSIZE, (0, resource.getrlimit(resource.RLIMIT_FSIZE)[1]))
+
+
+def children():
+    """Processor seconds used so far by child processes that have been waited for."""
+    usage = resource.getrusage(resource.RUSAGE_CHILDREN)
+    return usage.ru_utime + usage.ru_stime
 
 
 # ---- frames
@@ -137,12 +182,15 @@ class TapLink:
 # ---- one boot
 
 class Boot:
-    def __init__(self, command):
-        # `lines` is the record (console lines starting with '@'); `other` is everything
-        # else the process printed (a tender's banner and its complaints), kept for errors.
-        self.lines, self.other, self.changed = [], [], threading.Condition()
+    def __init__(self, command, fsize=None):
+        # `lines` is the record (console lines starting with '@') and `at` the time each
+        # was read; `other` is everything else the process printed (a tender's banner and
+        # its complaints).
+        self.lines, self.at, self.other, self.changed = [], [], [], threading.Condition()
+        self.before = children()
+        limited = {} if fsize is None else {"preexec_fn": refuse_writes, "restore_signals": False}
         self.process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                        stdin=subprocess.DEVNULL)
+                                        stdin=subprocess.DEVNULL, **limited)
         self.done = False
         self.reader = threading.Thread(target=self.read, daemon=True)
         self.reader.start()
@@ -151,7 +199,11 @@ class Boot:
         for raw in self.process.stdout:
             text = raw.decode("ascii", "replace").rstrip("\n")
             with self.changed:
-                (self.lines if text.startswith("@") else self.other).append(text)
+                if text.startswith("@"):
+                    self.lines.append(text)
+                    self.at.append(clock())
+                else:
+                    self.other.append(text)
                 self.changed.notify_all()
         with self.changed:
             self.done = True
@@ -178,25 +230,34 @@ class Boot:
     def settled(self, start=0, code=None, events=0):
         """After line `start`: an event with tag `code` was handled (any event when None;
         none needed when `start` is 0), at least `events` events have been handled in all,
-        and the node then went idle. Or the node has stopped."""
+        and the node then went idle. Or the node has stopped. Or, when an event is waited
+        for, the driver said it skipped a frame instead: the comparison will find the
+        request missing."""
         def ready():
-            seen, idle = start == 0, False
+            seen, idle, skipped = start == 0, False, False
             for line in self.lines[start:]:
                 words = line.split()
                 if words[0] == "@event":
                     seen, idle = seen or code is None or int(words[3]) == code, False
                 elif words[0] == "@idle":
                     idle = True
-            return self.stopped() or (seen and idle and self.count("@event") >= events)
+                elif words[0] == "@skip" and code is not None and words[1] != "ethertype":
+                    skipped = True
+            return self.stopped() or skipped or (seen and idle and self.count("@event") >= events)
         self.wait(ready, "the node to settle")
 
+    def tick(self):
+        """The tick of the last event the driver logged."""
+        return [int(line.split()[2]) for line in self.lines if line.startswith("@event ")][-1]
+
     def kill(self):
-        """SIGKILL. Returns the exit status: negative when the signal ended the process."""
+        """SIGKILL. Returns the exit status (negative when the signal ended the process;
+        a process that had already stopped keeps its own) and the processor seconds used."""
         self.process.send_signal(signal.SIGKILL)
         status = self.process.wait(timeout=TIMEOUT)
         self.reader.join(timeout=TIMEOUT)
         self.process.stdout.close()
-        return status
+        return status, children() - self.before
 
 
 def play(schema, command, link, image, scenario):
@@ -206,8 +267,9 @@ def play(schema, command, link, image, scenario):
     recorded with the reason under `error`, and the scenario stops there.
     """
     disk = emit.row_width(schema) is not None
+    blocks = scenario.get("blocks", 8) if disk else 0
     if disk:
-        Path(image).write_bytes(bytes(BLOCK * scenario.get("blocks", 8)))
+        Path(image).write_bytes(bytes(BLOCK * blocks))
     boots = []
 
     def drain(received):
@@ -222,18 +284,29 @@ def play(schema, command, link, image, scenario):
             arguments.append("hold=%d.%d" % tuple(plan["hold"]))
         options = ([f"--block:{emit.DISK}={image}"] if disk else []) + link.options()
         drain([])                                 # nothing from an earlier boot is ours
-        boot = Boot(command(options, arguments))
-        sent, received, error = [], [], None
+        argv = command(options, arguments)
+        boot = Boot(argv, plan.get("fsize"))
+        sent, sent_at, received, error = [], [], [], None
         try:
             boot.settled()
+            if plan.get("fsize") is not None and PRLIMIT:
+                resource.prlimit(boot.process.pid, resource.RLIMIT_FSIZE,
+                                 (plan["fsize"], resource.getrlimit(resource.RLIMIT_FSIZE)[1]))
             for move in plan.get("moves", []):
                 if boot.stopped():
                     break
                 start = len(boot.lines)
                 if move[0] == "send":
-                    link.send(frame(schema, move[1]))
-                    sent.append(move[1])
-                    boot.settled(start, schema.code[move[1][0]])
+                    # A field {"due": T} is the delay that makes a timer armed now due at
+                    # tick T of the driver's clock.
+                    event = [field["due"] - boot.tick() if isinstance(field, dict) else field
+                             for field in move[1]]
+                    sent_at.append(clock())
+                    link.send(frame(schema, event))
+                    sent.append(event)
+                    boot.settled(start, schema.code[event[0]])
+                elif move[0] == "shrink":         # the device loses all but its first blocks
+                    os.truncate(image, BLOCK * move[1])
                 elif move[0] == "raw":            # a frame that is not a request
                     link.send(bytes.fromhex(move[1]))
                     boot.wait(lambda: boot.stopped() or any(
@@ -251,11 +324,14 @@ def play(schema, command, link, image, scenario):
         except (RunError, OSError) as failure:
             error = str(failure)
         finally:
-            status = boot.kill()
+            status, cpu = boot.kill()
         drain(received)
-        boots.append({"hold": plan.get("hold"), "lines": list(boot.lines), "sent": sent,
-                      "received": received, "status": status,
-                      "rows": rows(schema, image) if disk else []})
+        if disk:
+            os.truncate(image, BLOCK * blocks)    # a shrunk device gets its (empty) blocks back
+        boots.append({"hold": plan.get("hold"), "lines": list(boot.lines), "at": list(boot.at),
+                      "other": boot.other[:60], "argv": list(argv), "sent": sent,
+                      "sent_at": sent_at, "received": received, "status": status, "cpu": cpu,
+                      "blocks": blocks, "rows": rows(schema, image) if disk else []})
         if error is not None:
             boots[-1]["error"] = error
             break
@@ -263,17 +339,21 @@ def play(schema, command, link, image, scenario):
 
 
 def session(kind, directory, work, tap="tap0", tender="solo5-spt"):
-    """(link, command builder for an image name) for one kind of driver."""
+    """(link, command builder for an image name, the tender's path or None) for one kind
+    of driver."""
     directory = Path(directory)
     if kind == "host":
         link = UnixLink(work)
         return link, lambda name: (lambda options, arguments:
-                                   [str(directory / f"{name}.host"), *options, "--", *arguments])
+                                   [str(directory / f"{name}.host"), *options, "--", *arguments]), None
     if kind == "spt":
+        path = shutil.which(tender)
+        if path is None:
+            raise RunError(f"no {tender} on PATH")
         link = TapLink(tap)
         return link, lambda name: (lambda options, arguments:
-                                   [tender, "--mem=16", *options, str(directory / f"{name}.spt"),
-                                    *arguments])
+                                   [path, "--mem=16", *options, str(directory / f"{name}.spt"),
+                                    *arguments]), path
     raise RunError(f"unknown driver kind {kind}")
 
 
@@ -284,15 +364,22 @@ def run_all(kind, directory, names=None, **where):
     # A socket path is at most about a hundred bytes.
     base = tempfile.gettempdir() if len(tempfile.gettempdir()) < 60 else "/tmp"
     with tempfile.TemporaryDirectory(prefix="s5", dir=base) as work:
-        link, builder = session(kind, directory, work, **where)
+        link, builder, tender = session(kind, directory, work, **where)
+        executed = {}                             # file -> SHA-256, read once
         try:
             for name, scenario in SCENARIOS.items():
                 if names and name not in names:
                     continue
                 schema = Schema(manifest(IMAGES[scenario["image"]]))
+                file = Path(directory) / f"{scenario['image']}.{kind}"
+                for path in (file, tender):
+                    if path and str(path) not in executed:
+                        executed[str(path)] = sha(path)
                 out[name] = play(schema, builder(scenario["image"]), link,
                                  os.path.join(work, "disk.img"), scenario)
                 out[name]["driver"] = kind
+                out[name]["image"] = {"file": file.name, "sha256": executed[str(file)]}
+                out[name]["tender"] = tender and {"path": tender, "sha256": executed[tender]}
         finally:
             link.close()
     return out
