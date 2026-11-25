@@ -16,6 +16,8 @@ The repo includes three locally runnable applications. Their rules are written i
 
 Agreement between two executions can hide a shared bug. An independent accounting rule exposed one here. The engine could report a $100 balance while its journal recorded $101 after an adjustment arrived before the opening statement. The engine now rejects that sequence. [Executable ledger laws](example/trading-engine/invariants.shen) · [Regression and generated histories](example/trading-engine/check_reachable.py)
 
+The [classic patterns library](experiments/patterns/README.md) shows a smaller integration. A JSON profile describing handlers, a sequence pipeline and a matcher becomes a static library you can link into an existing C application.
+
 ## Try it
 
 With Nix installed and flakes enabled, build the sum program and inspect what the compiler kept. The locked shell supplies Python, Clang, SQLite, Shen JIT and Maude.

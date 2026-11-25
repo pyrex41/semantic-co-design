@@ -58,6 +58,19 @@ def run(root, frames, order_count):
     snapshot = fixture(PRODUCT, "book")
     invoke("snapshot", {"product": PRODUCT, "body": snapshot}, "book")
 
+    # Attribute time within the same durable calls, with the same inputs and commits.
+    compiled_delta = entries["delta"]
+    transition_ns = 0
+    durable_ns = 0
+
+    def timed_delta(ctx, request):
+        nonlocal transition_ns
+        begin = time.perf_counter_ns()
+        result = compiled_delta(ctx, request)
+        transition_ns += time.perf_counter_ns() - begin
+        return result
+
+    store.entries = {**entries, "delta": timed_delta}
     start = time.perf_counter()
     queue = []
     for offset in range(1, frames + 1):
@@ -67,8 +80,11 @@ def run(root, frames, order_count):
         if wait > 0:
             time.sleep(wait)
         queue.append(max(0, time.perf_counter() - arrival))
+        begin = time.perf_counter_ns()
         invoke("delta", {"body": event}, "book")
+        durable_ns += time.perf_counter_ns() - begin
     feed_seconds = time.perf_counter() - start
+    store.entries = entries
     last_book_time = clock
 
     sends, cancels = [], []
@@ -111,6 +127,7 @@ def run(root, frames, order_count):
         "generation_and_build_seconds": round(build_seconds, 3),
         "package_bytes": sum(item.stat().st_size for item in release.rglob("*") if item.is_file()),
         "cold_start_seconds": round(cold_seconds, 3),
+        "feed_delta_wall_ns": {"compiled_transition": transition_ns, "durable_calls": durable_ns},
         "durable_feed_frames_per_second": round(frames / feed_seconds, 1),
         "synthetic_feed_queue_lag_p99_us": p99(queue),
         "final_book_age_virtual_ms": clock - last_book_time,

@@ -82,7 +82,8 @@ def normalize(tree, depth=0):
     return [op,condition,*branches]
 
 
-def generate(program):
+def lower_c_body(program):
+    """Return C statements and the scratch bank IDs required by the program."""
     program = normalize(program)
     banks = set()
     def c_expr(tree):
@@ -127,8 +128,13 @@ def generate(program):
                 statement(args[2],depth+1)
             line("}")
     statement(program,1)
-    declarations = [f"static int64_t bank_{b}[LIMIT];" for b in sorted(banks)]
-    resets = [f"    memset(bank_{b}, 0, sizeof bank_{b});" for b in sorted(banks)]
+    return lines, sorted(banks)
+
+
+def generate(program):
+    lines, banks = lower_c_body(program)
+    declarations = [f"static int64_t bank_{b}[LIMIT];" for b in banks]
+    resets = [f"    memset(bank_{b}, 0, sizeof bank_{b});" for b in banks]
     template = Path(__file__).with_name("driver.c.in").read_text()
     return template.replace("/* BANKS */","\n".join(declarations)).replace(
         "/* PROGRAM */","\n".join(resets+lines))
