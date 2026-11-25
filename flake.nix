@@ -25,6 +25,9 @@
           BIFROST_SHEN_GO = "${capcov.packages.${system}.shen-go}/bin/shen";
         });
       });
+      # tool/solo5: the pinned Solo5 source on every system; the tender, the toolchain
+      # wrappers and the unikernel images on Linux.
+      packages = eachSystem (system: import ./tool/solo5/nix { pkgs = nixpkgs.legacyPackages.${system}; });
       checks = eachSystem (system: {
         generated-applications = let
           pkgs = nixpkgs.legacyPackages.${system};
