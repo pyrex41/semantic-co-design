@@ -1,0 +1,16 @@
+[    3.600762] random: crng reseeded due to virtual machine fork
+echo typed-after-restore
+busy 20000
+4.54 3.01
+[33mbase[0m ~ # echo typed-during-loop
+typed-during-loop
+[33mbase[0m ~ # date -u; head -c 8 /dev/urandom | od -An -x
+Thu Jan  1 00:00:04 UTC 2026
+ d61b 28ae 1216 7156
+[33mbase[0m ~ # echo typed-after-restore
+typed-after-restore
+[33mbase[0m ~ # [6necho settled; ls /tmp | wc -l; cat /proc/uptime
+settled
+0
+9.62 8.10
+[33mbase[0m ~ # [6n

@@ -1,0 +1,4 @@
+[[3000, "i=0; while [ $i -lt 20000 ]; do i=$((i+1)); done; echo busy $i; cat /proc/uptime\n"],
+ [3100, "echo typed-during-loop\n"],
+ [3300, "date -u; head -c 8 /dev/urandom | od -An -x\n"],
+ [9000, "echo after; cat /proc/uptime\n"]]

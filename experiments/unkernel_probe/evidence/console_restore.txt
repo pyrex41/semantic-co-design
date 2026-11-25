@@ -1,0 +1,18 @@
+[    8.000136] random: crng reseeded due to virtual machine fork
+echo resumed; ls /tmp | wc -l; cat /proc/uptime; date -u
+resumed
+3
+8.51 8.59
+Thu Jan  1 00:00:08 UTC 2026
+[33mbase[0m ~ # [6nhead -c 16 /dev/urandom | od -An -x; (sleep 0.2; echo bg1) & (sleep 0.1
+; echo bg2) & wait
+ a1b8 bd5e fa76 bfbe 98c5 8c3b fc42 3b2e
+bg2
+bg1
+[2]+  Done                       (sleep 0.1; echo bg2)
+[1]+  Done                       (sleep 0.2; echo bg1)
+[33mbase[0m ~ # [6ni=0; while [ $i -lt 5000 ]; do i=$((i+1)); done; echo busy $i; sha256su
+m /bin/busybox
+busy 5000
+999cb969d09093a71716cfc747bb53cdada3f332c05eb5046c56e0f66a4d6d22  /bin/busybox
+[33mbase[0m ~ # [6n

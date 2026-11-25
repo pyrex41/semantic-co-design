@@ -32,6 +32,7 @@
         accepted_job = p.node { example = "accepted_job"; };
         accepted_job-reply-before-ack = p.node { example = "accepted_job"; mutant = "reply-before-ack"; };
         heartbeat = p.node { example = "heartbeat"; nodes = 2; };
+        unkernel = nixpkgs.legacyPackages.${system}.callPackage ./nix/unkernel.nix { };
       });
       nixosModules.default = ./nix/module.nix;
       devShells = eachSystem (system: {
@@ -41,6 +42,11 @@
           PYTHONPATH = "${capcov}/src";
           BIFROST_SHEN_GO = "${capcov.packages.${system}.shen-go}/bin/shen";
         });
+        # experiments/unkernel_probe: Linux as a wasm module under Node, both pinned.
+        unkernel = let pkgs = nixpkgs.legacyPackages.${system}; in pkgs.mkShell {
+          nativeBuildInputs = [ pkgs.nodejs_24 pkgs.python3 ];
+          UNKERNEL = "${pkgs.callPackage ./nix/unkernel.nix { }}";
+        };
       });
       checks = eachSystem (system: {
         staged-examples = nixpkgs.legacyPackages.${system}.runCommand "staged-examples" (environment system) ''
@@ -83,6 +89,15 @@
           python3 ${./nix/packed.py} ${(packed system).runtime}/bin/node-run \
             ${(packed system).conform}/bin/node-conform ${self.packages.${system}.accepted_job} \
             ${self.packages.${system}.accepted_job-reply-before-ack} ${self.packages.${system}.heartbeat}
+          touch "$out"
+        '';
+        # Two boots of Linux-as-wasm under a controlled host must reach the same memory, byte for byte.
+        unkernel-probe = let pkgs = nixpkgs.legacyPackages.${system}; in pkgs.runCommand "unkernel-probe" {
+          nativeBuildInputs = [ pkgs.nodejs_24 pkgs.python3 ];
+          UNKERNEL = "${pkgs.callPackage ./nix/unkernel.nix { }}";
+        } ''
+          export HOME=$TMPDIR
+          python3 ${self}/experiments/unkernel_probe/check.py --no-stock
           touch "$out"
         '';
         native-replay = nixpkgs.legacyPackages.${system}.runCommand "native-replay" (environment system) ''
