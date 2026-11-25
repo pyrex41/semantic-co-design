@@ -87,8 +87,8 @@ def normalize(tree, depth=0):
     return [op,condition,*branches]
 
 
-def generate(program, *, template=None, slots=1024, depth=128):
-    """Lower to C. A caller may supply its own driver template, slot count and nesting bound."""
+def lower_c_body(program, *, trap="exit(2);", slots=1024, depth=128):
+    """Return C statements and the scratch bank IDs required by the program."""
     saved = dict(LIMITS)
     LIMITS.update(slots=slots, depth=depth)
     try:
@@ -96,7 +96,6 @@ def generate(program, *, template=None, slots=1024, depth=128):
     finally:
         LIMITS.update(saved)
     banks = set()
-    trap = "exit(2);" if template is None else "TRAP();"
     def c_expr(tree):
         if type(tree) is int:
             return "INT64_MIN" if tree == -(2**63) else f"INT64_C({tree})"
@@ -141,8 +140,15 @@ def generate(program, *, template=None, slots=1024, depth=128):
                 statement(args[2],depth+1)
             line("}")
     statement(program,1)
-    declarations = [f"static int64_t bank_{b}[LIMIT];" for b in sorted(banks)]
-    resets = [f"    memset(bank_{b}, 0, sizeof bank_{b});" for b in sorted(banks)]
+    return lines, sorted(banks)
+
+
+def generate(program, *, template=None, slots=1024, depth=128):
+    """Lower to C. A caller may supply its own driver template, slot count and nesting bound."""
+    lines, banks = lower_c_body(program, trap="exit(2);" if template is None else "TRAP();",
+                                slots=slots, depth=depth)
+    declarations = [f"static int64_t bank_{b}[LIMIT];" for b in banks]
+    resets = [f"    memset(bank_{b}, 0, sizeof bank_{b});" for b in banks]
     if template is None:
         template = Path(__file__).with_name("driver.c.in").read_text()
     return template.replace("/* SLOTS */", str(slots)).replace("/* BANKS */","\n".join(declarations)).replace(

@@ -1,0 +1,24 @@
+[Unit]
+Description=Generated router and layer-4 load balancer
+After=network.target
+
+[Service]
+User=router-nlb
+Group=router-nlb
+EnvironmentFile=/etc/router-nlb/ports
+ExecStart=/opt/router-nlb/router-nlb --db /var/lib/router-nlb/state.sqlite serve --socket /run/router-nlb/admin $ROUTER_PORTS
+StateDirectory=router-nlb
+StateDirectoryMode=0700
+RuntimeDirectory=router-nlb
+RuntimeDirectoryMode=0700
+AmbientCapabilities=CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_RAW
+RestrictAddressFamilies=AF_UNIX AF_PACKET
+NoNewPrivileges=yes
+ProtectHome=yes
+ProtectSystem=strict
+UMask=0077
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

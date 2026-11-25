@@ -1,0 +1,1 @@
+(shen.module (version 1) (name bench) (main bench.main) (sources tc- "kernels.shen"))

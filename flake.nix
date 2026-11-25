@@ -64,10 +64,32 @@
         uk-node = nixpkgs.legacyPackages.${system}.mkShell (ukNode system);
       });
       checks = eachSystem (system: {
+        generated-applications = let
+          pkgs = nixpkgs.legacyPackages.${system};
+          python = pkgs.python3.withPackages (p: [ p.cython ]);
+          shen = pkgs.callPackage ./nix/shen-jit.nix { };
+        in pkgs.runCommand "generated-applications" {
+          nativeBuildInputs = [ python pkgs.clang shen ];
+          PYTHONDONTWRITEBYTECODE = "1";
+          SHEN_JIT = "${shen}/bin/shen-jit";
+        } ''
+          cd ${self}
+          python3 example/qualify.py
+          touch "$out"
+        '';
+        book-projections = nixpkgs.legacyPackages.${system}.runCommand "book-projections" (environment system) ''
+          cd ${self}
+          python3 -m experiments.patterns.projections.check
+          python3 -m experiments.patterns.projections.check_core
+          python3 -m experiments.patterns.projections.check_catalog
+          python3 -m experiments.patterns.projections.check_library
+          touch "$out"
+        '';
         staged-examples = nixpkgs.legacyPackages.${system}.runCommand "staged-examples" (environment system) ''
           cd ${self}
           python3 -m unittest specializer.test_backend
           python3 -m specializer.check_backend_contract
+          python3 -m experiments.patterns
           python3 -m examples.check_artifacts
           for example in vm decoder railway query; do
             python3 -m examples."$example".check

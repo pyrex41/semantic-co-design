@@ -1,0 +1,37 @@
+{
+  "st_adapter": {"pattern": "adapter", "format": "pair8", "target": "st_accept_pair"},
+  "st_bridge": {
+    "pattern": "bridge",
+    "backend": {"read": "st_channel_read", "channel": 4},
+    "adjustment": 7,
+    "threshold": 60
+  },
+  "st_tree": {
+    "pattern": "composite",
+    "read": "st_read_leaf",
+    "tree": {"op": "sum", "children": [1, {"op": "max", "children": [2, 3]}, 1]}
+  },
+  "st_decorated": {
+    "pattern": "decorator",
+    "target": "st_component",
+    "layers": [
+      {"before": {"op": "add", "value": 2}, "after": {"op": "add", "value": 7}},
+      {"before": {"op": "multiply", "value": 3}, "after": {"op": "multiply", "value": 5}}
+    ]
+  },
+  "st_submit": {
+    "pattern": "facade",
+    "validate": "st_validate",
+    "encode": "st_encode",
+    "send": "st_send"
+  },
+  "st_marks": {
+    "pattern": "flyweight",
+    "descriptors": [
+      {"scale": 4, "offset": 3, "aliases": ["primary", "main"]},
+      {"scale": 4, "offset": 3, "aliases": ["same"]},
+      {"scale": 2, "offset": 9, "aliases": ["secondary"]}
+    ]
+  },
+  "st_guard": {"pattern": "proxy", "roles": [1, 31], "target": "st_authorized"}
+}

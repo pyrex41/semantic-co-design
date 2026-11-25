@@ -1,0 +1,5 @@
+{
+  "review_queue": {"handlers": [[100, 2], [10, 1]], "default": 0},
+  "billable_total": {"sum": [["keep_ge", 10], ["add", 2]]},
+  "transfer_id": {"match": [7, "?id", "_", "?id"], "capture": "?id"}
+}

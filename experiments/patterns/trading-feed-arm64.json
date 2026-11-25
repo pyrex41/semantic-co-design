@@ -1,0 +1,92 @@
+[
+  {
+    "cancel_to_transport_p99_us": 38582.0,
+    "cold_start_seconds": 0.227,
+    "decision_to_transport_p99_us": 34651.3,
+    "durable_feed_frames_per_second": 102.5,
+    "feed_delta_wall_ns": {
+      "compiled_transition": 181329749,
+      "durable_calls": 2495420457
+    },
+    "final_book_age_virtual_ms": 14544,
+    "generation_and_build_seconds": 10.505,
+    "host": {
+      "cpu": "arm",
+      "machine": "arm64",
+      "python": "3.9.6",
+      "system": "Darwin"
+    },
+    "package_bytes": 11449120,
+    "python_peak_rss_bytes": 40796160,
+    "release": "16671b83d474a58d2b971b9188d893ba30f4335f8cc71abeb6a6a37544ad2391",
+    "replay_events": 406,
+    "replay_seconds": 0.131,
+    "synthetic_feed_queue_lag_p99_us": 2407014.0,
+    "workload": {
+      "arrival_interval_us": 250,
+      "frames": 256,
+      "mode": "local SQLite WAL, FULL synchronous, simulated venue without network delay",
+      "orders": 16
+    }
+  },
+  {
+    "cancel_to_transport_p99_us": 17942.9,
+    "cold_start_seconds": 0.12,
+    "decision_to_transport_p99_us": 18562.4,
+    "durable_feed_frames_per_second": 201.9,
+    "feed_delta_wall_ns": {
+      "compiled_transition": 97327834,
+      "durable_calls": 1266338673
+    },
+    "final_book_age_virtual_ms": 14544,
+    "generation_and_build_seconds": 12.465,
+    "host": {
+      "cpu": "arm",
+      "machine": "arm64",
+      "python": "3.9.6",
+      "system": "Darwin"
+    },
+    "package_bytes": 11449120,
+    "python_peak_rss_bytes": 41025536,
+    "release": "16671b83d474a58d2b971b9188d893ba30f4335f8cc71abeb6a6a37544ad2391",
+    "replay_events": 406,
+    "replay_seconds": 0.111,
+    "synthetic_feed_queue_lag_p99_us": 1189007.0,
+    "workload": {
+      "arrival_interval_us": 250,
+      "frames": 256,
+      "mode": "local SQLite WAL, FULL synchronous, simulated venue without network delay",
+      "orders": 16
+    }
+  },
+  {
+    "cancel_to_transport_p99_us": 22172.3,
+    "cold_start_seconds": 0.12,
+    "decision_to_transport_p99_us": 21039.1,
+    "durable_feed_frames_per_second": 233.3,
+    "feed_delta_wall_ns": {
+      "compiled_transition": 53444792,
+      "durable_calls": 1096616585
+    },
+    "final_book_age_virtual_ms": 14544,
+    "generation_and_build_seconds": 12.437,
+    "host": {
+      "cpu": "arm",
+      "machine": "arm64",
+      "python": "3.9.6",
+      "system": "Darwin"
+    },
+    "package_bytes": 11449120,
+    "python_peak_rss_bytes": 40697856,
+    "release": "16671b83d474a58d2b971b9188d893ba30f4335f8cc71abeb6a6a37544ad2391",
+    "replay_events": 406,
+    "replay_seconds": 0.112,
+    "synthetic_feed_queue_lag_p99_us": 1018643.0,
+    "workload": {
+      "arrival_interval_us": 250,
+      "frames": 256,
+      "mode": "local SQLite WAL, FULL synchronous, simulated venue without network delay",
+      "orders": 16
+    }
+  }
+]

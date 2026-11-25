@@ -1,0 +1,29 @@
+{
+  "cr_offset": {
+    "pattern": "abstract_factory",
+    "family": "offset",
+    "key": 7
+  },
+  "cr_sequence": {
+    "pattern": "builder",
+    "representation": "sequence",
+    "capacity": 4
+  },
+  "cr_adjust": {
+    "pattern": "factory_method",
+    "product": "offset",
+    "prepare": 4,
+    "parameter": 8,
+    "finish": 3
+  },
+  "cr_prototype": {
+    "pattern": "prototype",
+    "kind": 73,
+    "values": [11, 17, 23]
+  },
+  "cr_limits": {
+    "pattern": "singleton",
+    "revision": 5,
+    "limit": 256
+  }
+}

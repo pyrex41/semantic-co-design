@@ -126,11 +126,16 @@ def concrete(example, source, static, rows, *, directory=None):
     return outputs
 
 
-def build(example, source, static, binary, *, emit_ir=None, emit_c=None, directory=None):
-    from .backend import generate, normalize
+def specialize(example, source, static, *, directory=None):
+    from .backend import normalize
     path = _directory(example, directory)
     program, = _evaluate(path, source, static, None)
-    program = normalize(program)
+    return normalize(program)
+
+
+def build(example, source, static, binary, *, emit_ir=None, emit_c=None, directory=None):
+    from .backend import generate
+    program = specialize(example, source, static, directory=directory)
     code = generate(program)
     binary = Path(binary)
     with tempfile.TemporaryDirectory(dir=binary.parent) as work:

@@ -1,0 +1,253 @@
+fmod PROJECTION is
+  protecting INT .
+  sort Ints Exp Exps .
+  op nil : -> Ints [ctor] .
+  op cons : Int Ints -> Ints [ctor] .
+  op enil : -> Exps [ctor] .
+  op econs : Exp Exps -> Exps [ctor] .
+  ops lit arg cfg var : Int -> Exp [ctor] .
+  op letv : Exp Exp -> Exp [ctor] .
+  op ifv : Exp Exp Exp -> Exp [ctor] .
+  op getv : Exp -> Exp [ctor] .
+  op lenv : -> Exp [ctor] .
+  op foldv : Exp Exp Exp -> Exp [ctor] .
+  op add : Exp Exp -> Exp [ctor] .
+  op sub : Exp Exp -> Exp [ctor] .
+  op mul : Exp Exp -> Exp [ctor] .
+  op divv : Exp Exp -> Exp [ctor] .
+  op modv : Exp Exp -> Exp [ctor] .
+  op eqv : Exp Exp -> Exp [ctor] .
+  op ltv : Exp Exp -> Exp [ctor] .
+  op minv : Exp Exp -> Exp [ctor] .
+  op maxv : Exp Exp -> Exp [ctor] .
+  op andv : Exp Exp -> Exp [ctor] .
+  op orv : Exp Exp -> Exp [ctor] .
+  ops lookup : Int Ints -> Int .
+  op size : Ints -> Int .
+  op eval : Exp Ints Ints -> Int .
+  op ev : Exp Ints Ints Ints -> Int .
+  op loop : Int Int Int Exp Ints Ints Ints -> Int .
+  op calc : Exp Int Int -> Int .
+  op specialize : Exp Ints -> Exp .
+  op pe : Exp Ints Exps -> Exp .
+  op pick : Int Exps -> Exp .
+  op lift : Exp Int -> Exp .
+  op lifts : Exps -> Exps .
+  op simplify : Exp Exp Exp -> Exp .
+  vars I J K N : Int .
+  vars C A V : Ints .
+  vars E F G H : Exp .
+  var ES : Exps .
+  eq lookup(I, nil) = 0 .
+  ceq lookup(I, cons(J, A)) = 0 if I < 0 .
+  eq lookup(0, cons(J, A)) = J .
+  ceq lookup(I, cons(J, A)) = lookup(I - 1, A) if I > 0 .
+  eq size(nil) = 0 .
+  eq size(cons(I, A)) = 1 + size(A) .
+  eq eval(E, C, A) = ev(E, C, A, nil) .
+  eq ev(lit(I), C, A, V) = I .
+  eq ev(arg(I), C, A, V) = lookup(I, A) .
+  eq ev(cfg(I), C, A, V) = lookup(I, C) .
+  eq ev(var(I), C, A, V) = lookup(I, V) .
+  eq ev(lenv, C, A, V) = size(A) .
+  eq ev(getv(E), C, A, V) = lookup(ev(E, C, A, V), A) .
+  eq ev(letv(E, F), C, A, V) = ev(F, C, A, cons(ev(E, C, A, V), V)) .
+  ceq ev(ifv(E, F, G), C, A, V) = ev(F, C, A, V) if ev(E, C, A, V) =/= 0 .
+  ceq ev(ifv(E, F, G), C, A, V) = ev(G, C, A, V) if ev(E, C, A, V) == 0 .
+  eq ev(foldv(E, F, G), C, A, V) = loop(ev(E, C, A, V), 0, ev(F, C, A, V), G, C, A, V) .
+  ceq loop(N, I, J, E, C, A, V) = J if I >= N .
+  ceq loop(N, I, J, E, C, A, V) = loop(N, I + 1, ev(E, C, A, cons(J, cons(I, V))), E, C, A, V) if I < N .
+  eq ev(add(E, F), C, A, V) = calc(add(E, F), ev(E, C, A, V), ev(F, C, A, V)) .
+  eq ev(sub(E, F), C, A, V) = calc(sub(E, F), ev(E, C, A, V), ev(F, C, A, V)) .
+  eq ev(mul(E, F), C, A, V) = calc(mul(E, F), ev(E, C, A, V), ev(F, C, A, V)) .
+  eq ev(divv(E, F), C, A, V) = calc(divv(E, F), ev(E, C, A, V), ev(F, C, A, V)) .
+  eq ev(modv(E, F), C, A, V) = calc(modv(E, F), ev(E, C, A, V), ev(F, C, A, V)) .
+  eq ev(eqv(E, F), C, A, V) = calc(eqv(E, F), ev(E, C, A, V), ev(F, C, A, V)) .
+  eq ev(ltv(E, F), C, A, V) = calc(ltv(E, F), ev(E, C, A, V), ev(F, C, A, V)) .
+  eq ev(minv(E, F), C, A, V) = calc(minv(E, F), ev(E, C, A, V), ev(F, C, A, V)) .
+  eq ev(maxv(E, F), C, A, V) = calc(maxv(E, F), ev(E, C, A, V), ev(F, C, A, V)) .
+  eq ev(andv(E, F), C, A, V) = calc(andv(E, F), ev(E, C, A, V), ev(F, C, A, V)) .
+  eq ev(orv(E, F), C, A, V) = calc(orv(E, F), ev(E, C, A, V), ev(F, C, A, V)) .
+  eq calc(add(E, F), I, J) = I + J .
+  eq calc(sub(E, F), I, J) = I - J .
+  eq calc(mul(E, F), I, J) = I * J .
+  eq calc(divv(E, F), I, 0) = 0 .
+  ceq calc(divv(E, F), I, J) = I quo J if J =/= 0 .
+  eq calc(modv(E, F), I, 0) = 0 .
+  ceq calc(modv(E, F), I, J) = I rem J if J =/= 0 .
+  ceq calc(eqv(E, F), I, J) = 1 if I == J .
+  ceq calc(eqv(E, F), I, J) = 0 if I =/= J .
+  ceq calc(ltv(E, F), I, J) = 1 if I < J .
+  ceq calc(ltv(E, F), I, J) = 0 if I >= J .
+  ceq calc(minv(E, F), I, J) = I if I <= J .
+  ceq calc(minv(E, F), I, J) = J if I > J .
+  ceq calc(maxv(E, F), I, J) = I if I >= J .
+  ceq calc(maxv(E, F), I, J) = J if I < J .
+  ceq calc(andv(E, F), I, J) = 1 if I =/= 0 /\ J =/= 0 .
+  ceq calc(andv(E, F), I, J) = 0 if I == 0 or J == 0 .
+  ceq calc(orv(E, F), I, J) = 1 if I =/= 0 or J =/= 0 .
+  ceq calc(orv(E, F), I, J) = 0 if I == 0 /\ J == 0 .
+  eq specialize(E, C) = pe(E, C, enil) .
+  eq pick(I, enil) = lit(0) .
+  ceq pick(I, econs(E, ES)) = lit(0) if I < 0 .
+  eq pick(0, econs(E, ES)) = E .
+  ceq pick(I, econs(E, ES)) = pick(I - 1, ES) if I > 0 .
+  eq lifts(enil) = enil .
+  eq lifts(econs(E, ES)) = econs(lift(E, 0), lifts(ES)) .
+  eq lift(lit(I), N) = lit(I) .
+  eq lift(arg(I), N) = arg(I) .
+  eq lift(cfg(I), N) = cfg(I) .
+  ceq lift(var(I), N) = var(I + 1) if I >= N .
+  ceq lift(var(I), N) = var(I) if I < N .
+  eq lift(lenv, N) = lenv .
+  eq lift(getv(E), N) = getv(lift(E, N)) .
+  eq lift(letv(E, F), N) = letv(lift(E, N), lift(F, N + 1)) .
+  eq lift(ifv(E, F, G), N) = ifv(lift(E, N), lift(F, N), lift(G, N)) .
+  eq lift(foldv(E, F, G), N) = foldv(lift(E, N), lift(F, N), lift(G, N + 2)) .
+  eq lift(add(E, F), N) = add(lift(E, N), lift(F, N)) .
+  eq lift(sub(E, F), N) = sub(lift(E, N), lift(F, N)) .
+  eq lift(mul(E, F), N) = mul(lift(E, N), lift(F, N)) .
+  eq lift(divv(E, F), N) = divv(lift(E, N), lift(F, N)) .
+  eq lift(modv(E, F), N) = modv(lift(E, N), lift(F, N)) .
+  eq lift(eqv(E, F), N) = eqv(lift(E, N), lift(F, N)) .
+  eq lift(ltv(E, F), N) = ltv(lift(E, N), lift(F, N)) .
+  eq lift(minv(E, F), N) = minv(lift(E, N), lift(F, N)) .
+  eq lift(maxv(E, F), N) = maxv(lift(E, N), lift(F, N)) .
+  eq lift(andv(E, F), N) = andv(lift(E, N), lift(F, N)) .
+  eq lift(orv(E, F), N) = orv(lift(E, N), lift(F, N)) .
+  eq pe(lit(I), C, ES) = lit(I) .
+  eq pe(arg(I), C, ES) = arg(I) .
+  eq pe(cfg(I), C, ES) = lit(lookup(I, C)) .
+  eq pe(var(I), C, ES) = pick(I, ES) .
+  eq pe(lenv, C, ES) = lenv .
+  op peget : Exp -> Exp .
+  eq pe(getv(E), C, ES) = peget(pe(E, C, ES)) .
+  ceq peget(lit(I)) = lit(0) if I < 0 .
+  ceq peget(lit(I)) = arg(I) if I >= 0 .
+  eq peget(E) = getv(E) [owise] .
+  op pelet : Exp Exp Ints Exps -> Exp .
+  eq pe(letv(E, F), C, ES) = pelet(pe(E, C, ES), F, C, ES) .
+  eq pelet(lit(I), F, C, ES) = pe(F, C, econs(lit(I), ES)) .
+  eq pelet(E, F, C, ES) = letv(E, pe(F, C, econs(var(0), lifts(ES)))) [owise] .
+  op peif : Exp Exp Exp Ints Exps -> Exp .
+  eq pe(ifv(E, F, G), C, ES) = peif(pe(E, C, ES), F, G, C, ES) .
+  eq peif(lit(0), F, G, C, ES) = pe(G, C, ES) .
+  ceq peif(lit(I), F, G, C, ES) = pe(F, C, ES) if I =/= 0 .
+  eq peif(E, F, G, C, ES) = ifv(E, pe(F, C, ES), pe(G, C, ES)) [owise] .
+  op pefold : Exp Exp Exp Ints Exps -> Exp .
+  op finish-fold : Exp Exp Exp -> Exp .
+  op static-cost : Exp -> Int .
+  op static-loop : Int Int Int Exp Exp -> Exp .
+  op static-step : Int Int Exp Exp Exp -> Exp .
+  op static-eval : Exp Int Int -> Exp .
+  op static-if : Exp Exp Exp Int Int -> Exp .
+  op static-bin : Exp Exp Exp -> Exp .
+  op bounded : Int -> Exp .
+  op overflow : -> Exp [ctor] .
+  eq pe(foldv(E, F, G), C, ES) = pefold(pe(E, C, ES), pe(F, C, ES), G, C, ES) .
+  ceq pefold(lit(I), F, G, C, ES) = F if I <= 0 .
+  eq pefold(E, F, G, C, ES) =
+    finish-fold(E, F, pe(G, C, econs(var(0), econs(var(1), lifts(lifts(ES)))))) [owise] .
+
+  --- A straight-line body may read its own two binders, including in tests.
+  --- Other nodes cost more than the node-iteration budget of 256.
+  eq static-cost(lit(I)) = 1 .
+  eq static-cost(var(0)) = 1 .
+  eq static-cost(var(1)) = 1 .
+  eq static-cost(ifv(E, F, G)) = 1 + static-cost(E) + static-cost(F) + static-cost(G) .
+  eq static-cost(add(E, F)) = 1 + static-cost(E) + static-cost(F) .
+  eq static-cost(sub(E, F)) = 1 + static-cost(E) + static-cost(F) .
+  eq static-cost(mul(E, F)) = 1 + static-cost(E) + static-cost(F) .
+  eq static-cost(divv(E, F)) = 1 + static-cost(E) + static-cost(F) .
+  eq static-cost(modv(E, F)) = 1 + static-cost(E) + static-cost(F) .
+  eq static-cost(eqv(E, F)) = 1 + static-cost(E) + static-cost(F) .
+  eq static-cost(ltv(E, F)) = 1 + static-cost(E) + static-cost(F) .
+  eq static-cost(minv(E, F)) = 1 + static-cost(E) + static-cost(F) .
+  eq static-cost(maxv(E, F)) = 1 + static-cost(E) + static-cost(F) .
+  eq static-cost(andv(E, F)) = 1 + static-cost(E) + static-cost(F) .
+  eq static-cost(orv(E, F)) = 1 + static-cost(E) + static-cost(F) .
+  eq static-cost(E) = 257 [owise] .
+  ceq finish-fold(lit(N), lit(J), E) = static-loop(N, 0, J, E, foldv(lit(N), lit(J), E))
+    if N <= 256 /\ N * static-cost(E) <= 256 .
+  eq finish-fold(E, F, G) = foldv(E, F, G) [owise] .
+
+  --- Keep trials within the exact integer range shared by the two engines.
+  ceq static-loop(N, I, J, E, F) = lit(J) if I >= N .
+  ceq static-loop(N, I, J, E, F) =
+    static-step(N, I + 1, static-eval(E, J, I), E, F) if I < N .
+  eq static-step(N, I, lit(J), E, F) = static-loop(N, I, J, E, F) .
+  eq static-step(N, I, overflow, E, F) = F .
+  eq static-eval(lit(I), J, K) = bounded(I) .
+  eq static-eval(var(0), J, K) = bounded(J) .
+  eq static-eval(var(1), J, K) = lit(K) .
+  eq static-eval(ifv(E, F, G), I, J) = static-if(static-eval(E, I, J), F, G, I, J) .
+  eq static-if(lit(0), F, G, I, J) = static-eval(G, I, J) .
+  ceq static-if(lit(K), F, G, I, J) = static-eval(F, I, J) if K =/= 0 .
+  eq static-if(overflow, F, G, I, J) = overflow .
+  eq static-eval(add(E, F), I, J) =
+    static-bin(add(E, F), static-eval(E, I, J), static-eval(F, I, J)) .
+  eq static-eval(sub(E, F), I, J) =
+    static-bin(sub(E, F), static-eval(E, I, J), static-eval(F, I, J)) .
+  eq static-eval(mul(E, F), I, J) =
+    static-bin(mul(E, F), static-eval(E, I, J), static-eval(F, I, J)) .
+  eq static-eval(divv(E, F), I, J) =
+    static-bin(divv(E, F), static-eval(E, I, J), static-eval(F, I, J)) .
+  eq static-eval(modv(E, F), I, J) =
+    static-bin(modv(E, F), static-eval(E, I, J), static-eval(F, I, J)) .
+  eq static-eval(eqv(E, F), I, J) =
+    static-bin(eqv(E, F), static-eval(E, I, J), static-eval(F, I, J)) .
+  eq static-eval(ltv(E, F), I, J) =
+    static-bin(ltv(E, F), static-eval(E, I, J), static-eval(F, I, J)) .
+  eq static-eval(minv(E, F), I, J) =
+    static-bin(minv(E, F), static-eval(E, I, J), static-eval(F, I, J)) .
+  eq static-eval(maxv(E, F), I, J) =
+    static-bin(maxv(E, F), static-eval(E, I, J), static-eval(F, I, J)) .
+  eq static-eval(andv(E, F), I, J) =
+    static-bin(andv(E, F), static-eval(E, I, J), static-eval(F, I, J)) .
+  eq static-eval(orv(E, F), I, J) =
+    static-bin(orv(E, F), static-eval(E, I, J), static-eval(F, I, J)) .
+  eq static-bin(E, lit(I), lit(J)) = bounded(calc(E, I, J)) .
+  eq static-bin(E, F, G) = overflow [owise] .
+  --- shen-jit stores exact integers in a signed 62-bit tagged value.
+  ceq bounded(I) = lit(I) if I >= -2305843009213693952 /\ I <= 2305843009213693951 .
+  eq bounded(I) = overflow [owise] .
+  eq pe(add(E, F), C, ES) = simplify(add(E, F), pe(E, C, ES), pe(F, C, ES)) .
+  eq simplify(add(E, F), lit(I), lit(J)) = lit(calc(add(E, F), I, J)) .
+  eq pe(sub(E, F), C, ES) = simplify(sub(E, F), pe(E, C, ES), pe(F, C, ES)) .
+  eq simplify(sub(E, F), lit(I), lit(J)) = lit(calc(sub(E, F), I, J)) .
+  eq pe(mul(E, F), C, ES) = simplify(mul(E, F), pe(E, C, ES), pe(F, C, ES)) .
+  eq simplify(mul(E, F), lit(I), lit(J)) = lit(calc(mul(E, F), I, J)) .
+  eq pe(divv(E, F), C, ES) = simplify(divv(E, F), pe(E, C, ES), pe(F, C, ES)) .
+  eq simplify(divv(E, F), lit(I), lit(J)) = lit(calc(divv(E, F), I, J)) .
+  eq pe(modv(E, F), C, ES) = simplify(modv(E, F), pe(E, C, ES), pe(F, C, ES)) .
+  eq simplify(modv(E, F), lit(I), lit(J)) = lit(calc(modv(E, F), I, J)) .
+  eq pe(eqv(E, F), C, ES) = simplify(eqv(E, F), pe(E, C, ES), pe(F, C, ES)) .
+  eq simplify(eqv(E, F), lit(I), lit(J)) = lit(calc(eqv(E, F), I, J)) .
+  eq pe(ltv(E, F), C, ES) = simplify(ltv(E, F), pe(E, C, ES), pe(F, C, ES)) .
+  eq simplify(ltv(E, F), lit(I), lit(J)) = lit(calc(ltv(E, F), I, J)) .
+  eq pe(minv(E, F), C, ES) = simplify(minv(E, F), pe(E, C, ES), pe(F, C, ES)) .
+  eq simplify(minv(E, F), lit(I), lit(J)) = lit(calc(minv(E, F), I, J)) .
+  eq pe(maxv(E, F), C, ES) = simplify(maxv(E, F), pe(E, C, ES), pe(F, C, ES)) .
+  eq simplify(maxv(E, F), lit(I), lit(J)) = lit(calc(maxv(E, F), I, J)) .
+  eq pe(andv(E, F), C, ES) = simplify(andv(E, F), pe(E, C, ES), pe(F, C, ES)) .
+  eq simplify(andv(E, F), lit(I), lit(J)) = lit(calc(andv(E, F), I, J)) .
+  eq pe(orv(E, F), C, ES) = simplify(orv(E, F), pe(E, C, ES), pe(F, C, ES)) .
+  eq simplify(orv(E, F), lit(I), lit(J)) = lit(calc(orv(E, F), I, J)) .
+  eq simplify(add(E, F), G, lit(0)) = G .
+  eq simplify(sub(E, F), G, lit(0)) = G .
+  eq simplify(add(E, F), lit(0), G) = G .
+  eq simplify(mul(E, F), G, lit(1)) = G .
+  eq simplify(mul(E, F), lit(1), G) = G .
+  eq simplify(divv(E, F), G, lit(1)) = G .
+  eq simplify(add(E, F), G, H) = add(G, H) [owise] .
+  eq simplify(sub(E, F), G, H) = sub(G, H) [owise] .
+  eq simplify(mul(E, F), G, H) = mul(G, H) [owise] .
+  eq simplify(divv(E, F), G, H) = divv(G, H) [owise] .
+  eq simplify(modv(E, F), G, H) = modv(G, H) [owise] .
+  eq simplify(eqv(E, F), G, H) = eqv(G, H) [owise] .
+  eq simplify(ltv(E, F), G, H) = ltv(G, H) [owise] .
+  eq simplify(minv(E, F), G, H) = minv(G, H) [owise] .
+  eq simplify(maxv(E, F), G, H) = maxv(G, H) [owise] .
+  eq simplify(andv(E, F), G, H) = andv(G, H) [owise] .
+  eq simplify(orv(E, F), G, H) = orv(G, H) [owise] .
+endfm

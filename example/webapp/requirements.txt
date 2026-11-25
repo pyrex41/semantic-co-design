@@ -1,0 +1,6 @@
+psycopg[binary]==3.2.13
+PyJWT[crypto]==2.10.1
+cryptography==50.0.2
+cffi==2.0.0
+pycparser==2.23
+typing_extensions==4.16.0

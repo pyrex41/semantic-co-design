@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Router and layer-4 load balancer configuration",
+  "type": "object",
+  "required": ["schema", "interfaces", "routes", "neighbors", "listeners", "peers", "flow-limit", "tenant-limit", "port-low", "port-high", "pending-limit", "neighbor-limit"],
+  "properties": {
+    "schema": {"const": 1},
+    "interfaces": {"type": "array", "minItems": 2, "maxItems": 16, "items": {"$ref": "#/$defs/interface"}},
+    "routes": {"type": "array", "maxItems": 64, "items": {"$ref": "#/$defs/route"}},
+    "neighbors": {"type": "array", "maxItems": 64, "items": {"$ref": "#/$defs/neighbor"}},
+    "listeners": {"type": "array", "maxItems": 32, "items": {"$ref": "#/$defs/listener"}},
+    "peers": {"type": "array", "maxItems": 4, "items": {"$ref": "#/$defs/peer"}},
+    "flow-limit": {"type": "integer", "minimum": 1, "maximum": 64},
+    "tenant-limit": {"type": "integer", "minimum": 1, "maximum": 64},
+    "port-low": {"type": "integer", "minimum": 1024, "maximum": 65535},
+    "port-high": {"type": "integer", "minimum": 1024, "maximum": 65535},
+    "pending-limit": {"type": "integer", "minimum": 1, "maximum": 32},
+    "neighbor-limit": {"type": "integer", "minimum": 1, "maximum": 64}
+  },
+  "$defs": {
+    "id": {"type": "string", "minLength": 1, "maxLength": 32},
+    "byte": {"type": "integer", "minimum": 0, "maximum": 255},
+    "address": {"type": "array", "items": {"$ref": "#/$defs/byte"}, "anyOf": [{"minItems": 4, "maxItems": 4}, {"minItems": 16, "maxItems": 16}]},
+    "mac": {"type": "array", "items": {"$ref": "#/$defs/byte"}, "minItems": 6, "maxItems": 6},
+    "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+    "bits": {"type": "integer", "minimum": 0, "maximum": 128},
+    "interface": {
+      "type": "object",
+      "required": ["id", "tenant", "addresses", "mac", "vlan", "mtu", "forward", "policy"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"}, "tenant": {"$ref": "#/$defs/id"}, "mac": {"$ref": "#/$defs/mac"},
+        "addresses": {"type": "array", "minItems": 1, "maxItems": 8, "items": {"$ref": "#/$defs/address"}},
+        "vlan": {"type": "integer", "minimum": 0, "maximum": 4094},
+        "mtu": {"type": "integer", "minimum": 68, "maximum": 9200},
+        "forward": {"type": "boolean"},
+        "policy": {"type": "array", "maxItems": 32, "items": {"$ref": "#/$defs/policy"}}
+      }
+    },
+    "policy": {
+      "type": "object", "required": ["src", "dst", "src-bits", "dst-bits", "protocol", "allow"],
+      "properties": {
+        "src": {"$ref": "#/$defs/address"}, "dst": {"$ref": "#/$defs/address"},
+        "src-bits": {"$ref": "#/$defs/bits"}, "dst-bits": {"$ref": "#/$defs/bits"},
+        "protocol": {"$ref": "#/$defs/byte"}, "allow": {"type": "boolean"}
+      }
+    },
+    "prefix": {
+      "type": "object", "required": ["prefix", "bits"],
+      "properties": {"prefix": {"$ref": "#/$defs/address"}, "bits": {"$ref": "#/$defs/bits"}}
+    },
+    "route": {
+      "type": "object", "required": ["prefix", "bits", "metric", "out", "via"],
+      "properties": {
+        "prefix": {"$ref": "#/$defs/address"}, "bits": {"$ref": "#/$defs/bits"},
+        "metric": {"type": "integer", "minimum": 0, "maximum": 65535},
+        "out": {"$ref": "#/$defs/id"}, "via": {"anyOf": [{"$ref": "#/$defs/address"}, {"const": []}]}
+      }
+    },
+    "neighbor": {
+      "type": "object", "required": ["port", "address", "mac", "until"],
+      "properties": {
+        "port": {"$ref": "#/$defs/id"}, "address": {"$ref": "#/$defs/address"},
+        "mac": {"$ref": "#/$defs/mac"}, "until": {"type": "integer", "minimum": 1}
+      }
+    },
+    "listener": {
+      "type": "object", "required": ["tenant", "address", "translation", "protocol", "port", "backends", "front", "back"],
+      "properties": {
+        "tenant": {"$ref": "#/$defs/id"}, "front": {"$ref": "#/$defs/id"}, "back": {"$ref": "#/$defs/id"},
+        "address": {"$ref": "#/$defs/address"}, "translation": {"$ref": "#/$defs/address"},
+        "protocol": {"enum": [6, 17]}, "port": {"$ref": "#/$defs/port"},
+        "backends": {"type": "array", "minItems": 1, "maxItems": 16, "items": {"$ref": "#/$defs/backend"}}
+      }
+    },
+    "backend": {
+      "type": "object", "required": ["id", "address", "port", "healthy", "draining"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"}, "address": {"$ref": "#/$defs/address"}, "port": {"$ref": "#/$defs/port"},
+        "healthy": {"type": "boolean"}, "draining": {"type": "boolean"}, "probe-port": {"$ref": "#/$defs/port"}
+      }
+    },
+    "peer": {
+      "type": "object", "required": ["id", "port", "address", "local-as", "remote-as", "hold", "router-id", "import", "export"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"}, "port": {"$ref": "#/$defs/id"},
+        "address": {"$ref": "#/$defs/address"}, "router-id": {"$ref": "#/$defs/address"},
+        "local-as": {"type": "integer", "minimum": 1, "maximum": 65534},
+        "remote-as": {"type": "integer", "minimum": 1, "maximum": 65534},
+        "hold": {"type": "integer", "minimum": 3, "maximum": 65535},
+        "import": {"type": "array", "maxItems": 32, "items": {"$ref": "#/$defs/prefix"}},
+        "export": {"type": "array", "maxItems": 32, "items": {"$ref": "#/$defs/prefix"}}
+      }
+    }
+  }
+}

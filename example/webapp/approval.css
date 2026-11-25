@@ -1,0 +1,63 @@
+:root {
+  color-scheme: light;
+  --ink: #162e37;
+  --muted: #4c6268;
+  --paper: #f5f8f9;
+  --rule: #bdd0d4;
+  --accent: #005e69;
+  --focus: #f4a900;
+  font: 100%/1.55 "Atkinson Hyperlegible", "Trebuchet MS", sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+header, footer { display: flex; align-items: center; justify-content: space-between; padding: .8rem max(1rem, 5vw); }
+header { background: var(--ink); color: white; }
+header .detail, header a { color: white; }
+header a { font-weight: 750; text-decoration: none; font-size: 1.15rem; }
+footer { border-top: 1px solid var(--rule); margin-top: 3rem; }
+footer:empty { display: none; }
+.workspace { display: grid; grid-template-columns: minmax(10rem, 15rem) minmax(0, 52rem); gap: clamp(1rem, 5vw, 5rem); margin: 0 auto; padding: 2.4rem max(1rem, 5vw); max-width: 92rem; }
+.landing { display: block; max-width: 61rem; padding-top: clamp(3rem, 9vw, 8rem); }
+nav { border-right: 1px solid var(--rule); padding: .65rem 1.5rem .65rem 0; }
+nav ul { margin: 1.1rem 0 0; }
+nav li { border: 0; padding: .35rem 0; }
+main { min-width: 0; }
+body > main { margin: 4rem auto; max-width: 44rem; padding: 1rem; }
+h1, h2 { line-height: 1.15; margin: 0 0 .7em; }
+h1 { font-size: clamp(2rem, 5vw, 3.5rem); letter-spacing: -.045em; max-width: 23ch; }
+h2 { font-size: 1.35rem; }
+section { border-top: 1px solid var(--rule); margin: 1.75rem 0; padding-top: 1.2rem; }
+p { max-width: 65ch; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.detail { color: var(--muted); margin: .15rem 0; font-size: .97rem; }
+.document-text { white-space: pre-wrap; background: white; border-left: 3px solid var(--accent); padding: 1rem 1.15rem; overflow-wrap: anywhere; }
+ul, ol { padding: 0; list-style: none; }
+li { border-bottom: 1px solid var(--rule); padding: .75rem 0; }
+li .action-form { margin: .55rem 0 0; }
+a { color: var(--accent); text-underline-offset: .19em; }
+a:focus-visible, input:focus-visible, button:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: 3px solid var(--focus); outline-offset: 3px;
+}
+.skip { position: fixed; background: white; padding: 1rem; transform: translateY(-150%); }
+.skip:focus { z-index: 1; transform: none; }
+.action-form { max-width: 38rem; }
+.field { display: grid; gap: .3rem; margin: .75rem 0 1rem; }
+label { font-weight: 650; }
+input, select, textarea, button { font: inherit; }
+input:not([type=hidden]), select, textarea {
+  color: var(--ink); background: white; border: 1px solid #6a8589; border-radius: .25rem; padding: .48rem .6rem; max-width: 100%;
+}
+button {
+  border: 1px solid var(--accent); color: white; background: var(--accent); padding: .48rem .9rem;
+  border-radius: .25rem; font-weight: 650; cursor: pointer;
+}
+button:hover { background: var(--ink); }
+.search { display: flex; gap: .55rem; align-items: baseline; flex-wrap: wrap; margin: 1.2rem 0; }
+@media (max-width: 45rem) {
+  .workspace { display: block; padding-top: 1rem; }
+  nav { border-right: 0; border-bottom: 1px solid var(--rule); margin-bottom: 1.5rem; padding: 0 0 .6rem; }
+  nav ul { display: flex; flex-wrap: wrap; gap: .15rem .75rem; margin: .55rem 0 0; }
+  header { gap: .6rem; flex-wrap: wrap; }
+}

@@ -1,0 +1,883 @@
+{
+  "platform": "macOS-27.2.1-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "cpu": "Apple M5",
+  "source_sha256": {
+    "bench.shenmod": "d297d118c3842bb46332bd5fc079cb91865d3ab8a3f67dfdaba86f9cbfc3a8f7",
+    "kernels.c": "e421a00f04531b4d56443d58a1a192c35900594423cd4763ab4f3c1f16c9dc5f",
+    "kernels.maude": "500449fe647e7bdf8873d3a8f0fe3d5360e46e650b53b21ecec9de6ddd01998c",
+    "kernels.shen": "9d5cc18eaa8cd9e994e1e3cda3c00e4f768e1bf117f4e0a7ef7a3bded41baf2a",
+    "maude_timer.cpp": "259ee4c569c8d71ebf106dbe1e81dd3f2ad537b06d95bdeb600ad3e1562f5626",
+    "requirements.txt": "eb253e518f1019c13721c330beb246593bc2f5b1834c35d9eb1049b5900ebb45",
+    "timer.c": "878adf79a5222bb0bdbb81b0e8c9e340c93ecfe4e6731e5acff3f9bc52188d11"
+  },
+  "rows_per_trial": 1024,
+  "trials": 9,
+  "seed": 5145,
+  "clang": "clang version 21.1.8",
+  "clangxx": "clang version 21.1.8",
+  "shen_jit": "43.7 (port (\"native\" \"0.11\") implementation (\"shen-jit\" \"0.11\"))",
+  "maude": "3.5.1",
+  "maudec_cpp_sha256": "30eac7070e9faf1147e20de9bb3f699bc804c7b6d8f6ab4bba848cf92281a496",
+  "fixtures": {
+    "vm": {
+      "fixture": "checksum",
+      "input_sha256": "5a5efb92f76edee06b165e8f7c3459969e1a3679c1715b93c11963c05fc60d1a",
+      "output_sha256": "6f2c428be9f658679792474094dff730b79b2df352a0f2090524eef1aca95a99",
+      "specialized_c_identical": true,
+      "median_cpu_us_per_row": {
+        "shen_jit": 0.8193359374999994,
+        "specialized_shen": 0.0341796875,
+        "specialized_maude": 0.03515625,
+        "direct_c": 0.013671875,
+        "direct_maude": 0.1220703125
+      },
+      "samples": {
+        "shen_jit": [
+          {
+            "cpu_us_per_row": 0.7363281250000003,
+            "batch_wall_ms": 79.935375
+          },
+          {
+            "cpu_us_per_row": 0.8066406250000003,
+            "batch_wall_ms": 6.742292
+          },
+          {
+            "cpu_us_per_row": 0.765625,
+            "batch_wall_ms": 10.0925
+          },
+          {
+            "cpu_us_per_row": 0.8369140625000001,
+            "batch_wall_ms": 7.390208
+          },
+          {
+            "cpu_us_per_row": 0.7744140624999994,
+            "batch_wall_ms": 7.434833
+          },
+          {
+            "cpu_us_per_row": 0.8632812500000002,
+            "batch_wall_ms": 8.229042
+          },
+          {
+            "cpu_us_per_row": 0.8193359374999994,
+            "batch_wall_ms": 7.555167
+          },
+          {
+            "cpu_us_per_row": 0.8251953125000002,
+            "batch_wall_ms": 7.517875
+          },
+          {
+            "cpu_us_per_row": 0.8916015624999998,
+            "batch_wall_ms": 7.892417
+          }
+        ],
+        "specialized_shen": [
+          {
+            "cpu_us_per_row": 0.0791015625,
+            "batch_wall_ms": 76.646375
+          },
+          {
+            "cpu_us_per_row": 0.0322265625,
+            "batch_wall_ms": 4.285333
+          },
+          {
+            "cpu_us_per_row": 0.033203125,
+            "batch_wall_ms": 4.513208
+          },
+          {
+            "cpu_us_per_row": 0.033203125,
+            "batch_wall_ms": 4.830709
+          },
+          {
+            "cpu_us_per_row": 0.037109375,
+            "batch_wall_ms": 4.748875
+          },
+          {
+            "cpu_us_per_row": 0.037109375,
+            "batch_wall_ms": 6.041917
+          },
+          {
+            "cpu_us_per_row": 0.0341796875,
+            "batch_wall_ms": 3.983791
+          },
+          {
+            "cpu_us_per_row": 0.03515625,
+            "batch_wall_ms": 4.116875
+          },
+          {
+            "cpu_us_per_row": 0.0341796875,
+            "batch_wall_ms": 4.397917
+          }
+        ],
+        "specialized_maude": [
+          {
+            "cpu_us_per_row": 0.0810546875,
+            "batch_wall_ms": 60.591208
+          },
+          {
+            "cpu_us_per_row": 0.0361328125,
+            "batch_wall_ms": 23.854666
+          },
+          {
+            "cpu_us_per_row": 0.0322265625,
+            "batch_wall_ms": 4.023666
+          },
+          {
+            "cpu_us_per_row": 0.0322265625,
+            "batch_wall_ms": 4.222375
+          },
+          {
+            "cpu_us_per_row": 0.037109375,
+            "batch_wall_ms": 4.250375
+          },
+          {
+            "cpu_us_per_row": 0.0361328125,
+            "batch_wall_ms": 4.593167
+          },
+          {
+            "cpu_us_per_row": 0.03515625,
+            "batch_wall_ms": 4.033833
+          },
+          {
+            "cpu_us_per_row": 0.03515625,
+            "batch_wall_ms": 4.703542
+          },
+          {
+            "cpu_us_per_row": 0.03515625,
+            "batch_wall_ms": 4.497041
+          }
+        ],
+        "direct_c": [
+          {
+            "cpu_us_per_row": 0.0146484375,
+            "batch_wall_ms": 77.509
+          },
+          {
+            "cpu_us_per_row": 0.01171875,
+            "batch_wall_ms": 4.199167
+          },
+          {
+            "cpu_us_per_row": 0.0126953125,
+            "batch_wall_ms": 6.785625
+          },
+          {
+            "cpu_us_per_row": 0.013671875,
+            "batch_wall_ms": 9.658167
+          },
+          {
+            "cpu_us_per_row": 0.013671875,
+            "batch_wall_ms": 4.312083
+          },
+          {
+            "cpu_us_per_row": 0.0146484375,
+            "batch_wall_ms": 9.0885
+          },
+          {
+            "cpu_us_per_row": 0.013671875,
+            "batch_wall_ms": 4.244
+          },
+          {
+            "cpu_us_per_row": 0.013671875,
+            "batch_wall_ms": 4.454708
+          },
+          {
+            "cpu_us_per_row": 0.0146484375,
+            "batch_wall_ms": 4.620083
+          }
+        ],
+        "direct_maude": [
+          {
+            "cpu_us_per_row": 0.11328125,
+            "batch_wall_ms": 160.24025
+          },
+          {
+            "cpu_us_per_row": 0.14453125,
+            "batch_wall_ms": 26.212083
+          },
+          {
+            "cpu_us_per_row": 0.1220703125,
+            "batch_wall_ms": 22.644792
+          },
+          {
+            "cpu_us_per_row": 0.169921875,
+            "batch_wall_ms": 23.470041
+          },
+          {
+            "cpu_us_per_row": 0.1279296875,
+            "batch_wall_ms": 25.689084
+          },
+          {
+            "cpu_us_per_row": 0.119140625,
+            "batch_wall_ms": 24.363416
+          },
+          {
+            "cpu_us_per_row": 0.119140625,
+            "batch_wall_ms": 23.609625
+          },
+          {
+            "cpu_us_per_row": 0.1171875,
+            "batch_wall_ms": 22.20075
+          },
+          {
+            "cpu_us_per_row": 0.220703125,
+            "batch_wall_ms": 23.663541
+          }
+        ]
+      }
+    },
+    "decoder": {
+      "fixture": "grammar",
+      "input_sha256": "ca869762b8aa89fdbcd1d1f4790f2b337f4c5c3c48828692912d11fce881da16",
+      "output_sha256": "89ec4513af7a5c38912f090f34e050cc22d72916338562f6e7fe4c08e7217465",
+      "specialized_c_identical": true,
+      "median_cpu_us_per_row": {
+        "shen_jit": 0.43164062500000056,
+        "specialized_shen": 3.2763671875,
+        "specialized_maude": 3.6123046875,
+        "direct_c": 0.0703125,
+        "direct_maude": 2.8056640625,
+        "decoder_reset_probe": 0.078125
+      },
+      "samples": {
+        "shen_jit": [
+          {
+            "cpu_us_per_row": 0.43066406249999956,
+            "batch_wall_ms": 8.817875
+          },
+          {
+            "cpu_us_per_row": 0.4345703124999992,
+            "batch_wall_ms": 8.842084
+          },
+          {
+            "cpu_us_per_row": 0.43164062500000056,
+            "batch_wall_ms": 9.020291
+          },
+          {
+            "cpu_us_per_row": 0.39062499999999933,
+            "batch_wall_ms": 8.037458
+          },
+          {
+            "cpu_us_per_row": 0.4501953124999996,
+            "batch_wall_ms": 9.143083
+          },
+          {
+            "cpu_us_per_row": 0.453125,
+            "batch_wall_ms": 9.263333
+          },
+          {
+            "cpu_us_per_row": 0.4355468750000002,
+            "batch_wall_ms": 12.344334
+          },
+          {
+            "cpu_us_per_row": 0.42089843749999994,
+            "batch_wall_ms": 9.130583
+          },
+          {
+            "cpu_us_per_row": 0.42968749999999944,
+            "batch_wall_ms": 9.001041
+          }
+        ],
+        "specialized_shen": [
+          {
+            "cpu_us_per_row": 3.26171875,
+            "batch_wall_ms": 147.43125
+          },
+          {
+            "cpu_us_per_row": 3.2265625,
+            "batch_wall_ms": 9.293083
+          },
+          {
+            "cpu_us_per_row": 3.263671875,
+            "batch_wall_ms": 19.866584
+          },
+          {
+            "cpu_us_per_row": 3.34375,
+            "batch_wall_ms": 11.253167
+          },
+          {
+            "cpu_us_per_row": 3.3583984375,
+            "batch_wall_ms": 15.079083
+          },
+          {
+            "cpu_us_per_row": 3.28125,
+            "batch_wall_ms": 19.248792
+          },
+          {
+            "cpu_us_per_row": 3.12109375,
+            "batch_wall_ms": 9.503667
+          },
+          {
+            "cpu_us_per_row": 3.8632812500000004,
+            "batch_wall_ms": 16.198958
+          },
+          {
+            "cpu_us_per_row": 3.2763671875,
+            "batch_wall_ms": 9.790792
+          }
+        ],
+        "specialized_maude": [
+          {
+            "cpu_us_per_row": 3.5927734375,
+            "batch_wall_ms": 68.963875
+          },
+          {
+            "cpu_us_per_row": 3.95703125,
+            "batch_wall_ms": 11.479708
+          },
+          {
+            "cpu_us_per_row": 3.87890625,
+            "batch_wall_ms": 15.138834
+          },
+          {
+            "cpu_us_per_row": 3.6123046875,
+            "batch_wall_ms": 15.331792
+          },
+          {
+            "cpu_us_per_row": 3.76953125,
+            "batch_wall_ms": 16.382583
+          },
+          {
+            "cpu_us_per_row": 3.24609375,
+            "batch_wall_ms": 9.841333
+          },
+          {
+            "cpu_us_per_row": 3.2080078125,
+            "batch_wall_ms": 9.516
+          },
+          {
+            "cpu_us_per_row": 3.279296875,
+            "batch_wall_ms": 9.779834
+          },
+          {
+            "cpu_us_per_row": 3.8183593750000004,
+            "batch_wall_ms": 16.621834
+          }
+        ],
+        "direct_c": [
+          {
+            "cpu_us_per_row": 0.1142578125,
+            "batch_wall_ms": 71.972375
+          },
+          {
+            "cpu_us_per_row": 0.0693359375,
+            "batch_wall_ms": 6.444833
+          },
+          {
+            "cpu_us_per_row": 0.0673828125,
+            "batch_wall_ms": 9.693375
+          },
+          {
+            "cpu_us_per_row": 0.0673828125,
+            "batch_wall_ms": 6.140792
+          },
+          {
+            "cpu_us_per_row": 0.0703125,
+            "batch_wall_ms": 7.66775
+          },
+          {
+            "cpu_us_per_row": 0.072265625,
+            "batch_wall_ms": 10.810959
+          },
+          {
+            "cpu_us_per_row": 0.0703125,
+            "batch_wall_ms": 6.285333
+          },
+          {
+            "cpu_us_per_row": 0.0673828125,
+            "batch_wall_ms": 6.820708
+          },
+          {
+            "cpu_us_per_row": 0.080078125,
+            "batch_wall_ms": 6.4365
+          }
+        ],
+        "direct_maude": [
+          {
+            "cpu_us_per_row": 2.6533203125,
+            "batch_wall_ms": 100.348459
+          },
+          {
+            "cpu_us_per_row": 2.8056640625,
+            "batch_wall_ms": 26.555625
+          },
+          {
+            "cpu_us_per_row": 2.7099609375,
+            "batch_wall_ms": 27.16825
+          },
+          {
+            "cpu_us_per_row": 3.0498046875,
+            "batch_wall_ms": 31.58925
+          },
+          {
+            "cpu_us_per_row": 2.8369140625,
+            "batch_wall_ms": 27.0645
+          },
+          {
+            "cpu_us_per_row": 2.9580078125,
+            "batch_wall_ms": 27.248083
+          },
+          {
+            "cpu_us_per_row": 2.9970703125,
+            "batch_wall_ms": 27.740208
+          },
+          {
+            "cpu_us_per_row": 2.7177734375,
+            "batch_wall_ms": 25.052125
+          },
+          {
+            "cpu_us_per_row": 2.7744140625,
+            "batch_wall_ms": 25.805083
+          }
+        ],
+        "decoder_reset_probe": [
+          {
+            "cpu_us_per_row": 0.125,
+            "batch_wall_ms": 97.731583
+          },
+          {
+            "cpu_us_per_row": 0.0771484375,
+            "batch_wall_ms": 6.370125
+          },
+          {
+            "cpu_us_per_row": 0.076171875,
+            "batch_wall_ms": 6.455875
+          },
+          {
+            "cpu_us_per_row": 0.0751953125,
+            "batch_wall_ms": 7.306334
+          },
+          {
+            "cpu_us_per_row": 0.083984375,
+            "batch_wall_ms": 8.554291
+          },
+          {
+            "cpu_us_per_row": 0.080078125,
+            "batch_wall_ms": 13.452292
+          },
+          {
+            "cpu_us_per_row": 0.080078125,
+            "batch_wall_ms": 6.445958
+          },
+          {
+            "cpu_us_per_row": 0.076171875,
+            "batch_wall_ms": 9.328
+          },
+          {
+            "cpu_us_per_row": 0.078125,
+            "batch_wall_ms": 12.354083
+          }
+        ]
+      }
+    },
+    "railway": {
+      "fixture": "layout",
+      "input_sha256": "a55f4d4f3e17a896675443c3efa1ffaf5c9fd66f97d698acfae7f0ad9852bf2c",
+      "output_sha256": "a6c38e939d94d1a0dc0ff09b002ce70a6159e88323ca5348dcbd27d998436b14",
+      "specialized_c_identical": true,
+      "median_cpu_us_per_row": {
+        "shen_jit": 0.9091796874999996,
+        "specialized_shen": 0.3017578125,
+        "specialized_maude": 0.302734375,
+        "direct_c": 0.1171875,
+        "direct_maude": 2.05859375
+      },
+      "samples": {
+        "shen_jit": [
+          {
+            "cpu_us_per_row": 0.9052734374999999,
+            "batch_wall_ms": 12.998959
+          },
+          {
+            "cpu_us_per_row": 0.8828124999999994,
+            "batch_wall_ms": 16.875792
+          },
+          {
+            "cpu_us_per_row": 0.8769531250000003,
+            "batch_wall_ms": 12.809833
+          },
+          {
+            "cpu_us_per_row": 0.9248046874999999,
+            "batch_wall_ms": 14.245792
+          },
+          {
+            "cpu_us_per_row": 0.9345703125000003,
+            "batch_wall_ms": 13.410541
+          },
+          {
+            "cpu_us_per_row": 0.9101562499999997,
+            "batch_wall_ms": 12.962084
+          },
+          {
+            "cpu_us_per_row": 0.951171875,
+            "batch_wall_ms": 14.185708
+          },
+          {
+            "cpu_us_per_row": 0.8916015624999998,
+            "batch_wall_ms": 12.792
+          },
+          {
+            "cpu_us_per_row": 0.9091796874999996,
+            "batch_wall_ms": 13.531792
+          }
+        ],
+        "specialized_shen": [
+          {
+            "cpu_us_per_row": 0.4482421875,
+            "batch_wall_ms": 160.845917
+          },
+          {
+            "cpu_us_per_row": 0.2744140625,
+            "batch_wall_ms": 13.137417
+          },
+          {
+            "cpu_us_per_row": 0.3291015625,
+            "batch_wall_ms": 10.762459
+          },
+          {
+            "cpu_us_per_row": 0.3125,
+            "batch_wall_ms": 13.626459
+          },
+          {
+            "cpu_us_per_row": 0.3125,
+            "batch_wall_ms": 10.428291
+          },
+          {
+            "cpu_us_per_row": 0.3017578125,
+            "batch_wall_ms": 10.133792
+          },
+          {
+            "cpu_us_per_row": 0.2841796875,
+            "batch_wall_ms": 9.891833
+          },
+          {
+            "cpu_us_per_row": 0.30078125,
+            "batch_wall_ms": 9.591833
+          },
+          {
+            "cpu_us_per_row": 0.2880859375,
+            "batch_wall_ms": 9.837916
+          }
+        ],
+        "specialized_maude": [
+          {
+            "cpu_us_per_row": 0.4072265625,
+            "batch_wall_ms": 89.357
+          },
+          {
+            "cpu_us_per_row": 0.2783203125,
+            "batch_wall_ms": 9.544916
+          },
+          {
+            "cpu_us_per_row": 0.3349609375,
+            "batch_wall_ms": 12.269916
+          },
+          {
+            "cpu_us_per_row": 0.326171875,
+            "batch_wall_ms": 10.86125
+          },
+          {
+            "cpu_us_per_row": 0.314453125,
+            "batch_wall_ms": 9.925042
+          },
+          {
+            "cpu_us_per_row": 0.2978515625,
+            "batch_wall_ms": 9.881625
+          },
+          {
+            "cpu_us_per_row": 0.302734375,
+            "batch_wall_ms": 9.438084
+          },
+          {
+            "cpu_us_per_row": 0.30078125,
+            "batch_wall_ms": 9.913
+          },
+          {
+            "cpu_us_per_row": 0.2998046875,
+            "batch_wall_ms": 9.695583
+          }
+        ],
+        "direct_c": [
+          {
+            "cpu_us_per_row": 0.119140625,
+            "batch_wall_ms": 84.851583
+          },
+          {
+            "cpu_us_per_row": 0.111328125,
+            "batch_wall_ms": 10.117958
+          },
+          {
+            "cpu_us_per_row": 0.1083984375,
+            "batch_wall_ms": 10.323583
+          },
+          {
+            "cpu_us_per_row": 0.1298828125,
+            "batch_wall_ms": 10.530541
+          },
+          {
+            "cpu_us_per_row": 0.1181640625,
+            "batch_wall_ms": 9.2865
+          },
+          {
+            "cpu_us_per_row": 0.1171875,
+            "batch_wall_ms": 9.924875
+          },
+          {
+            "cpu_us_per_row": 0.1171875,
+            "batch_wall_ms": 9.631375
+          },
+          {
+            "cpu_us_per_row": 0.1171875,
+            "batch_wall_ms": 9.664666
+          },
+          {
+            "cpu_us_per_row": 0.11328125,
+            "batch_wall_ms": 9.216459
+          }
+        ],
+        "direct_maude": [
+          {
+            "cpu_us_per_row": 1.9550781249999998,
+            "batch_wall_ms": 106.230292
+          },
+          {
+            "cpu_us_per_row": 2.033203125,
+            "batch_wall_ms": 35.257375
+          },
+          {
+            "cpu_us_per_row": 2.2275390625,
+            "batch_wall_ms": 41.138125
+          },
+          {
+            "cpu_us_per_row": 2.1865234375,
+            "batch_wall_ms": 37.18725
+          },
+          {
+            "cpu_us_per_row": 2.2275390625,
+            "batch_wall_ms": 35.783
+          },
+          {
+            "cpu_us_per_row": 2.03515625,
+            "batch_wall_ms": 35.749375
+          },
+          {
+            "cpu_us_per_row": 2.2412109375,
+            "batch_wall_ms": 35.33
+          },
+          {
+            "cpu_us_per_row": 2.0341796875,
+            "batch_wall_ms": 34.222
+          },
+          {
+            "cpu_us_per_row": 2.05859375,
+            "batch_wall_ms": 38.896583
+          }
+        ]
+      }
+    },
+    "query": {
+      "fixture": "join",
+      "input_sha256": "d1e1eeadbdd6f55e07490897970d90889ae59cbd283ac80defdcefa79181f146",
+      "output_sha256": "ffeebb747d363405ddb6881812edbf521bb669bfef0c4fb2da1a7605d3634e87",
+      "specialized_c_identical": true,
+      "median_cpu_us_per_row": {
+        "shen_jit": 0.38964843750000006,
+        "specialized_shen": 0.099609375,
+        "specialized_maude": 0.09765625,
+        "direct_c": 0.087890625,
+        "direct_maude": 1.82421875
+      },
+      "samples": {
+        "shen_jit": [
+          {
+            "cpu_us_per_row": 0.4121093750000005,
+            "batch_wall_ms": 8.0765
+          },
+          {
+            "cpu_us_per_row": 0.3710937500000001,
+            "batch_wall_ms": 9.574125
+          },
+          {
+            "cpu_us_per_row": 0.40429687499999944,
+            "batch_wall_ms": 13.597542
+          },
+          {
+            "cpu_us_per_row": 0.3876953124999998,
+            "batch_wall_ms": 12.01025
+          },
+          {
+            "cpu_us_per_row": 0.3876953125000006,
+            "batch_wall_ms": 7.494167
+          },
+          {
+            "cpu_us_per_row": 0.41210937499999967,
+            "batch_wall_ms": 7.557708
+          },
+          {
+            "cpu_us_per_row": 0.38964843750000006,
+            "batch_wall_ms": 13.025791
+          },
+          {
+            "cpu_us_per_row": 0.3730468750000004,
+            "batch_wall_ms": 15.434375
+          },
+          {
+            "cpu_us_per_row": 0.41992187500000067,
+            "batch_wall_ms": 10.32
+          }
+        ],
+        "specialized_shen": [
+          {
+            "cpu_us_per_row": 0.158203125,
+            "batch_wall_ms": 75.920792
+          },
+          {
+            "cpu_us_per_row": 0.0986328125,
+            "batch_wall_ms": 6.211292
+          },
+          {
+            "cpu_us_per_row": 0.09765625,
+            "batch_wall_ms": 5.8905
+          },
+          {
+            "cpu_us_per_row": 0.099609375,
+            "batch_wall_ms": 20.657125
+          },
+          {
+            "cpu_us_per_row": 0.0947265625,
+            "batch_wall_ms": 12.893208
+          },
+          {
+            "cpu_us_per_row": 0.1025390625,
+            "batch_wall_ms": 5.781833
+          },
+          {
+            "cpu_us_per_row": 0.1015625,
+            "batch_wall_ms": 5.875375
+          },
+          {
+            "cpu_us_per_row": 0.09765625,
+            "batch_wall_ms": 6.004875
+          },
+          {
+            "cpu_us_per_row": 0.099609375,
+            "batch_wall_ms": 6.840333
+          }
+        ],
+        "specialized_maude": [
+          {
+            "cpu_us_per_row": 0.146484375,
+            "batch_wall_ms": 91.941959
+          },
+          {
+            "cpu_us_per_row": 0.091796875,
+            "batch_wall_ms": 5.732334
+          },
+          {
+            "cpu_us_per_row": 0.09765625,
+            "batch_wall_ms": 5.675209
+          },
+          {
+            "cpu_us_per_row": 0.091796875,
+            "batch_wall_ms": 11.087875
+          },
+          {
+            "cpu_us_per_row": 0.09375,
+            "batch_wall_ms": 6.850292
+          },
+          {
+            "cpu_us_per_row": 0.0947265625,
+            "batch_wall_ms": 5.872583
+          },
+          {
+            "cpu_us_per_row": 0.1005859375,
+            "batch_wall_ms": 6.073209
+          },
+          {
+            "cpu_us_per_row": 0.099609375,
+            "batch_wall_ms": 5.909958
+          },
+          {
+            "cpu_us_per_row": 0.1005859375,
+            "batch_wall_ms": 5.981084
+          }
+        ],
+        "direct_c": [
+          {
+            "cpu_us_per_row": 0.091796875,
+            "batch_wall_ms": 116.070459
+          },
+          {
+            "cpu_us_per_row": 0.0927734375,
+            "batch_wall_ms": 10.6885
+          },
+          {
+            "cpu_us_per_row": 0.087890625,
+            "batch_wall_ms": 6.845958
+          },
+          {
+            "cpu_us_per_row": 0.0869140625,
+            "batch_wall_ms": 10.204917
+          },
+          {
+            "cpu_us_per_row": 0.0908203125,
+            "batch_wall_ms": 5.991875
+          },
+          {
+            "cpu_us_per_row": 0.087890625,
+            "batch_wall_ms": 7.302041
+          },
+          {
+            "cpu_us_per_row": 0.0869140625,
+            "batch_wall_ms": 18.662166
+          },
+          {
+            "cpu_us_per_row": 0.091796875,
+            "batch_wall_ms": 8.147959
+          },
+          {
+            "cpu_us_per_row": 0.0849609375,
+            "batch_wall_ms": 10.916333
+          }
+        ],
+        "direct_maude": [
+          {
+            "cpu_us_per_row": 1.6806640625,
+            "batch_wall_ms": 137.951167
+          },
+          {
+            "cpu_us_per_row": 1.7978515625,
+            "batch_wall_ms": 26.752625
+          },
+          {
+            "cpu_us_per_row": 1.748046875,
+            "batch_wall_ms": 28.189708
+          },
+          {
+            "cpu_us_per_row": 1.8466796875,
+            "batch_wall_ms": 26.2585
+          },
+          {
+            "cpu_us_per_row": 1.82421875,
+            "batch_wall_ms": 26.949375
+          },
+          {
+            "cpu_us_per_row": 1.9101562499999998,
+            "batch_wall_ms": 28.299125
+          },
+          {
+            "cpu_us_per_row": 1.8076171875,
+            "batch_wall_ms": 28.230042
+          },
+          {
+            "cpu_us_per_row": 2.9638671875,
+            "batch_wall_ms": 32.228834
+          },
+          {
+            "cpu_us_per_row": 1.8701171875,
+            "batch_wall_ms": 26.773167
+          }
+        ]
+      }
+    }
+  }
+}
