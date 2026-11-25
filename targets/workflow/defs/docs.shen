@@ -1,8 +1,9 @@
 \\ A document package. Render three documents, each under its own key and with its own
-\\ retries, let the store settle for a while, then bundle them.
+\\ retries, let the store settle for a while, then bundle them. An undo waits 45 for its
+\\ acknowledgement, longer than a round trip to a worker in the seeded runs.
 
 (define docs.definition ->
-  [3 30
+  [3 45
    [[each render [201 202 203] 3 2 30]
     [sleep 25]
     [act bundle 204 2 3 30]
