@@ -359,10 +359,25 @@ def prefix(schema, report):
                 f"durable prefix: the read was rejected for another reason: {failure}")
     else:
         raise CheckFailure("durable prefix: a read was served before the write issued ahead of it was durable")
+    # Answers come back in the order their effects were issued: of the acknowledgements of
+    # the two writes, both durable, the second cannot come first or alone.
+    ack = lambda seq, k: {"seq": seq, "event": ["written", k], "cause": [2, k], "effects": [], "post": None}
+    both = [[2, 0, *a], [2, 1, *b]]
+    for label, acks in (("first then second", [0, 1]), ("the first alone", [0])):
+        explain(schema, 0, [{"records": records + [ack(3 + n, k) for n, k in enumerate(acks)], "rows": both}])
+    for label, acks in (("second then first", [1, 0]), ("the second alone", [1])):
+        try:
+            explain(schema, 0, [{"records": records + [ack(3 + n, k) for n, k in enumerate(acks)], "rows": both}])
+        except CheckFailure as failure:
+            require(str(failure).startswith("causality") and "out of order" in str(failure),
+                    f"completion order: {label} was rejected for another reason: {failure}")
+        else:
+            raise CheckFailure(f"completion order: acknowledgements {label} were accepted")
     report(f"durable prefix: of two writes of one segment, neither, the first or both durable are "
            f"crashes that lost {lost['neither']}, {lost['the first']} and {lost['both']} writes; "
            f"the second alone is rejected (causality), and so is a read that misses a write "
-           f"issued before it and lost (causality)")
+           f"issued before it and lost (causality); acknowledgements of two durable writes are "
+           f"accepted in order or the first alone, and rejected second first or the second alone (causality)")
 
 
 def mutants(work, schema, report):

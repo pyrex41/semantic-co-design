@@ -133,6 +133,7 @@ def explain(schema, node, logs):
                 f"causality: node {node}: durable row {row} is not a write the log holds at {at}")
 
     items, used, armed, unsynced, issued, segment, clock = [], set(), {}, {}, [], None, 0
+    waiting = []                            # disk effects of the segment whose answer is to come
 
     def kill():
         # The disk serves in order and syncs each write before it starts the next, so what a
@@ -142,6 +143,7 @@ def explain(schema, node, logs):
                 f"causality: node {node}: a write of the segment at record {segment} is not "
                 f"durable and a later write of that segment is")
         issued.clear()
+        waiting.clear()                     # a process that ends owes no answers
         kept = [unsynced[at] for at in sorted(unsynced) if at in durable]
         items.append({"kind": "crash", "node": node, "crashed": True, "state": None, "rows": kept,
                       "persisted": len(kept), "lost_writes": len(unsynced) - len(kept)})
@@ -191,6 +193,12 @@ def explain(schema, node, logs):
                 # whatever it has answered, every write of the segment issued before is durable.
                 require(all(place in durable for place in issued if place < at),
                         f"{where}: {event} was served and a write issued before it is not durable")
+                # One worker, and queues that keep their order on the way there and back:
+                # answers arrive in the order their effects were issued, none skipped.
+                require(waiting and waiting[0] == at,
+                        f"{where}: {event} answers the disk effect at {at} out of order: "
+                        f"the next answer due is for {waiting[0] if waiting else 'nothing'}")
+                waiting.pop(0)
             if role == "disk-ack":
                 require(made[1] == event[1] and at in durable,
                         f"{where}: acknowledges a write that is not durable")
@@ -211,6 +219,10 @@ def explain(schema, node, logs):
             if role_of([tag]) == "disk-write":
                 unsynced[seq, k] = fields[1:]
                 issued.append((seq, k))
+                if "disk-ack" in schema.roles:
+                    waiting.append((seq, k))
+            elif role_of([tag]) == "disk-read":
+                waiting.append((seq, k))
             elif role_of([tag]) == "timer-set":
                 armed[fields[0]] = (seq, k)
             elif role_of([tag]) == "timer-cancel":
