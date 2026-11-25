@@ -1,12 +1,18 @@
-"""A durable workflow engine on the kernel. Run: nix develop -c python3 -m tool check workflow
+"""A durable workflow engine on the kernel.
 
-Regenerate the retained mutant evidence with: python3 -m tool record workflow
+    nix develop -c python3 -m tool check workflow       every section
+    nix develop -c python3 -m tool record workflow      the same, regenerating mutants.json and mutants/
+    nix develop -c python3 -m targets.workflow.check simulation mutants     only some sections
+
+Sections: specialization, simulation, bounded, reliance, mutants.
 """
 from collections import Counter, deque
 import hashlib
 import json
 from pathlib import Path
+import sys
 from tempfile import TemporaryDirectory
+import time
 
 from tool import check, maude, shen, sim
 from tool.check import CheckFailure, require
@@ -15,12 +21,18 @@ from tool.pe import Specializer, Unsupported
 from tool.schema import Schema
 from tool.sim import mutants as worlds
 
-from .model import HERE, INVARIANTS, SYNTAX, TERMINAL, Definition, manifest
+from .model import HERE, INVARIANTS, SYNTAX, TERMINAL, Definition, manifest, problems
 from .workload import Workers, maude as maude_workers
 
+SECTIONS = ("specialization", "simulation", "bounded", "reliance", "mutants")
+DEFINITIONS = ("order", "docs", "small", "single", "mix")
 SEEDS = 400
 SEEDED = sim.profile(budget={"crash": 2, "drop": 2, "dup": 2}, max_steps=600,
                      fault_rate=0.04, crash_mid_rate=0.02, client_rate=0.01)
+# The same schedule with nothing in the fault budget: every run is free of crashes, losses
+# and duplications, and whatever is compensated in it is compensated without a fault.
+CALM_SEEDS = 200
+CALM = sim.profile(budget={"crash": 0, "drop": 0, "dup": 0}, max_steps=600, client_rate=0.01)
 # What an execution of each activity may return in the seeded runs; 0 is a failure and a
 # repeated result is more likely. The environment chooses, the definition does not know.
 OUTCOMES = {
@@ -28,10 +40,14 @@ OUTCOMES = {
               "ship": (1, 1, 1, 0)},
     "docs": {"render": (1, 1, 1, 0), "bundle": (1, 1, 0)},
 }
-STATE = ["one-effect-per-key", "history-is-true", "history-is-a-log", "memory-is-replay",
-         "terminal-is-final", "compensation-matches"]
-TRACE = ["inv.append-only", "inv.recovery-reproduces", "inv.never-regresses"]
+STATE = ["one-effect-per-activity", "history-is-true", "history-is-a-log",
+         "history-follows-definition", "memory-is-replay", "terminal-is-final",
+         "compensation-matches", "completed-is-whole", "reports-are-true"]
+TRACE = ["inv.append-only", "inv.recovery-reproduces", "inv.never-regresses", "inv.backs-off",
+         "inv.stuck-needs-a-fault"]
+# Asked only of a run in which nothing is left to happen.
 LIVE = "inv.settles"
+TOLD = "inv.client-is-told"
 
 # The exhaustive bounds: (definition, fault budget, cancels, outcomes). In an untimed search
 # a timer may fire at any moment, so timeouts, late timers and every order of timers and
@@ -44,13 +60,17 @@ BOUNDS = {
     "crash": ("small", {"crash": 1, "drop": 0, "dup": 0}, 0, FLAKY),
     # A second crash can hit the recovery from the first one.
     "two crashes": ("single", {"crash": 2, "drop": 0, "dup": 0}, 0, {"hold": (1,)}),
+    # The instructions small and single do not have: each, branch (taken on 1, not on 2)
+    # and sleep, with a failure and a cancel so that both of them are also compensated.
+    "mix": ("mix", {"crash": 0, "drop": 0, "dup": 0}, 1, {"scan": (1, 2, 0), "fix": (1,)}),
 }
 # An engine that takes any acknowledgement for the write in flight. Under the environment's
 # rule that no completion crosses a crash it cannot be told from the real one.
 BLIND = [("  Def [live Seq Row Pos] [written Seq] ->", "  Def [live Seq Row Pos] [written _] ->")]
 
 # Each mutant is an edit of engine.shen, the invariant that must reject it, and the
-# exhaustive bound in which a violation must also be reachable.
+# exhaustive bound in which a violation must also be reachable (None for an invariant over
+# clock times, which an untimed search cannot state).
 MUTANTS = {
     "run-before-intent": {
         "what": "schedules the activity in the same step that writes the intent",
@@ -60,17 +80,22 @@ MUTANTS = {
         "invariant": "history-is-true", "bound": "drop"},
     "key-dropped-on-retry": {
         "what": "sends a retry without the idempotency key",
-        "edits": [("[[run Name Key A] [arm Key Timeout]]",
-                   "[[run Name (if (= A 1) Key 0) A] [arm Key Timeout]]")],
-        "invariant": "one-effect-per-key", "bound": "drop"},
+        "edits": [("[[run Name Key A] [arm Seq Timeout]]",
+                   "[[run Name (if (= A 1) Key 0) A] [arm Seq Timeout]]")],
+        "invariant": "one-effect-per-activity", "bound": "drop"},
     "forward-compensation": {
         "what": "undoes the oldest started activity first",
         "edits": [("  0 K 1 -> K\n  Later _ _ -> Later)", "  _ K 1 -> K\n  Later _ _ -> Later)")],
         "invariant": "compensation-matches", "bound": "drop"},
-    "any-completion-accepted": {
-        "what": "takes any completion for the one it is waiting for",
+    "completion-of-another-key": {
+        "what": "takes the completion of any key for the one it is waiting for",
         "edits": [("[done Key A Result] -> (wf.outcome Key A Result)\n"
                    "    where (= Key (wf.key Def Pc Item))",
+                   "[done Key A Result] -> (wf.outcome Key A Result)")],
+        "invariant": "history-follows-definition", "bound": "drop"},
+    "stale-attempt-accepted": {
+        "what": "takes the completion of an earlier attempt for the one in flight",
+        "edits": [("[done Key A Result] -> (wf.outcome Key A Result)",
                    "[done Key _ Result] -> (wf.outcome Key A Result)")],
         "invariant": "history-is-true", "bound": "drop"},
     "in-doubt-not-undone": {
@@ -88,11 +113,56 @@ MUTANTS = {
         "what": "accepts a cancel in any phase, a finished workflow included",
         "edits": [("  backoff -> true\n  _ -> false)", "  backoff -> true\n  _ -> true)")],
         "invariant": "terminal-is-final", "also": "inv.never-regresses", "bound": "cancel"},
+    "cancel-skips-compensation": {
+        "what": "treats an accepted cancel as the end of the workflow and undoes nothing",
+        "edits": [("[cancel _ _] -> [unwinding Pc Item 0 Last Marks]",
+                   "[cancel _ _] -> [completed Pc Item 0 Last Marks]")],
+        "invariant": "memory-is-replay", "bound": "cancel"},
+    "gives-up-early": {
+        "what": "abandons compensation without trying a single undo",
+        "edits": [("  Key Seq -> (wf.intend Seq [undo Key 1]))",
+                   "  Key Seq -> (wf.intend Seq [stuck 0 0]))")],
+        "invariant": "history-follows-definition", "bound": "cancel"},
+    "extra-attempt": {
+        "what": "tries an activity once more than the definition allows",
+        "edits": [("(if (< A (wf.attempts (wf.activity (wf.program Def) 0 Pc Item)))",
+                   "(if (<= A (wf.attempts (wf.activity (wf.program Def) 0 Pc Item)))")],
+        "invariant": "history-follows-definition", "bound": "drop"},
+    "fail-ignored": {
+        "what": "carries on past an activity whose attempts are all used up",
+        "edits": [("        [backoff Pc Item A Last Marks]\n        [unwinding Pc Item 0 Last Marks]))",
+                   "        [backoff Pc Item A Last Marks]\n        (wf.arrive (wf.after (wf.program "
+                   "Def) 0 Pc Item Last (wf.program Def)) Last Marks)))")],
+        "invariant": "completed-is-whole", "bound": "drop"},
+    "branch-inverted": {
+        "what": "takes a branch exactly when the result is not the one it names",
+        "edits": [("(if (= Result Value) (wf.settle Program Target Result) "
+                   "(wf.settle Program (+ Pc 1) Result))",
+                   "(if (= Result Value) (wf.settle Program (+ Pc 1) Result) "
+                   "(wf.settle Program Target Result))")],
+        "invariant": "completed-is-whole", "bound": "mix"},
+    "report-lies": {
+        "what": "tells the client `completed` whatever the outcome",
+        "edits": [("  _ _ [Final | _] -> [[none 0 0] [[report Final]]])",
+                   "  _ _ [Final | _] -> [[none 0 0] [[report completed]]])")],
+        "invariant": "reports-are-true", "bound": "cancel"},
+    "report-before-durable": {
+        "what": "tells the client `completed` in the step that writes the row",
+        "edits": [("  [end] _ _ Seq -> (wf.intend Seq [completed 0 0]))",
+                   "  [end] _ _ Seq ->\n"
+                   "    [[completed 0 0] [[write Seq Seq completed 0 0] [report completed]]])")],
+        "invariant": "reports-are-true", "bound": "drop"},
+    "never-reports": {
+        "what": "finishes the workflow and tells the client nothing",
+        "edits": [("  _ _ [Final | _] -> [[none 0 0] [[report Final]]])",
+                   "  _ _ [Final | _] -> [[none 0 0] []])")],
+        "invariant": TOLD, "bound": "cancel"},
     "restart-without-replay": {
         "what": "reads the history back after a restart but does not apply it",
         "edits": [("[[loading (+ Seq 1) [none 0 0] (wf.apply Def Pos Row)]",
                    "[[loading (+ Seq 1) [none 0 0] Pos]")],
-        "invariant": "memory-is-replay", "also": "inv.recovery-reproduces", "bound": "crash"},
+        "invariant": "memory-is-replay", "also": "inv.recovery-reproduces", "bound": "crash",
+        "regresses": True},
     "sequence-restarts": {
         "what": "numbers its rows from 0 again after a restart",
         "edits": [("  Def Seq Pos _ _ -> (wf.enter Def Seq Pos))",
@@ -103,7 +173,28 @@ MUTANTS = {
         "edits": [("  Def Seq Pos _ _ -> (wf.enter Def Seq Pos))",
                    "  Def Seq Pos _ _ -> [[live Seq [none 0 0] Pos] []])")],
         "invariant": LIVE, "bound": "crash"},
+    "no-backoff": {
+        "what": "retries at once instead of after the backoff",
+        "edits": [("[[arm Seq (* Backoff A)]]", "[[arm Seq (* Backoff 0)]]")],
+        "invariant": "inv.backs-off", "bound": None},
+    "old-timer-accepted": {
+        "what": "takes the expiry of any timer for the one of its position",
+        "edits": [("  Def Seq [waiting Pc Item A _ _] [timer Seq] ->",
+                   "  Def Seq [waiting Pc Item A _ _] [timer _] ->"),
+                  ("  Def Seq [backoff Pc Item A _ _] [timer Seq] ->",
+                   "  Def Seq [backoff Pc Item A _ _] [timer _] ->"),
+                  ("  _ Seq [ready Pc _ _ _ _] [timer Seq] ->", "  _ Seq [ready Pc _ _ _ _] [timer _] ->"),
+                  ("  Def Seq [undoing _ _ U _ Marks] [timer Seq] ->",
+                   "  Def Seq [undoing _ _ U _ Marks] [timer _] ->")],
+        "invariant": "inv.backs-off", "bound": None},
+    "undo-not-awaited": {
+        "what": "gives an undo no time to be acknowledged",
+        "edits": [("[arm Seq (wf.undo-timeout Def)]", "[arm Seq 1]")],
+        "invariant": "inv.stuck-needs-a-fault", "bound": None},
 }
+# Definitions that definition.shen must refuse, and the problem it must name.
+REJECTED = {"duplicate-key": "duplicate-key", "backward-branch": "branch-not-forward",
+            "branch-out-of-range": "branch-out-of-range", "no-end": "does-not-end"}
 
 
 def workers(definition, cancels=1, **options):
@@ -116,48 +207,53 @@ def seeded(native, definition, seeds, **options):
 
 # ---- what the invariants see
 
-def situation(world, ledger):
+def situation(world, ledger, told):
     state = world["states"][0]
-    return ["down" if state is None else state, world["disks"][0], world["pending"][0], ledger]
+    return ["down" if state is None else state, world["disks"][0], world["pending"][0], ledger,
+            told]
 
 
 def situations(trace):
-    """A trace as [[Kind Situation] ...]. The ledger is the workers' own record, carried in
-    the step records. A step during which the node died is two steps, the second `crash`."""
-    out, ledger = [], []
+    """A trace as [[Kind Time Situation] ...]. The ledger and what the client was told are
+    the workload's own record, carried in the step records. A step during which the node
+    died is two steps, the second `crash`."""
+    out, ledger, told = [], [], []
     for step in trace["steps"]:
-        ledger = step.get("ledger", ledger)
+        ledger, told = step.get("ledger", ledger), step.get("told", told)
         if "before_crash" in step:
-            out.append([step["kind"], situation(step["before_crash"], ledger)])
-            out.append(["crash", situation(step["world"], ledger)])
+            out.append([step["kind"], step["t"], situation(step["before_crash"], ledger, told)])
+            out.append(["crash", step["t"], situation(step["world"], ledger, told)])
         else:
-            out.append([step["kind"], situation(step["world"], ledger)])
+            out.append([step["kind"], step["t"], situation(step["world"], ledger, told)])
     return out
 
 
 def judge(definition, traces):
-    """The Shen invariants over traces, in one shen-jit process, against the engine in
-    `definition`. Returns per trace {invariant: detail} for the ones that do not hold.
+    """The Shen invariants over traces, in one shen-jit process, for the definition in
+    `definition`. Returns per trace {invariant: detail} for the ones that do not hold. The
+    invariants call nothing of the engine, so an edited engine is judged like the real one.
 
-    An invariant that raises an error does not hold. `inv.settles` is asked only of a run
-    in which nothing is left to happen.
+    An invariant that raises an error does not hold. `inv.settles` and
+    `inv.client-is-told` are asked only of a run in which nothing is left to happen.
     """
     name = definition.name
     calls = []
     for trace in traces:
         calls.append(f"(do (set wf.run {shen.term(situations(trace))}) ok)")
         calls += [f"(inv.first {inv} ({name}.definition) (value wf.run) 0)" for inv in STATE]
-        calls += [f"({inv} (value wf.run))" for inv in TRACE]
+        calls += [f"({inv} ({name}.definition) (value wf.run))" for inv in TRACE]
         calls.append(f"({LIVE} ({name}.settles-within) (value wf.run))")
+        calls.append(f"({TOLD} ({name}.definition) (value wf.run))")
     values = iter(shen.evaluate(definition.files, calls, timeout=540))
     out = []
     for trace in traces:
         require(next(values) == "ok", "invariants: a trace could not be read by shen-jit")
         bad = {inv: f"step {v}" for inv in STATE if (v := next(values)) != -1}
         bad.update({inv: v for inv in TRACE if (v := next(values)) is not True})
-        settled = next(values)
-        if trace["end"] == "quiescent" and settled is not True:
-            bad[LIVE] = settled
+        for inv in (LIVE, TOLD):
+            holds = next(values)
+            if trace["end"] == "quiescent" and holds is not True:
+                bad[inv] = holds
         out.append(bad)
     return out
 
@@ -226,9 +322,19 @@ def unspecialized(definition):
 
 
 def specialization(work, report):
+    # A definition is validated in Shen before anything is compiled from it. The retained
+    # fixtures are each refused for the reason they were written for; before this check
+    # existed two of them compiled and ran, one without ever executing its second activity.
+    for fixture, wanted in REJECTED.items():
+        found = problems(HERE / "defs" / "rejected" / f"{fixture}.shen", "rejected")
+        require([problem[0] for problem in found] == [wanted],
+                f"defs/rejected/{fixture}.shen: expected only {wanted}, found {found}")
+    report(f"definition.shen refuses the {len(REJECTED)} retained fixtures, each for its own "
+           f"reason ({', '.join(REJECTED.values())}), and accepts the {len(DEFINITIONS)} "
+           f"definitions compiled below")
     engine = (HERE / "engine.shen").read_bytes()
     built = {}
-    for name in ("order", "docs", "small", "single"):
+    for name in DEFINITIONS:
         definition = Definition(name, work / name)
         native = build(definition.schema, work / name / "build")
         built[name] = (definition, native)
@@ -260,8 +366,8 @@ def specialization(work, report):
         others = set().union(*(keys[other] for other in keys if other != name))
         require(keys[name] <= seen and not others & seen,
                 f"{name}: the residual program does not hold exactly its own keys")
-    report(f"one engine (sha256 {hashlib.sha256(engine).hexdigest()[:16]}), one compiler, four "
-           f"different residual programs; each contains the idempotency keys of its own "
+    report(f"one engine (sha256 {hashlib.sha256(engine).hexdigest()[:16]}), one compiler, "
+           f"{len(built)} different residual programs; each contains the idempotency keys of its own "
            f"definition as constants and none of another's")
 
     # There is no unspecialized native engine to measure against: the compiler refuses it.
@@ -341,7 +447,7 @@ def histories(traces):
                 armed.pop(event[1], None)
                 if quiet:
                     seen["late timer ignored"] += 1
-                elif step["effects"][0][3] == "fail":
+                elif step["effects"][0][3] == "late":
                     seen["attempt timed out"] += 1
             if tag == "done" and quiet and mode == "live":
                 seen["completion ignored (late or duplicate)"] += 1
@@ -375,13 +481,23 @@ REQUIRED = ["completion lost in flight", "completion duplicated in flight",
             "ended completed", "ended compensated"]
 
 
+FAULTS = ("crash", "drop", "dup", "lost")
+
+
+def faultless(trace):
+    return not any(kind in FAULTS for kind, _, _ in situations(trace))
+
+
+def final_phase(trace):
+    return phase(trace["steps"][-1]["world"]["states"][0])
+
+
 def settle_steps(trace):
     """Steps from the last fault to the first state at rest (what inv.settles bounds)."""
     steps = situations(trace)
-    last = max((n for n, (kind, _) in enumerate(steps) if kind in ("crash", "drop", "dup", "lost")),
-               default=0)
+    last = max((n for n, (kind, _, _) in enumerate(steps) if kind in FAULTS), default=0)
     for n in range(last, len(steps)):
-        node = steps[n][1][0]
+        node = steps[n][2][0]
         if node != "down" and node[0] == "live" and node[2][0] == "none" and node[3][0] in TERMINAL:
             return n - last
     return None
@@ -432,16 +548,38 @@ def simulation(definition, native, report):
     vectors = [schema.encode_input(schema.encode_state(state), event) for state, event in pairs]
     require(run_lines(native.executable, vectors) == [native.raw(v) for v in vectors],
             f"{name}: the line executable and the shared library disagree")
-    report(f"{name}: native equals shen-jit running engine.shen on all {len(pairs)} distinct "
-           f"(state, event) pairs of the runs and on the initial state")
+    # The Maude translation of the engine on the same pairs. For order and docs this is the
+    # only place Maude meets a branch, an `each` and a sleep on these definitions.
+    check.maude_refinement(maude.step_module(definition.text), schema, pairs)
+    report(f"{name}: native equals shen-jit running engine.shen, and the Maude translation "
+           f"of engine.shen, on all {len(pairs)} distinct (state, event) pairs of the runs; "
+           f"native equals shen-jit on the initial state")
 
     bad = [(seed, sorted(found)) for seed, found in enumerate(judge(definition, traces)) if found]
     require(not bad, f"{name}: invariants violated on seeds {bad[:5]}")
     worst = max(settle_steps(t) for t in traces)
     bound, = shen.evaluate(definition.files, [f"({name}.settles-within)"])
-    report(f"{name}: the six state invariants hold in every step and the three trace "
-           f"invariants on every run; every run is at rest within {worst} steps of its last "
-           f"fault (declared bound {bound})")
+    quiet = [t for t in traces if faultless(t)]
+    require(quiet and not any(final_phase(t) == "stuck" for t in quiet),
+            f"{name}: a run without a fault ended stuck")
+    report(f"{name}: the {len(STATE)} state invariants hold in every step and the "
+           f"{len(TRACE) + 2} run invariants on every run; every run is at rest within {worst} "
+           f"steps of its last fault (declared bound {bound}); {len(quiet)} of the runs had no "
+           f"fault at all and none of those ended stuck")
+
+    # Fault-free schedules only, so that inv.stuck-needs-a-fault is asked of many runs in
+    # which something is compensated: cancels, failures and timeouts still happen.
+    calm = [sim.run(native, workers(definition), CALM, seed) for seed in range(CALM_SEEDS)]
+    require({t["end"] for t in calm} == {"quiescent"} and all(map(faultless, calm)),
+            f"{name}: a fault-free run did not end quiescent and fault-free")
+    bad = [(seed, sorted(found)) for seed, found in enumerate(judge(definition, calm)) if found]
+    require(not bad, f"{name}: invariants violated on fault-free seeds {bad[:5]}")
+    ends = Counter(final_phase(t) for t in calm)
+    require(ends["compensated"] and ends["completed"] and not ends["stuck"],
+            f"{name}: fault-free runs ended {dict(ends)}")
+    report(f"{name}: {CALM_SEEDS} more seeds with no fault in the budget: every invariant "
+           f"holds; {ends['completed']} end completed, {ends['compensated']} compensated, "
+           f"none stuck")
     return traces, pairs
 
 
@@ -467,7 +605,7 @@ def graph(native, workload, prof, max_states=400000, world=sim.World):
     while queue:
         world = queue.popleft()
         observations.add(world.observe())
-        sits.append(sim.freeze(situation(world.snapshot(), world.client[0])))
+        sits.append(sim.freeze(situation(world.snapshot(), world.client[0], world.client[2])))
         following, busy = [], False
         for action, _, after, rec in sim.successors(world):
             note(rec, world.budget["crash"] > 0)
@@ -501,12 +639,64 @@ def longest_path(edges):
     return max(depth) if done == len(edges) else None
 
 
-def sit_term(node):
-    return f"cons({node}, cons(RW:Val, cons(f.inv.tails(PD:Val), cons(LG:Val, nil))))"
+def two_steps(before, after):
+    """Two situations as a run of two steps, for an invariant over runs."""
+    return shen.term([["step", 0, before], ["step", 0, after]])
+
+
+def regressions(definition, sits, edges):
+    """inv.never-regresses over every path of a graph, crashes and restarts included.
+
+    For each state, the finished workflows (as inv.finished reads a node) that some path
+    to it has shown are collected; the invariant is then evaluated on every distinct pair
+    (a node that showed one, a later node), which is every pair it could fail on. Returns
+    (pairs judged, pairs that regress).
+    """
+    nodes = list(dict.fromkeys(sit[0] for sit in sits))
+    shown = shen.evaluate(definition.files, [f"(inv.finished {shen.term(node)})" for node in nodes])
+    finished = [node for node, phase in zip(nodes, shown) if phase != "none"]
+    bit = {node: 1 << n for n, node in enumerate(finished)}
+    before = [0] * len(sits)           # the finished nodes on some path to a state, as bits
+    queue, queued = deque(range(len(sits))), [True] * len(sits)
+    while queue:
+        n = queue.popleft()
+        queued[n] = False
+        here = before[n] | bit.get(sits[n][0], 0)
+        for m in edges[n]:
+            if here & ~before[m]:
+                before[m] |= here
+                if not queued[m]:
+                    queued[m] = True
+                    queue.append(m)
+    pairs = dict.fromkeys((earlier, sit[0]) for sit, mask in zip(sits, before)
+                          for earlier in finished if mask & bit[earlier] and earlier != sit[0])
+    blank = lambda node: [node, [], [], [], []]
+    verdicts = shen.evaluate(definition.files, [
+        f"(inv.never-regresses ({definition.name}.definition) {two_steps(blank(a), blank(b))})"
+        for a, b in pairs], timeout=540)
+    return len(pairs), [pair for pair, verdict in zip(pairs, verdicts) if verdict is not True]
+
+
+def edge_regressions(definition, sits, edges):
+    """The same invariant on single transitions only. This is what the check used to do; it
+    cannot see a regression across a crash, and is kept to show that."""
+    moves = dict.fromkeys((sits[n][0], sits[m][0]) for n, following in enumerate(edges)
+                          for m in following if sits[n][0] != sits[m][0])
+    blank = lambda node: [node, [], [], [], []]
+    verdicts = shen.evaluate(definition.files, [
+        f"(inv.never-regresses ({definition.name}.definition) {two_steps(blank(a), blank(b))})"
+        for a, b in moves], timeout=540)
+    return [move for move, verdict in zip(moves, verdicts) if verdict is not True]
+
+
+def verdict_term(name, node):
+    """inv.verdict of the matched world, as a Maude term. `verdict` is memoized: a search
+    visits many more worlds than there are distinct situations."""
+    return f"verdict(f.{name}.definition, {node}, RW:Val, PD:Val, LG:Val, TD:Val)"
 
 
 def world_pattern(node):
-    return f"{{ {node} disk(0, RW:Val, PD:Val) client(LG:Val, CC:Nat) REST:Soup }}"
+    return f"{{ {node} disk(0, RW:Val, PD:Val) client(LG:Val, CC:Nat, TD:Val) REST:Soup }}"
 
 
 QUIET = """mod WORKFLOW-SEARCH is
@@ -517,6 +707,14 @@ QUIET = """mod WORKFLOW-SEARCH is
   eq busy(out(V:Val) R:Soup) = true .
   eq busy(down(I:Int) R:Soup) = true .
   eq busy(R:Soup) = false [owise] .
+  op who : Soup -> Val .                    --- the node's memory, or down
+  eq who(node(0, S:Val) R:Soup) = S:Val .
+  eq who(down(0) R:Soup) = q('down) .
+  --- inv.verdict of a situation, from its parts as the world holds them
+  op verdict : Val Val Val Val Val Val ~> Val [memo] .
+  eq verdict(D:Val, S:Val, RW:Val, PD:Val, LG:Val, TD:Val)
+   = f.inv.verdict(D:Val, cons(S:Val, cons(RW:Val, cons(f.inv.tails(PD:Val),
+       cons(LG:Val, cons(TD:Val, nil)))))) .
 endm
 """
 
@@ -528,19 +726,45 @@ def maude_model(definition, prof, cancels, outcomes):
             + QUIET)
 
 
+def at_rest_term(node, told):
+    """The translated Shen predicate a world with nothing left to happen must satisfy: the
+    node at rest, and, where no report can have been lost, the client told."""
+    if not told:
+        return f"f.inv.resting?({node})"
+    return (f"f.inv.told-at-rest?(cons({node}, cons(RW:Val, cons(f.inv.tails(PD:Val), "
+            f"cons(LG:Val, cons(TD:Val, nil))))))")
+
+
+def maude_clean(definition, modules, told):
+    """One search of the Maude model for any reachable state that violates a translated
+    state invariant, or in which nothing is left to happen and the node is not at rest
+    (`told`: or the client was not told). True when there is none. (maude_violation asks
+    the questions separately and reads the state back; this asks them in one pass.)"""
+    node = "who(REST:Soup)"
+    output = maude.run(modules, [
+        f"search [1] in WORKFLOW-SEARCH : init =>* "
+        f"{{ disk(0, RW:Val, PD:Val) client(LG:Val, CC:Nat, TD:Val) REST:Soup }} "
+        f"such that {verdict_term(definition.name, node)} =/= nil "
+        f"or (not busy(REST:Soup) and PD:Val == nil and CC:Nat == 0 "
+        f"and {at_rest_term(node, told)} =/= b(true)) .\n"], timeout=540)
+    require(output.count("No solution.") + output.count("Solution 1") == 1,
+            f"maude search did not finish:\n{output[-1500:]}")
+    return "No solution." in output
+
+
 def maude_violation(definition, modules, wanted=None):
     """Search the Maude model for a reachable state in which a translated Shen invariant
     does not hold (`wanted`: that one in particular; inv.settles: a world with nothing left
-    to happen that is not at rest). Returns the state as a situation, or None."""
+    to happen that is not at rest; inv.client-is-told: one in which the client was not told
+    either). Returns the state as a situation, or None."""
     name = definition.name
-    if wanted == LIVE:
+    if wanted in (LIVE, TOLD):
         searches = [f"search [1] in WORKFLOW-SEARCH : init =>* {world_pattern('node(0, NS:Val)')} "
                     f"such that not busy(REST:Soup) and PD:Val == nil and CC:Nat == 0 "
-                    f"and f.inv.resting?(NS:Val) =/= b(true) .\n"]
+                    f"and {at_rest_term('NS:Val', wanted == TOLD)} =/= b(true) .\n"]
     else:
-        verdict = lambda node: f"f.inv.verdict(f.{name}.definition, {sit_term(node)})"
-        test = (lambda node: f"{verdict(node)} =/= nil") if wanted is None else (
-            lambda node: f"f.element?(q('{wanted}), {verdict(node)}) =/= b(false)")
+        test = (lambda node: f"{verdict_term(name, node)} =/= nil") if wanted is None else (
+            lambda node: f"f.element?(q('{wanted}), {verdict_term(name, node)}) =/= b(false)")
         searches = [f"search [1] in WORKFLOW-SEARCH : init =>* {world_pattern(thing)} "
                     f"such that {test(node)} .\n"
                     for thing, node in (("node(0, NS:Val)", "NS:Val"), ("down(0)", "q('down)"))]
@@ -560,12 +784,12 @@ def maude_violation(definition, modules, wanted=None):
         if len(text) == 1:
             return default
         text = text[1]
-        for other in ("NS:Val", "RW:Val", "PD:Val", "LG:Val", "CC:Nat", "REST:Soup"):
+        for other in ("NS:Val", "RW:Val", "PD:Val", "LG:Val", "CC:Nat", "TD:Val", "REST:Soup"):
             text = text.split(f"{other} --> ", 1)[0]
         return maude.value(maude.read_terms(text)[0])
 
     pending = [row[1:] for row in bound("PD:Val")]
-    return [bound("NS:Val", "down"), bound("RW:Val"), pending, bound("LG:Val")]
+    return [bound("NS:Val", "down"), bound("RW:Val"), pending, bound("LG:Val"), bound("TD:Val")]
 
 
 def bounded(built, report):
@@ -585,50 +809,62 @@ def bounded(built, report):
         # The Shen invariants, twice: translated to Maude and searched for a violation
         # over every reachable state, and evaluated by shen-jit on every distinct situation
         # of the simulator's graph.
-        found = maude_violation(definition, modules)
-        require(found is None, f"bound '{label}': Maude reaches a state violating an invariant: {found}")
-        require(maude_violation(definition, modules, LIVE) is None,
-                f"bound '{label}': Maude reaches a world with nothing left to happen that is not at rest")
+        # A report in flight can be lost only where a loss is in the budget; everywhere
+        # else a world with nothing left to happen must also have told the client.
+        told = budget["drop"] == 0
+        if not maude_clean(definition, modules, told):
+            found = maude_violation(definition, modules)
+            require(found is None, f"bound '{label}': Maude reaches a state violating an invariant: {found}")
+            found = maude_violation(definition, modules, TOLD if told else LIVE)
+            raise CheckFailure(f"bound '{label}': Maude reaches a world with nothing left to "
+                               f"happen that is not at rest, or has not told the client: {found}")
         distinct = list(dict.fromkeys(sits))
         verdicts = shen.evaluate(definition.files, [
             f"(inv.verdict ({name}.definition) {shen.term(sit)})" for sit in distinct], timeout=540)
         bad = [(sit, v) for sit, v in zip(distinct, verdicts) if v != ()]
         require(not bad, f"bound '{label}': a reachable situation violates {bad[:1]}")
-        # The two transition invariants on every edge, by what they read: the rows before
-        # and after, and the node before and after.
-        moves = [dict.fromkeys((sits[n][part], sits[m][part]) for n, following in enumerate(edges)
-                               for m in following if sits[n][part] != sits[m][part])
-                 for part in (1, 0)]
-        calls = [f"(inv.append-only {shen.term([['step', ['down', a, [], []]], ['step', ['down', b, [], []]]])})"
-                 for a, b in moves[0]]
-        calls += [f"(inv.never-regresses {shen.term([['step', [a, [], [], []]], ['step', [b, [], [], []]]])})"
-                  for a, b in moves[1]]
-        require(all(v is True for v in shen.evaluate(definition.files, calls, timeout=540)),
-                f"bound '{label}': a transition changes the durable history or regresses")
-        moves = len(moves[0]) + len(moves[1])
+        # inv.append-only on every edge, by what it reads: the rows before and after. Being
+        # a prefix is transitive, so this is the invariant on every path.
+        moves = dict.fromkeys((sits[n][1], sits[m][1]) for n, following in enumerate(edges)
+                              for m in following if sits[n][1] != sits[m][1])
+        blank = lambda rows: ["down", rows, [], [], []]
+        require(all(v is True for v in shen.evaluate(definition.files, [
+            f"(inv.append-only ({name}.definition) {two_steps(blank(a), blank(b))})"
+            for a, b in moves], timeout=540)),
+                f"bound '{label}': a transition changes the durable history")
+        # inv.never-regresses is not a property of single edges: on every path.
+        judged, regress = regressions(definition, sits, edges)
+        require(not regress, f"bound '{label}': a finished workflow regresses: {regress[:1]}")
         # Liveness, exhaustively: the graph has no cycle, so every schedule ends, and it
         # can only end where nothing but a fault could still happen; such a world is at rest.
         longest = longest_path(edges)
         require(longest is not None, f"bound '{label}': some schedule never ends")
         resting = shen.evaluate(definition.files, [
-            f"(inv.resting? {shen.term(sit[0])})" for sit in dict.fromkeys(
-                sit for sit, quiet in zip(sits, idle) if quiet)])
+            f"(inv.told-at-rest? {shen.term(sit)})" if told else f"(inv.resting? {shen.term(sit[0])})"
+            for sit in dict.fromkeys(sit for sit, quiet in zip(sits, idle) if quiet)])
         require(resting and all(v is True for v in resting),
-                f"bound '{label}': nothing is left to happen in a world that is not at rest")
+                f"bound '{label}': nothing is left to happen in a world that is not at rest"
+                + (", or has not told the client" if told else ""))
         require(longest <= limit, f"bound '{label}': a schedule of {longest} steps exceeds "
                                   f"the declared {limit}")
         cuts = boundaries(records)
         require(budget["crash"] == 0 or all(all(counts) for counts in cuts.values()),
                 f"bound '{label}': an effect boundary was never crashed at: {cuts}")
+        ends = Counter(sit[0][3][0] for sit in distinct if sit[0] != "down"
+                       and sit[0][0] == "live" and sit[0][3][0] in TERMINAL)
         everything.setdefault(name, {}).update(pairs)
-        results[label] = (prof, cancels, outcomes, mine)
+        results[label] = (prof, cancels, outcomes, mine, set(ends))
         report(f"bounded search '{label}' ({name}, budget {budget}, cancels {cancels}, outcomes "
                f"{outcomes}): Maude {states} states, simulator {len(sits)}; the same "
                f"{len(reached)} observations; no state violates a state invariant (Maude search "
                f"over the translated Shen, and shen-jit on the {len(distinct)} distinct "
-               f"situations); {moves} distinct transitions keep the history and never "
-               f"regress; no cycle, longest schedule {longest} steps (declared {limit}), all "
-               f"{len(resting)} situations where nothing is left to happen are at rest"
+               f"situations, of which {ends['completed']} show a completed workflow, "
+               f"{ends['compensated']} a compensated and {ends['stuck']} a stuck one); "
+               f"{len(moves)} distinct changes of the durable history only append; no "
+               f"finished workflow regresses on any path ({judged} pairs of an earlier "
+               f"finished node and a later node); no cycle, longest schedule {longest} steps "
+               f"(declared {limit}), all {len(resting)} situations where nothing is left to "
+               f"happen are at rest" + (" and have told the client the outcome" if told else "")
                + (f"; the node died at every boundary of all {len(cuts)} step shapes"
                   if budget["crash"] else ""))
     count = 0
@@ -638,25 +874,46 @@ def bounded(built, report):
         check.maude_refinement(maude.step_module(definition.text), definition.schema, pairs)
     report(f"bounded search: native, shen-jit and the Maude translation agree on all {count} "
            f"(state, event) pairs the {len(BOUNDS)} searches executed")
-    return everything["small"], results
+    shown = Counter(phase for label in results for phase in results[label][4])
+    require(all(shown[phase] for phase in TERMINAL), f"the searches never show one of {TERMINAL}")
+    return everything
 
 
 # ---- what the guarantees rest on
 
 def reliance(order, order_native, small, small_native, report):
-    # The workers' side of "one effect per key". With workers that ignore the key, the
-    # same engine binary runs an activity twice, and the invariant says so: it counts
-    # executions in the environment, not what the engine believes.
+    # The workers' side of "one effect per activity", in two halves. With workers that
+    # ignore the key, the same engine binary runs an activity twice, and the invariant
+    # says so: it counts executions in the environment, not what the engine believes.
     careless = seeded(order_native, order, range(100), careless=True)
-    doubled = sum("one-effect-per-key" in found for found in judge(order, careless))
-    require(doubled, "one-effect-per-key holds even with workers that ignore the key")
-    report(f"reliance on the workers: with workers that run every request they receive, the "
-           f"unedited engine violates one-effect-per-key on {doubled} of 100 seeds")
+    doubled = sum("one-effect-per-activity" in found for found in judge(order, careless))
+    require(doubled, "one-effect-per-activity holds even with workers that ignore the key")
+    report(f"reliance on the workers, first half: with workers that run every request they "
+           f"receive, the unedited engine violates one-effect-per-activity on {doubled} of "
+           f"100 seeds")
+
+    # With workers that never commit a key twice but keep no tombstone, a request still in
+    # flight when its undo found nothing commits afterwards. No crash, loss, duplication
+    # or cancel is needed for it: a timeout is enough. The search is exhaustive.
+    prof = sim.profile(timed=False, observe_states=True, budget={"crash": 0, "drop": 0, "dup": 0})
+    sits = graph(small_native, Workers(small.keys, FLAKY, 0, tombstones=False), prof)[3]
+    distinct = list(dict.fromkeys(sits))
+    verdicts = shen.evaluate(small.files, [
+        f"(inv.verdict (small.definition) {shen.term(sit)})" for sit in distinct], timeout=540)
+    late = [sit for sit, v in zip(distinct, verdicts) if v != ()]
+    require(late and all(v in ((), ("compensation-matches",)) for v in verdicts),
+            f"workers without tombstones: {Counter(verdicts).most_common(3)}")
+    report(f"reliance on the workers, second half: with workers that never commit a key "
+           f"twice but forget an undo that found nothing committed, the unedited engine "
+           f"violates compensation-matches, and nothing else, in {len(late)} of the "
+           f"{len(distinct)} situations of an exhaustive search of small with no fault and no "
+           f"cancel in the budget ({len(sits)} states)")
 
     # The environment's rule that no completion crosses a crash. The engine does not lean
-    # on it: it checks the number of an acknowledgement and of a read result itself. In a
-    # simulator that keeps completions across a crash it is still safe, and an engine
-    # without the check is not, although the standard simulator cannot tell the two apart.
+    # on it: it checks the number of an acknowledgement and of a read result itself, and a
+    # timer by the Seq it was armed at. In a simulator that keeps completions across a
+    # crash it is still safe, and an engine without the acknowledgement check is not,
+    # although the standard simulator cannot tell the two apart.
     prof = sim.profile(timed=False, observe_states=True, budget={"crash": 1, "drop": 0, "dup": 0})
     outcomes = {"hold": (1,), "pay": (1,)}
     blind = small.mutant("ack-token-ignored", BLIND)
@@ -694,18 +951,28 @@ def one_step_removed(native, workload, trace):
             continue
 
 
-def mutants(work, order, native, small, searched, report, record):
+def first_failing_seed(binary, broken, fails, limit=2000, batch=50):
+    for start in range(0, limit, batch):
+        seeds = range(start, start + batch)
+        for seed, bad in zip(seeds, fails(seeded(binary, broken, seeds))):
+            if bad:
+                return seed
+    raise CheckFailure(f"{broken.name}: no seed below {limit} shows the violation")
+
+
+def mutants(work, built, report, record):
     retained_path = HERE / "mutants.json"
     retained = {} if record else json.loads(retained_path.read_text())
-    small_pairs, bounds = searched
+    order, native = built["order"]
+    # What the unedited engine does on the order definition, for the Maude step check.
+    real_pairs = check.step_pairs(seeded(native, order, range(SEEDS)))
     for label, mutant in MUTANTS.items():
         wanted = mutant["invariant"]
         broken = order.mutant(label, mutant["edits"])
         binary = build(broken.schema, broken.directory / "build")
-        fails = lambda traces: [wanted in found and (wanted != LIVE or t["end"] == "quiescent")
-                                for t, found in zip(traces, judge(broken, traces))]
+        fails = lambda traces: [wanted in found for found in judge(broken, traces)]
         if record:
-            seed = next(s for s in range(2000) if fails(seeded(binary, broken, [s]))[0])
+            seed = first_failing_seed(binary, broken, fails)
             trace = seeded(binary, broken, [seed])[0]
             minimal = check.shrink(binary, workers(broken), trace, fails)
             (HERE / "mutants").mkdir(exist_ok=True)
@@ -737,47 +1004,105 @@ def mutants(work, order, native, small, searched, report, record):
             pass
         else:
             raise CheckFailure(f"{label}: refinement accepted a binary built from the mutant")
-        # The same mutant of the engine on the small definition, searched exhaustively.
-        tiny = small.mutant(label, mutant["edits"])
+        # The Maude step check must reject the translation of the mutant: it differs from
+        # the unedited native code on the pairs of the unedited seeded runs.
         try:
-            check.maude_refinement(maude.step_module(tiny.text), small.schema, small_pairs)
+            check.maude_refinement(maude.step_module(broken.text), order.schema, real_pairs)
         except CheckFailure:
             pass
         else:
             raise CheckFailure(f"{label}: the Maude step check accepted a translation of the mutant")
-        prof, cancels, outcomes, _ = bounds[mutant["bound"]]
-        state = maude_violation(tiny, maude_model(tiny, prof, cancels, outcomes), wanted)
-        require(state is not None, f"{label}: the bounded search '{mutant['bound']}' does not "
-                                   f"reach a violation of {wanted}")
-        if wanted == LIVE:
-            verdict, = shen.evaluate(tiny.files, [f"(inv.resting? {shen.term(state[0])})"])
-            require(verdict is False, f"{label}: shen-jit calls Maude's stuck state at rest")
-        else:
-            verdict, = shen.evaluate(tiny.files, [
-                f"(inv.verdict ({tiny.name}.definition) {shen.term(state)})"])
-            require(verdict == shen.TRAP or wanted in verdict,
-                    f"{label}: shen-jit does not confirm Maude's violation: {verdict}")
+        # The same mutant of the engine on a small definition, searched exhaustively.
+        where = "the invariant reads clock times, so it has no exhaustive counterpart"
+        if mutant["bound"] is not None:
+            tiny_name, budget, cancels, outcomes = BOUNDS[mutant["bound"]]
+            tiny = built[tiny_name][0].mutant(label, mutant["edits"])
+            prof = sim.profile(timed=False, observe_states=True, budget=budget)
+            state = maude_violation(tiny, maude_model(tiny, prof, cancels, outcomes), wanted)
+            require(state is not None, f"{label}: the bounded search '{mutant['bound']}' does not "
+                                       f"reach a violation of {wanted}")
+            if wanted in (LIVE, TOLD):
+                verdict, = shen.evaluate(tiny.files, [
+                    f"(inv.told-at-rest? {shen.term(state)})" if wanted == TOLD
+                    else f"(inv.resting? {shen.term(state[0])})"])
+                require(verdict is False, f"{label}: shen-jit calls Maude's state at rest"
+                                          + (" and the client told" if wanted == TOLD else ""))
+            else:
+                verdict, = shen.evaluate(tiny.files, [
+                    f"(inv.verdict ({tiny.name}.definition) {shen.term(state)})"])
+                require(verdict == shen.TRAP or wanted in verdict,
+                        f"{label}: shen-jit does not confirm Maude's violation: {verdict}")
+            where = (f"in the bounded search '{mutant['bound']}' on the {tiny_name} definition "
+                     f"Maude reaches a violating state and shen-jit confirms it")
+        if mutant.get("regresses"):
+            # Teeth of the path-sensitive regression check. A run is a graph that is one
+            # path. On the runs of this mutant that regress across a crash, no single
+            # transition regresses, and following the path finds it.
+            runs = seeded(binary, broken, range(120))
+            runs = [t for t, found in zip(runs, judge(broken, runs)) if "inv.never-regresses" in found]
+            require(runs, f"{label}: no seed below 120 regresses")
+            on_paths = on_edges = 0
+            for run in runs:
+                sits = [sim.freeze(sit) for _, _, sit in situations(run)]
+                edges = [[n + 1] for n in range(len(sits) - 1)] + [[]]
+                on_edges += bool(edge_regressions(broken, sits, edges))
+                on_paths += bool(regressions(broken, sits, edges)[1])
+            require(on_paths == len(runs) and not on_edges,
+                    f"{label}: of {len(runs)} regressing runs, {on_paths} found along the path "
+                    f"and {on_edges} on single transitions")
+            where += (f"; of 120 seeds {len(runs)} regress across a crash: judged as graphs, "
+                      f"inv.never-regresses fails along the path in all of them and on a "
+                      f"single transition in none")
         report(f"mutant {label} ({mutant['what']}): {wanted}"
                f"{' and ' + mutant['also'] if 'also' in mutant else ''} fail at seed "
                f"{kept['seed']} ({kept['steps']} steps, sha256 {kept['sha256'][:16]}); minimal "
                f"trace {kept['minimal_steps']} steps replays, still fails and is 1-minimal; "
-               f"refinement rejects the binary; in the bounded search '{mutant['bound']}' on "
-               f"the small definition Maude reaches a violating state and shen-jit confirms it")
+               f"refinement rejects the binary; {where}")
     if record:
         retained_path.write_text(json.dumps(retained, indent=2, sort_keys=True) + "\n")
+        for stale in set(p.name for p in (HERE / "mutants").glob("*.trace.json")) - {
+                f"{label}.trace.json" for label in MUTANTS}:
+            (HERE / "mutants" / stale).unlink()
     covered = {m["invariant"] for m in MUTANTS.values()} | {
         m["also"] for m in MUTANTS.values() if "also" in m}
-    declared = set(STATE + TRACE + [LIVE])
+    declared = set(STATE + TRACE + [LIVE, TOLD])
     require(covered == declared, f"invariants without a retained mutant: {declared - covered}")
+    require(set(retained) == set(MUTANTS), f"mutants.json and MUTANTS differ: "
+                                           f"{set(retained) ^ set(MUTANTS)}")
 
 
-def main(report=print, record=False):
+def main(report=print, record=False, sections=SECTIONS):
+    unknown = set(sections) - set(SECTIONS)
+    require(not unknown, f"unknown sections {sorted(unknown)}; there are {SECTIONS}")
+    require(not record or "mutants" in sections, "record regenerates the mutants section")
+    clock = time.perf_counter()
+
+    def timed(section):
+        nonlocal clock
+        now = time.perf_counter()
+        print(f"[{section}: {now - clock:.0f} s]", file=sys.stderr, flush=True)
+        clock = now
+
     with TemporaryDirectory() as tmp:
         work = Path(tmp)
-        built = specialization(work, report)
-        for name in ("order", "docs"):
-            simulation(*built[name], report)
-        searched = bounded(built, report)
-        reliance(*built["order"], *built["small"], report)
-        mutants(work, *built["order"], built["small"][0], searched, report, record)
-    report("workflow: ok")
+        built = specialization(work, report if "specialization" in sections else lambda _: None)
+        timed("specialization")
+        if "simulation" in sections:
+            for name in ("order", "docs"):
+                simulation(*built[name], report)
+            timed("simulation")
+        if "bounded" in sections:
+            bounded(built, report)
+            timed("bounded")
+        if "reliance" in sections:
+            reliance(*built["order"], *built["small"], report)
+            timed("reliance")
+        if "mutants" in sections:
+            mutants(work, built, report, record)
+            timed("mutants")
+    report("workflow: ok" if set(sections) == set(SECTIONS)
+           else f"workflow: ok ({', '.join(s for s in SECTIONS if s in sections)} only)")
+
+
+if __name__ == "__main__":
+    main(sections=tuple(sys.argv[1:]) or SECTIONS)
