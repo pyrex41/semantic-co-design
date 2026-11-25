@@ -10,6 +10,8 @@
 | 4 | NixOS virtual machines with real faults | `real-vm`, `real-vm-mutant` (Linux only) | **UNKNOWN**: never built or booted |
 | 5 | unkernel: Linux as a wasm module under a controlled host | `unkernel-probe` | run, passes; a probe of the substrate, the node is not in it |
 
+On the branch `wasm/uk-node` the node is in rung 5 as well: `accepted_job` as a static aarch64-linux program inside the guest equals the native build line for line and reruns bit-identically (flake check `uk-node`; [experiments/unkernel_probe/README.md](experiments/unkernel_probe/README.md), section 8).
+
 Rungs 1 to 4 run the same module and ask the same two questions of it: does it refine the Shen source in shen-jit, and do the Shen invariants hold. Rung 5 asks a different question, about a substrate, and nothing on rungs 1 to 4 depends on it.
 
 ## What this branch is
