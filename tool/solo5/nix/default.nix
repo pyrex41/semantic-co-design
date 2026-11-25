@@ -99,13 +99,13 @@ let
         $CC $flags -I tool/solo5/include -I $dir $dir/driver.c tool/solo5/host.c $dir/node.c \
           -o $out/$name.host
       done
-      cp build/node.c.sha256.json $out/
+      cp build/node.c.sha256.json build/driver.c.sha256.json $out/
       for image in $out/*.spt $out/*.hvt; do
         printf '%s %s %s\n' "$(basename $image)" "$(solo5-elftool query-abi $image | tr -d ' \n')" \
           "$(solo5-elftool query-manifest $image | tr -d ' \n')"
       done > $out/images.txt
       printf '%s\n' ${solo5-src.rev} > $out/SOLO5_COMMIT
-      (cd $out && sha256sum *.spt *.hvt > sha256.txt)
+      (cd $out && sha256sum *.spt *.hvt *.host > sha256.txt)
     '';
     dontInstall = true;
   };
@@ -124,10 +124,15 @@ let
     cd ${source}
     python3 -m tool.solo5.run spt ${images} "$out/spt.json" "$@"
     python3 -m tool.solo5.run host ${images} "$out/host.json" "$@"
-    cp ${images}/images.txt ${images}/node.c.sha256.json ${images}/SOLO5_COMMIT \
-      ${images}/sha256.txt "$out/"
+    cp ${images}/images.txt ${images}/node.c.sha256.json ${images}/driver.c.sha256.json \
+      ${images}/SOLO5_COMMIT ${images}/sha256.txt "$out/"
     echo ${images} > "$out/images-path.txt"
+    # What ran: the tender binary (its build is not bit-reproducible, so the hash names
+    # this build of it and no other) and the harness sources.
     solo5-spt --version > "$out/tender.txt" 2>&1 || true
+    sha256sum "$(command -v solo5-spt)" >> "$out/tender.txt"
+    sha256sum tool/solo5/run.py tool/solo5/scenarios.py tool/solo5/mutants.py tool/solo5/emit.py \
+      tool/solo5/driver.c tool/solo5/host.c > "$out/sources.sha256"
     uname -srm > "$out/uname.txt"
     # The hvt image: boot it for a few seconds if this machine has a hypervisor for it.
     # Status 124 means it was still running when the time was up.
