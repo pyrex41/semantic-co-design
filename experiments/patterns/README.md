@@ -1,8 +1,26 @@
-# Three classic patterns you can link into a C program
+# Specializing patterns from three programming books
 
-A review service might let operators write ordered rules and still want a small, predictable request path. Here the operator edits a JSON profile. At build time Shen walks the rules and emits a C function for each named entry. A C caller passes fresh data to those functions. Changing the profile requires rebuilding and relinking the library.
+A pattern is a good specialization candidate when an application knows part of the answer before the next request arrives. A parser can know its grammar, an evaluator can know the program, and a router can know the order of its handlers. Fix that information once and the caller can reuse the resulting library on many inputs.
 
-## Books and examples
+## Book catalogs
+
+| Book | Implemented | What you can reuse |
+|---|---:|---|
+| [Gang of Four](gof/README.md) | 23 named patterns | A C11 static library generated from a JSON profile, with public declarations and hooks for application code. |
+| [SICP](sicp/README.md) | 32 mechanism groups | Python procedures, factories and compiled schedules for fixed expressions, data representations, constraint networks and machines. The inventory covers all five chapters. |
+| [Norvig’s PAIP](paip/README.md) | 20 mechanism families | Generated Python functions for rules, grammars, search, algebra, knowledge representation and language compilation. The inventory covers all 25 chapters. |
+
+The table counts 75 catalog entries. GoF supplies its own named list. For SICP and PAIP we grouped related applications that share a specialization mechanism. The three original Shen-to-C examples below illustrate overlapping ideas.
+
+Run `python3 -m experiments.patterns` from the repository root inside `nix develop` to exercise all three catalogs and the original C library. The individual book guides give smaller commands and identify the configuration each compiler consumes, the work it removes and the behavior the application must still supply.
+
+[The invoice router](workflow.py) uses all three libraries. A PAIP rule accepts an invoice whose confirmation repeats its ID. A SICP expression prices the accepted units. A C client linked against the GoF archive sends the amount to the first review queue whose threshold it meets. Run `python3 -m experiments.patterns.workflow` inside the development shell to see two invoices routed and one rejected; the example also checks a second price and queue policy.
+
+## Start with the three-pattern C library
+
+A review service can let operators write ordered rules while keeping a small request path. For this library the operator edits a JSON profile. At build time Shen walks the rules and emits a C function for each named entry. A C caller passes fresh data to those functions. Changing the profile requires rebuilding and relinking the library.
+
+### Books and examples
 
 | Book and legal reading copy | Idea used here | What survives in the example |
 |---|---|---|

@@ -16,7 +16,7 @@ The repo includes three locally runnable applications. Their rules are written i
 
 Agreement between two executions can hide a shared bug. An independent accounting rule exposed one here. The engine could report a $100 balance while its journal recorded $101 after an adjustment arrived before the opening statement. The engine now rejects that sequence. [Executable ledger laws](example/trading-engine/invariants.shen) · [Regression and generated histories](example/trading-engine/check_reachable.py)
 
-The [classic patterns library](experiments/patterns/README.md) shows a smaller integration. A JSON profile describing handlers, a sequence pipeline and a matcher becomes a static library you can link into an existing C application.
+The [patterns catalog](experiments/patterns/README.md) follows the same question through the Gang of Four, SICP and Norvig’s PAIP: what can a library decide once, and what must it still do on every call? Start with the [three-function C client](experiments/patterns/client.c), or go directly to the book you want. Each catalog identifies the fixed configuration and exercises the residual behavior on fresh inputs.
 
 ## Try it
 

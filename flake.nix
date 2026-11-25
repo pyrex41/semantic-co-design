@@ -43,7 +43,7 @@
           cd ${self}
           python3 -m unittest specializer.test_backend
           python3 -m specializer.check_backend_contract
-          python3 -m experiments.patterns.check
+          python3 -m experiments.patterns
           python3 -m examples.check_artifacts
           for example in vm decoder railway query; do
             python3 -m examples."$example".check

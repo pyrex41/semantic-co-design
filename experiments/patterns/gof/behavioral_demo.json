@@ -1,0 +1,34 @@
+{
+  "bh_dispatch": {"pattern": "chain_of_responsibility", "handlers": [[100, 2], [10, 1]], "default": 0},
+  "bh_credit": {"pattern": "command", "apply": "bh_add", "undo": "bh_subtract"},
+  "bh_audit": {"pattern": "command", "apply": "bh_audit", "undo": null},
+  "bh_invoice": {
+    "pattern": "interpreter",
+    "expression": ["+", ["*", ["value", 0], ["+", ["const", 2], ["const", 3]]], ["value", 1]]
+  },
+  "bh_constant": {"pattern": "interpreter", "expression": ["*", ["const", 4294967295], ["const", 3]]},
+  "bh_reading": {"pattern": "iterator", "stride": 3, "offset": 1},
+  "bh_checkout": {"pattern": "mediator", "routes": {"open": ["bh_hold", "bh_confirm"], "cancel": ["bh_release"]}},
+  "bh_checkpoint": {"pattern": "memento", "snapshot": ["balance", "revision"]},
+  "bh_publish": {
+    "pattern": "observer",
+    "subscribers": {
+      "account": {"notify": "bh_account", "tags": [7]},
+      "audit": {"notify": "bh_log", "tags": [7, 9]}
+    }
+  },
+  "bh_door": {
+    "pattern": "state",
+    "states": ["sealed", "released", "revoked"],
+    "events": {"release": [["sealed", "released", "bh_admit"]], "revoke": [["released", "revoked", null]]}
+  },
+  "bh_sort": {"pattern": "strategy", "algorithm": "insertion", "order": "ascending"},
+  "bh_job": {
+    "pattern": "template_method",
+    "prepare": "bh_prepare",
+    "compute": "bh_compute",
+    "finish": "bh_finish",
+    "minimum": 10
+  },
+  "bh_visit": {"pattern": "visitor", "number": "bh_number", "pair": "bh_pair"}
+}
