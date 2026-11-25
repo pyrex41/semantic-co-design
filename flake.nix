@@ -24,6 +24,12 @@
         nativeBuildInputs = [ pkgs.nodejs_24 pkgs.python3 ];
         UNKERNEL = "${self.packages.${system}.unkernel}";
       };
+      # experiments/unkernel_probe/guest_node_*: the tool's environment, Node with the pinned unkernel, and zig.
+      ukNode = system: let env = environment system; pkgs = nixpkgs.legacyPackages.${system}; in env // {
+        nativeBuildInputs = env.nativeBuildInputs ++ [ pkgs.nodejs_24 ];
+        inherit (unkernel system) UNKERNEL;
+        ZIG = "${pkgs.zig}/bin/zig";
+      };
       # nix/node.nix: the node runtime, the conformance command and one package per example.
       packed = system: import ./nix/node.nix {
         pkgs = nixpkgs.legacyPackages.${system};
@@ -53,6 +59,9 @@
         });
         # The probe's own inputs and nothing else; default has them too.
         unkernel = nixpkgs.legacyPackages.${system}.mkShell (unkernel system);
+        # experiments/unkernel_probe/guest_node_*: default plus zig, the cross compiler that builds
+        # the node as a static aarch64-linux program on any host (no Linux builder needed).
+        uk-node = nixpkgs.legacyPackages.${system}.mkShell (ukNode system);
       });
       checks = eachSystem (system: {
         staged-examples = nixpkgs.legacyPackages.${system}.runCommand "staged-examples" (environment system) ''
@@ -103,6 +112,13 @@
         unkernel-probe = nixpkgs.legacyPackages.${system}.runCommand "unkernel-probe" (unkernel system) ''
           export HOME=$TMPDIR
           python3 ${self}/experiments/unkernel_probe/check.py --no-stock
+          touch "$out"
+        '';
+        # Rung 5 with the node in it: accepted_job as a static aarch64-linux program inside the guest equals
+        # the native node line for line, and three boots are identical. About a minute; nothing is fetched.
+        uk-node = nixpkgs.legacyPackages.${system}.runCommand "uk-node" (ukNode system) ''
+          export HOME=$TMPDIR
+          python3 ${self}/experiments/unkernel_probe/guest_node_check.py --quick
           touch "$out"
         '';
         native-replay = nixpkgs.legacyPackages.${system}.runCommand "native-replay" (environment system) ''

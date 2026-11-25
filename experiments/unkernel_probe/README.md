@@ -157,3 +157,110 @@ It looks feasible; it was not built or run here.
 * Each guest is deterministic given the virtual times at which its inputs arrive. Section 4 shows that for console input, both for an idle guest and, in the running-guest rows, for a guest interrupted inside one busy loop under the instruction-driven clock. A frame would be delivered from the same two imports, through `receiveFrame` instead of `sendInput`; that path was not run.
 * "One kernel per thread" then gives two designs. In one thread, the shim parks a guest by returning a pending promise from `sched_yield` or the idle wait (both are JSPI imports; a busy guest yields every 20 ms of its own time) and always resumes the guest whose clock is furthest behind; this is a sequential discrete-event loop and is deterministic by construction, at the speed of one core. With one worker thread per guest, the guests run in parallel and block in their clock import (`Atomics.wait` is allowed in a worker) at the end of each window of virtual time; frames are exchanged between windows, which is deterministic as long as the link latency is at least one window (conservative parallel simulation with lookahead).
 * What is unknown: whether two kernels in one thread interleave correctly (the SDK's notes say its API tests run concurrently, its README says only one kernel can run per thread), the cost of 128 MiB of linear memory per guest, and whether the guest's network stack has a time source this probe did not exercise.
+
+## 8. The compiled node inside the guest
+
+Sections 1 to 7 ran the base shell only. This section puts our own program in the guest: the `accepted_job` node, compiled by `tool/compile.py` to C and built as a static aarch64-linux executable, run by the guest's Linux under the same controlled host.
+
+**Verdict: inside the guest the node computes exactly what the native build computes, and the whole session is bit-identical across fresh processes**, with the JIT off and on, with the files delivered in the initramfs or over 9p on vsock. The initramfs path needs no control beyond the four of section 3. The 9p path needs one more, kept outside the package: the SDK's own timers on the virtual clock. Without it the mount never happens.
+
+```sh
+nix develop .#uk-node -c python3 experiments/unkernel_probe/guest_node_check.py           # everything, about 1 min 45 s
+nix develop .#uk-node -c python3 experiments/unkernel_probe/guest_node_check.py --quick   # what `nix flake check` runs (uk-node), about 1 min
+nix develop .#uk-node -c python3 experiments/unkernel_probe/guest_node_check.py --record  # rewrite evidence/guest_node_*
+nix build .#checks.aarch64-darwin.uk-node -L                                              # the quick run in the sandbox, no network
+```
+
+All numbers below are from one `--record` run on aarch64-darwin, in [evidence/guest_node_summary.json](evidence/guest_node_summary.json); [evidence/guest_node_console.txt](evidence/guest_node_console.txt) is the console of that session up to the end of the row comparison. No binary is committed: the check rebuilds them and compares their digests with the record.
+
+### The files
+
+* [guest_node_build.py](guest_node_build.py) generates `node.c`, builds the native reference and the aarch64 programs, and derives the rows and the expected outputs.
+* [guest_node.mjs](guest_node.mjs) boots once with files in the guest. It uses host.mjs unchanged, adds the delivery (`--deliver initrd | mount | none`), `--host-timers virtual`, and `marks`: the instruction count and the real time at each delivery of a console line.
+* [guest_node_history.c](guest_node_history.c) drives recorded histories through the node in the guest; [guest_node_bench.c](guest_node_bench.c) runs the step in a loop without I/O. Both `#include` the generated `node.c`.
+* [guest_node_check.py](guest_node_check.py) runs everything here and fails if any line is not as stated.
+
+### The binary
+
+| | |
+|---|---|
+| Toolchain | `zig` 0.16.0 of the flake's nixpkgs (substituted for aarch64-darwin from cache.nixos.org; `ZIG` in the `uk-node` shell). No Linux builder is used |
+| Command | `$ZIG cc -target aarch64-linux-musl -std=c11 -O2 -fbracket-depth=8000 -static -mcpu=generic -s -Wl,--build-id=none -ffile-prefix-map=OUT=. -DNODE_MAIN OUT/node.c -o OUT/node.aarch64` |
+| Input | `node.c`, 420 lines, sha256 `baa253d8…01610060` |
+| Output | ELF aarch64, statically linked, stripped, 37728 bytes, sha256 `3df86291…1d7f01d7` |
+| Reproducible | yes: a second build with an empty compiler cache has the same digest, and so did every build of this session, in several directories and in the Nix sandbox |
+
+The history driver is 37912 bytes (`6eaa071b…`), the step loop 36712 bytes.
+
+### Delivery
+
+| Path | Works | What it adds |
+|---|---|---|
+| initramfs: a cpio archive (newc, all times and owners zero) appended to the kernel's bundled initramfs, passed as `initrd` with the bundled command line | yes | no import call and no host I/O: the bytes are in memory before the first instruction. 1494448 bytes of base initramfs become 1696176. `sha256sum` in the guest gives the host's digest for each of the 4 files |
+| 9p over vsock: the SDK's `MemoryFs` as `mounts`, `vsock` on | only with `--host-timers virtual` | 337 vsock import calls in the session (`wasm_driver_vsock_send` 128, `_rx_len` 137, `_recv` 71, `_init` 1), 203393 bytes to the guest and 1068 from it, and 78 SDK timers of which 1 fires |
+
+Why 9p fails as it is. Observed: the host's first 44-byte vsock packet reaches the guest during boot (import calls 1316 and 1317, `wasm_driver_vsock_rx_len()=44` and `wasm_driver_vsock_recv(…,44)=44`), the guest answers in call 1318, and the SDK counts the connection as refused (`refused: 1`, `connected: 0`). After that the only vsock import call of the whole run is one more `rx_len` (call 1319), 4 timers are left to the real clock, and `/node` does not exist when the script runs. Read from the SDK's source: its `connectRetry` waits between attempts with `setTimeout`, which is real time here, while the rest of the machine runs on the virtual clock and finishes its 40 virtual seconds first. Two such boots are identical to each other; they are just not the run that was asked for.
+
+The control: `guest_node.mjs --host-timers virtual` replaces `setTimeout` before host.mjs is installed, so every timer host.mjs does not capture itself goes to a queue ordered by virtual deadline and then by creation, and is fired at the first clock read at or after its deadline. With it the retry fires once, the mount is served, and the node runs. Proof that it is needed: the row above without it.
+
+### Equivalence
+
+The rows are the 163 distinct (state, event) pairs of the 500-seed simulation (12800 steps), as `tool/examples/accepted_job/check.py` derives them, none of which traps, followed by 6 rows that do (no input, a state without an event, a truncated state, an undeclared event tag, symbols in no table, `INT64_MAX` everywhere).
+
+| Compared | Result |
+|---|---|
+| `/node/node < /node/vectors.txt` on the console against the native `node` on this Mac | 169 of 169 lines equal, 6 of them `trap 2`, `trap 2`, `trap 2`, `trap 1`, `trap 1`, `trap 1`; exit status 0. The only normalization is the terminal's `\r\n` to `\n` |
+| The same through `sha256sum` inside the guest (no terminal) | `27239072…25305321`, the digest of the native output |
+| All 500 recorded traces through `/node/history` (976 state lines for boots and crashes, 5913 steps; the driver carries the state between steps) | 5913 of 5913 lines equal, digest `0cb4cfad…fd30d4e4`. Each expected line is the native node's output, asserted at build time to decode to the post-state and effects the simulator recorded for that step |
+| The same two comparisons with the files on the 9p mount | equal |
+
+### Determinism
+
+One session: the five console lines of `SESSION` in guest_node_check.py, 40 virtual seconds, 6082 node steps, 227744 console bytes. Each process is fresh.
+
+| Run | Boots | Result |
+|---|---|---|
+| initramfs, JIT off | 3 | identical: memory `444366e2…`, console `450a710c…`, 38082 import calls (`d510dcc4…`), 195301657 instructions, 999 idle waits |
+| initramfs, JIT on | 3 | identical: memory `576c5472…`, 38133 import calls, 41 blocks compiled, 10 freed, 0 refused. Console and instruction count as with the JIT off |
+| initramfs, clock driven by instructions (`--ns-per-insn 5`) | 2 | identical: memory `8eb0e0b2…`, 116555 import calls, 195751999 instructions |
+| 9p mount, SDK timers virtual, JIT off | 3 | identical: memory `3abd7228…`, 41006 import calls, 195367115 instructions |
+| 9p mount, SDK timers virtual, JIT on | 2 | identical: memory `23c25209…`, 41052 import calls. Console and instruction count as with the JIT off |
+
+Every line of every session was delivered to an idle guest, and no timer was left to the real clock.
+
+Controls removed again (`--fault`, one boot each against a good one; in the recorded run): `entropy` changes memory, imports and import calls; `date` changes memory, imports, import calls and instruction count; `jitter` changes memory, console, imports, import calls and instruction count; `idle-real` leaves a timer to the real clock. All four are rejected. Which digests move varies from run to run for `entropy` and `jitter`, since what they let in is real; memory and imports moved every time.
+
+### Teeth
+
+| Change | What the comparison reports |
+|---|---|
+| Node built from the mutant `reply-before-ack` of spec.shen, same rows | 12 of 169 lines differ from the native node, first at line 4: guest `2 0 0 2 0 0 5 0 0 7 22 0 1 2 14 0 0 7 22 15 0 6 0`, native `2 0 0 2 0 0 5 0 0 7 22 0 1 1 14 0 0 7 22`. The guest's lines equal the native mutant's |
+| One byte of vectors.txt (offset 3566, the first digit from the middle on that the native output depends on) | memory, console, imports, import calls and instruction count change; line 89 differs from the expected output; the guest still equals the native node on the changed rows |
+
+A first choice of byte (offset 3564) changed every digest but no output line: that digit is a field the step does not read on that row.
+
+### Cost of a step
+
+`perf.txt` is the 163 distinct rows 200 times over (32600 rows). The cost per row is the difference between `/node/node < /node/perf.txt > /dev/null` and `/node/node < /dev/null`, taken from `marks`. The step alone is the difference between 2001 passes and 1 pass of `/node/bench` over the 163 rows (326000 steps). Wall times are of one run on this machine and move by 10 to 20 % between runs; instruction counts do not move.
+
+| | guest instructions | interpreter | JIT | native on this Mac |
+|---|---|---|---|---|
+| One row through the line executable (parse, step, print, flush) | 14071.1 | 38.8 µs | 18.1 µs (19.6 µs on the first run, which compiles) | 1.72 µs |
+| One step alone | 355.6 | 790 ns | 290 ns (322 ns on the first run) | 245 ns |
+| Boot to the first prompt | 3750863 | | | |
+| An empty run of the node (exec to exit) | 58020 to 58975 | | | |
+
+For comparison, the same step called from Python as the simulator calls it: 1.17 µs through the native library and 16.6 µs through wasmtime, both dominated by the call path, not by the step. The timing session (1667772817 guest instructions in all) took 4.45 s from its first console line to its end on the interpreter and 2.07 s with the JIT, about 375 and 806 million guest instructions per second. One whole process, boot and a 12 virtual second session of 338 rows, took 1.25 s including `nix develop`.
+
+So a node step inside the guest costs about what a wasmtime step costs the simulator today, when the node is spoken to over stdio; by that rate the 12800 steps of the 500-seed run would be about 0.23 s with the JIT (arithmetic, not a measurement). The price of whole-system simulation is the boot and the kernel around the step, not the step.
+
+The two runs of the same command in one boot differ by 132 instructions (458776604 and 458776472); both numbers are the same in every boot and with the JIT. The native figure for the step alone was not broken down: it is higher per instruction than the guest's JIT, which suggests a cost outside the step (Darwin's `setjmp` is the suspect, unverified).
+
+### What this does not show
+
+* **The node here is a filter on stdin and stdout.** The real `tool/host` (sockets, an fsync'd log, timers, the event log) was not run in the guest. It needs Python and wasmtime for aarch64-linux: both are in cache.nixos.org for the flake's nixpkgs (`python3-3.14.7`, closure 238 MB; `python3.14-wasmtime-48.0.0`, closure 289 MB), which does not fit a 128 MiB guest's initramfs and would need a disk image or the 9p mount and more memory. Whether wasmtime's own code generator runs under the guest's emulated ARMv8.0 CPU was not tried.
+* **No disk, no network.** The node's effects were printed, not performed. Sibling probes cover the block and the network device.
+* **One example, one mutant, one CPU, one machine.** `accepted_job` and `reply-before-ack` only; digests were not compared across machines or Node versions.
+* **The import log does not digest vsock payloads**, only the calls' arguments and return values (host.mjs was left as it is). The memory digest covers what the guest received.
+* **Virtual SDK timers fire only at clock reads.** A timer due while the guest computes without reading the clock fires late in virtual time, though at the same point in every run. Only the mount's one retry exercised this; `vm.exec`, `vm.spawn` and writes to the mount were not used.
+* **The driver of histories replays what the simulator decided.** It shows the compiled step agrees with the record on every step of 500 histories when it carries its own state; it does not schedule, crash or drop anything inside the guest.
