@@ -793,7 +793,7 @@ def maude_violation(definition, modules, wanted=None):
 
 
 def bounded(built, report):
-    everything, results = {}, {}
+    everything = {}
     for label, (name, budget, cancels, outcomes) in BOUNDS.items():
         definition, native = built[name]
         limit, = shen.evaluate(definition.files, [f"({name}.settles-within)"])
@@ -850,10 +850,13 @@ def bounded(built, report):
         cuts = boundaries(records)
         require(budget["crash"] == 0 or all(all(counts) for counts in cuts.values()),
                 f"bound '{label}': an effect boundary was never crashed at: {cuts}")
+        # The verdicts above are not about unfinished workflows only: each bound shows
+        # completed, compensated and stuck ones.
         ends = Counter(sit[0][3][0] for sit in distinct if sit[0] != "down"
                        and sit[0][0] == "live" and sit[0][3][0] in TERMINAL)
+        require(all(ends[outcome] for outcome in TERMINAL),
+                f"bound '{label}': finished workflows shown: {dict(ends)}")
         everything.setdefault(name, {}).update(pairs)
-        results[label] = (prof, cancels, outcomes, mine, set(ends))
         report(f"bounded search '{label}' ({name}, budget {budget}, cancels {cancels}, outcomes "
                f"{outcomes}): Maude {states} states, simulator {len(sits)}; the same "
                f"{len(reached)} observations; no state violates a state invariant (Maude search "
@@ -874,8 +877,6 @@ def bounded(built, report):
         check.maude_refinement(maude.step_module(definition.text), definition.schema, pairs)
     report(f"bounded search: native, shen-jit and the Maude translation agree on all {count} "
            f"(state, event) pairs the {len(BOUNDS)} searches executed")
-    shown = Counter(phase for label in results for phase in results[label][4])
-    require(all(shown[phase] for phase in TERMINAL), f"the searches never show one of {TERMINAL}")
     return everything
 
 
