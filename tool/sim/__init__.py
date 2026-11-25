@@ -81,6 +81,12 @@ class Workload:
     def apply(self, world, action, draw):
         return {}
 
+    def deliver(self, world, payload, draw):
+        """An output reached the outside world. Like `apply`, this may inject requests, draw
+        with `draw.choose` and replace `world.client`; what it returns is added to the record
+        of the `output` step. Every delivery is seen, a duplicate as well."""
+        return {}
+
     def observe(self, world):
         return ("client", *world.client)
 
@@ -296,6 +302,7 @@ class World:
             self.take(self.outs, (action[1],))
             self.got.add(action[1])
             rec.update(event=action[1])
+            rec.update(self.workload.deliver(self, action[1], draw))
         elif kind in ("drop", "dup"):
             self.budget[kind] -= 1
             items, content = (self.net, action[2:]) if action[1] == "net" else (self.outs, action[2:])
