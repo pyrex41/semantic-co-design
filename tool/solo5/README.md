@@ -244,7 +244,7 @@ The numbers are from one run of `python3 -m tool check solo5-cluster` on commit 
 * Every boot recorded as a unikernel is a `solo5-spt` command naming the `.spt` image and `--net:net=tapN` for node `N`, and printed the Solo5 banner. The host processes' records, relabelled, are not accepted in their place.
 * `solo5-hvt`: **blocked**. Tried once per run on `raft.hvt` as node 0 of 3; the tender says `Could not open: /dev/kvm: No such file or directory`. The image is linked and nothing more.
 
-In one earlier run under `solo5-spt`, made while this was written and not retained, a kill of the harness's own (the kill that ends `partition-heals`) did land inside a step, and the record reconstructed.
+The harness's own kills do land inside a step now and then. In the second run (`0b38a87`) one did under `solo5-spt`, and one among the Linux host processes killed a node after an effect and before its log line; both records reconstructed, the second by the rule above. An earlier run, not retained, had one under `solo5-spt` too. None of this can be asked for: it happens or it does not.
 
 Not in `nix flake check`: `solo5-cluster`, which needs the container. `checks.<system>.solo5-cluster-host` is the host-process half.
 
