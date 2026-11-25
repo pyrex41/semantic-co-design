@@ -219,7 +219,7 @@ def hostile(work, schema, packed, report):
     request that must be answered, and nothing but those requests may reach the log."""
     lines = [("a number outside 64 bits", b'["submit", 5, 8, 9223372036854775808]'),
              ("a number below 64 bits", b'["submit", 5, -9223372036854775809, 22]'),
-             ("nesting deeper than the parser's stack", b"[" * (LINE - 1)),
+             ("65535 open brackets", b"[" * (LINE - 1)),
              ("events only the host may make", b'["written", 0]\n["restart"]\n["loaded", 0, 0, 1, 7, 99]'),
              ("ill-typed fields", b'["submit", 5.0, true, 22]\n["submit", 5, 8]\n{"a": 1}\n5\nnull\n[["submit"], 1, 2, 3]')]
     cluster = Cluster(packed, work / "hostile")
