@@ -1,0 +1,2 @@
+maude==1.6.0
+maudec @ git+https://github.com/fadoss/maudec.git@5ea07b3586ebb39741fc0aac4f0e1c6ced0cd491

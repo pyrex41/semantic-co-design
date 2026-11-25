@@ -46,7 +46,7 @@ The [shared interface](specializer/FORMAT.md) uses scalar expressions, structure
 
 The [ordinary Shen interpreter experiment](experiments/ordinary_vm/README.md) derives the sum loop from recursive list processing without explicit staging primitives.
 
-Each example retains its representative IR and C in `residual/`. The artifact check regenerates both files from each language and checks the surviving loops. The decoder has loops over chunks, bytes, and payload output. The join has a loop per input relation. The shared code has no domain-specific dispatch. For measured generation cost, binary sizes and warm timings, see the [benchmark procedure and receipt](benchmarks/README.md).
+Each example retains its representative IR and C in `residual/`. The artifact check regenerates both files from each language and checks the surviving loops. The decoder has loops over chunks, bytes, and payload output. The join has a loop per input relation. The shared code has no domain-specific dispatch. The [compiled benchmark](benchmarks/README.md) compares the generated programs with standalone Shen JIT binaries, Maude compiled through C++, and handwritten C on identical input rows.
 
 ## Run a durable job from two different specs
 
