@@ -2,13 +2,16 @@
 
 Regenerate the retained mutant evidence with: python3 -m tool record accepted_job
 """
+from contextlib import contextmanager
 import copy
 import hashlib
 import json
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from ... import check, maude, sim
+from ...sim import hegel as generated
 from ...check import CheckFailure, require
 from ...compile import build, run_lines
 from ...schema import Schema
@@ -21,6 +24,14 @@ SUBMISSIONS = 6
 # The exhaustive bound: one key, two digests, two submissions, one crash, one loss.
 BOUND = sim.profile(timed=False, budget={"crash": 1, "drop": 1, "dup": 0})
 BOUND_SUBMISSIONS = 2
+HEGEL_CASES, HEGEL_SEED = 200, 0
+# What Hegel shrinks each mutant's first failure to; a longer result fails the check.
+HEGEL_SHRUNK = {"reply-before-ack": 5, "insert-without-key-check": 11,
+                "reload-ignores-durable-row": 12, "no-conflict-clause": 9}
+# Settings Hegel would take from its environment. Each changed a run until falsify pinned it.
+HOSTILE = {"HEGEL_PHASES": "generate", "HEGEL_BACKEND": "urandom", "HEGEL_SEED": "7",
+           "HEGEL_STOP_ON_FIRST_FAILURE": "false", "HEGEL_REPORT_MULTIPLE_FAILURES": "true",
+           "HEGEL_TEST_CASES": "3", "HEGEL_DERANDOMIZE": "true", "CI": "true"}
 WITNESSES = ["wit.retry-after-lost-reply", "wit.retry-after-precommit-crash",
              "wit.conflict-rejected"]
 
@@ -39,6 +50,10 @@ MUTANTS = {
         "new": "Slot 1 Key Digest -> [(job.put Slot [free 0 0] Jobs) Pending Next]",
         "invariant": "inv.rows-are-immutable"},
 }
+# For the generated schedules only: a step with no result, which no invariant names.
+TRAP_MUTANT = {
+    "old": "\n  [Slot _] State Req _ _ -> [State [[reply Req conflict Slot]]])",
+    "new": ")"}
 
 
 def mutate(source, mutant):
@@ -235,6 +250,171 @@ def mutants(work, schema, native, inits, explored, report, record):
         retained_path.write_text(json.dumps(retained, indent=2, sort_keys=True) + "\n")
 
 
+@contextmanager
+def environment(**values):
+    """Run with these variables set; the old values come back afterwards."""
+    old = {name: os.environ.get(name) for name in values}
+    os.environ.update(values)
+    try:
+        yield
+    finally:
+        for name, value in old.items():
+            os.environ.pop(name) if value is None else os.environ.update({name: value})
+
+
+def unshrunk(found, limit):
+    """Why `found` is not a shrunk failure, or [] when it is one."""
+    first, trace = len(found["first"]["steps"]), len(found["trace"]["steps"])
+    return ([f"{trace} steps, the first failure had {first}"] * (trace >= first)
+            + [f"{trace} steps, more than the retained {limit}"] * (trace > limit)
+            + ["no run after the first failure"] * (found["executions"] <= found["cases"]))
+
+
+def rejected(replay, why):
+    try:
+        replay()
+    except sim.Divergence:
+        return
+    raise CheckFailure(why)
+
+
+def properties(work, schema, native, inits, report):
+    """Hegel generates the schedules, faults and workload, and shrinks what fails."""
+    clients = Clients(SUBMISSIONS)
+    run = lambda binary, names=None, **more: generated.falsify(
+        binary, clients, SEEDED, inits, invariants=names, cases=HEGEL_CASES, seed=HEGEL_SEED,
+        **more)
+    same = lambda a, b: (a["trace"] is not None and b["trace"] is not None
+                         and sim.dumps(a["trace"]) == sim.dumps(b["trace"])
+                         and a["executions"] == b["executions"])
+    healthy = run(native)
+    require(healthy["trace"] is None, f"hegel: the specification violates {healthy['violated']}")
+    require(healthy["cases"] == HEGEL_CASES and not healthy["exhausted"],
+            f"hegel: ran {healthy['cases']} cases")
+    report(f"hegel: {healthy['cases']} generated schedules of spec.shen "
+           f"({healthy['evaluations']} distinct), all invariants hold; {healthy['seconds']:.1f}s")
+    # A run that covers less than it was asked for says so.
+    none = generated.falsify(native, clients, sim.profile(max_steps=0), inits, cases=100)
+    require(none["exhausted"] and none["cases"] == 1 and none["trace"] is None,
+            f"hegel: a profile with one schedule ran {none['cases']} cases unremarked")
+    try:
+        generated.falsify(native, clients, SEEDED, inits, cases=0)
+    except ValueError:
+        pass
+    else:
+        raise CheckFailure("hegel: zero cases passed as a run")
+    retained = json.loads((HERE / "mutants.json").read_text())
+    for name, mutant in MUTANTS.items():
+        broken = build(schema, work / f"{name}.hegel", mutate(schema.source, mutant))
+        wanted = mutant["invariant"]
+        fails = lambda traces: [wanted in names for names in violations(schema, traces)]
+        found = run(broken, [wanted])
+        trace, first = found["trace"], found["first"]
+        require(trace is not None, f"hegel {name}: no failing schedule in {HEGEL_CASES} cases")
+        require(found["failure"] == wanted, f"hegel {name}: found {found['failure']}")
+        require(trace["format"] == sim.FORMAT, f"hegel {name}: not a simulator trace")
+        again = sim.replay(broken, clients, inits, trace)
+        require(sim.dumps(again) == sim.dumps(trace), f"hegel {name}: replay changed the bytes")
+        require(fails([again, first]) == [True, True],
+                f"hegel {name}: the first and the shrunk trace do not both violate {wanted}")
+        # Teeth: these steps are the mutant's, so the unedited binary must not replay them.
+        rejected(lambda: sim.replay(native, clients, inits, trace),
+                 f"hegel {name}: the shrunk trace replays on the unedited spec")
+        problems = unshrunk(found, HEGEL_SHRUNK[name])
+        require(not problems, f"hegel {name}: not shrunk: {problems}")
+        second = run(broken, [wanted])
+        require(same(found, second), f"hegel {name}: the same seed gave a different shrunk trace")
+        if name == "reply-before-ack":
+            # Teeth: with Hegel's shrink phase off the failure is found and not shrunk, and
+            # the test above says so.
+            raw = run(broken, [wanted], shrink=False)
+            require(sim.dumps(raw["trace"]) == sim.dumps(first), f"hegel {name}: shrunk anyway")
+            require(unshrunk(raw, HEGEL_SHRUNK[name]),
+                    f"hegel {name}: an unshrunk failure passed as shrunk")
+            # Teeth: Hegel's own configuration channels must not reach the run.
+            with environment(**HOSTILE, HEGEL_DATABASE=str(work / "examples")):
+                third = run(broken, [wanted])
+            require(same(found, third) and not (work / "examples").exists(),
+                    f"hegel {name}: HEGEL_* variables changed the run")
+        # The hand shrinker on the same first failure, next to its retained minimum from a seed.
+        by_hand = check.shrink(broken, clients, inits, first, fails)
+        report(f"hegel mutant {name}: {wanted} fails at case {found['cases']} "
+               f"({len(first['steps'])} steps); Hegel shrinks it to {len(trace['steps'])} steps "
+               f"in {found['executions']} runs, {found['seconds']:.1f}s (hand shrinker: "
+               f"{len(by_hand['steps'])} steps from the same failure, "
+               f"{retained[name]['minimal_steps']} retained); replays byte for byte and still "
+               f"fails; a second run gives the same trace, sha256 {sim.digest(trace)[:16]}")
+    traps(work, schema, native, inits, run, same, report)
+    two_faults(work, schema, inits, run, report)
+
+
+def traps(work, schema, native, inits, run, same, report):
+    """A step with no result. A trace has no record of the step that trapped, so falsify
+    returns that action beside it and generated.replay executes it after the others."""
+    clients, name = Clients(SUBMISSIONS), "no-conflict-clause"
+    broken = build(schema, work / "trap.hegel", mutate(schema.source, TRAP_MUTANT))
+    found = run(broken, [])
+    trace, trap = found["trace"], found["trap"]
+    require(found["failure"] == generated.TRAP and found["violated"] == [generated.TRAP]
+            and trace["end"].startswith("error: ") and found["first"]["end"].startswith("error: "),
+            f"hegel {name}: expected a trap, got {found['failure']}")
+    problems = unshrunk(found, HEGEL_SHRUNK[name])
+    require(not problems, f"hegel {name}: not shrunk: {problems}")
+    require(same(found, run(broken, [])), f"hegel {name}: the same seed gave a different trace")
+    generated.replay(broken, clients, inits, trace, trap)
+    # Teeth: the steps before the trap are also the specification's, so replaying only them
+    # proves nothing. The trapping step must trap here, with this error, and nowhere else.
+    sim.replay(native, clients, inits, trace)
+    rejected(lambda: generated.replay(native, clients, inits, trace, trap),
+             f"hegel {name}: the unedited spec traps on the same step")
+    made_up = {**trace, "end": "error: made up"}
+    rejected(lambda: generated.replay(broken, clients, inits, made_up, trap),
+             f"hegel {name}: replay accepted an error the step does not raise")
+    rejected(lambda: generated.replay(broken, clients, inits, trace),
+             f"hegel {name}: replay accepted an error trace without its trapping step")
+    report(f"hegel mutant {name}: a trap at case {found['cases']} "
+           f"({len(found['first']['steps'])} steps); Hegel shrinks it to {len(trace['steps'])} "
+           f"steps in {found['executions']} runs, {found['seconds']:.1f}s; the trapping step "
+           f"{trap[0]} replays to the same error on the mutant and is rejected on the "
+           f"unedited spec; {trace['end']}")
+
+
+def two_faults(work, schema, inits, run, report):
+    """Two faults in one binary: the failure found first is the one that is shrunk."""
+    clients = Clients(SUBMISSIONS)
+    kinds = lambda found: [(t["end"] or "").startswith("error: ")
+                           for t in (found["first"], found["trace"])]
+    # A trap and an invariant. Asked for the invariant, the trap comes first.
+    wanted = MUTANTS["reply-before-ack"]["invariant"]
+    source = mutate(mutate(schema.source, MUTANTS["reply-before-ack"]), TRAP_MUTANT)
+    broken = build(schema, work / "two.trap.hegel", source)
+    both = run(broken, [wanted])
+    require(both["failure"] == generated.TRAP and kinds(both) == [True, True],
+            f"hegel two faults: {both['failure']} with error traces {kinds(both)}")
+    generated.replay(broken, clients, inits, both["trace"], both["trap"])
+    only = run(broken, [wanted], traps=False)
+    require(only["failure"] == wanted and kinds(only) == [False, False] and only["trapped"]
+            and violations(schema, [only["first"], only["trace"]]) == [[wanted], [wanted]]
+            and not unshrunk(only, len(only["first"]["steps"])),
+            f"hegel two faults: with traps excluded, {only['failure']}")
+    sim.replay(broken, clients, inits, only["trace"])
+    # Two invariants, all of them asked for.
+    names = ["reply-before-ack", "insert-without-key-check"]
+    source = mutate(mutate(schema.source, MUTANTS[names[0]]), MUTANTS[names[1]])
+    broken = build(schema, work / "two.invariants.hegel", source)
+    pair = run(broken)
+    first, shrunk = violations(schema, [pair["first"], pair["trace"]])
+    require(pair["failure"] in first and pair["failure"] in shrunk and shrunk == pair["violated"],
+            f"hegel two faults: {pair['failure']} pursued, first {first}, shrunk {shrunk}")
+    sim.replay(broken, clients, inits, pair["trace"])
+    size = lambda found: f"{len(found['first']['steps'])} to {len(found['trace']['steps'])} steps"
+    report(f"hegel two faults: asked for {wanted}, a spec that also traps fails first as "
+           f"{both['failure']} and stays that failure ({size(both)}); with traps excluded it "
+           f"fails as {only['failure']} ({size(only)}, {only['trapped']} trapping runs not "
+           f"counted as failures); {' with '.join(names)} first violates {first} and is "
+           f"shrunk as {pair['failure']} ({size(pair)})")
+
+
 def one_step_removed(trace, native, inits):
     actions = [(s["action"], s["draws"]) for s in trace["steps"] if s["action"] != ["boot"]]
     for n in range(len(actions)):
@@ -253,4 +433,5 @@ def main(report=print, record=False):
         native, inits, traces = specification(work, schema, report)
         explored = bounded(schema, native, inits, traces, report)
         mutants(work, schema, native, inits, explored, report, record)
+        properties(work, schema, native, inits, report)
     report("accepted_job: ok")

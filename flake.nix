@@ -10,8 +10,9 @@
       environment = system:
         let pkgs = nixpkgs.legacyPackages.${system};
             shenJit = pkgs.callPackage ./nix/shen-jit.nix { };
+            hegel = pkgs.python3Packages.callPackage ./nix/hegel.nix { };
         in {
-          nativeBuildInputs = [ pkgs.clang (pkgs.python3.withPackages (p: [ p.wasmtime ])) pkgs.maude shenJit pkgs.lld ];
+          nativeBuildInputs = [ pkgs.clang (pkgs.python3.withPackages (p: [ p.wasmtime hegel ])) pkgs.maude shenJit pkgs.lld ];
           buildInputs = [ pkgs.sqlite ];
           SHEN_JIT = "${shenJit}/bin/shen-jit";
           # The wrapped compiler targets the host; wasm32 needs the bare driver and wasm-ld.
@@ -43,6 +44,14 @@
           cd ${self}
           export HOME=$TMPDIR
           NODE_TARGET=wasm python3 -m tool check kernel accepted_job
+          touch "$out"
+        '';
+        # The same check on the host target; its last section is the Hegel property run.
+        hegel-step = nixpkgs.legacyPackages.${system}.runCommand "hegel-step" (environment system) ''
+          cd ${self}
+          export HOME=$TMPDIR
+          python3 -c 'import hegel; print("hegeltest", hegel.__version__, "libhegel", hegel.engine_version())'
+          python3 -m tool check accepted_job
           touch "$out"
         '';
         native-replay = nixpkgs.legacyPackages.${system}.runCommand "native-replay" (environment system) ''
