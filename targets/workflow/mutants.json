@@ -1,0 +1,74 @@
+{
+  "any-completion-accepted": {
+    "invariant": "history-is-true",
+    "minimal_sha256": "f9703ef0856c89911f9ea56add2a35f6291602322c0681ac070f7c76eabc6eb9",
+    "minimal_steps": 28,
+    "seed": 5,
+    "sha256": "5c6c4298a18073ea6c7ea98bebd44c5573b2b2e99dcd5b4ddfc8ceab60da22e6",
+    "steps": 75
+  },
+  "cancel-after-finish": {
+    "invariant": "terminal-is-final",
+    "minimal_sha256": "942ef1e83496fdcec8f036e960756863e11f3b9b2077ed85cc30fa288d3f99d0",
+    "minimal_steps": 24,
+    "seed": 2,
+    "sha256": "48b907985e921b7f9b4080c99593196499e7c72238aca259f8cb679a8798b8ba",
+    "steps": 80
+  },
+  "forward-compensation": {
+    "invariant": "compensation-matches",
+    "minimal_sha256": "2cc30bc23e4eb164df1dbc717c811b86b9d44a88c4fcbdea55a6f840ef4c8b19",
+    "minimal_steps": 39,
+    "seed": 1,
+    "sha256": "17b9de8a75d6c7c0c3f9a65cb433a89ad02e8aa92acfa9d7e7e6c305ca7784e3",
+    "steps": 72
+  },
+  "in-doubt-not-undone": {
+    "invariant": "compensation-matches",
+    "minimal_sha256": "f95b9efb89b2c26a6b43e0d79e9efd817d49da0d258d4c468774de328fb28746",
+    "minimal_steps": 39,
+    "seed": 1,
+    "sha256": "5f3be3369d822a8aee56cae06a6494c6c643cac0e218d64b88972dacb545a3bd",
+    "steps": 65
+  },
+  "key-dropped-on-retry": {
+    "invariant": "one-effect-per-key",
+    "minimal_sha256": "c2e199d628a94ec4727825949f48df797781422cc3099c9fdb99e3f399761d10",
+    "minimal_steps": 12,
+    "seed": 0,
+    "sha256": "5950820787e388fab21b0e602b2c501f8ec57e622d3fef72d3a3716ea737846a",
+    "steps": 41
+  },
+  "no-resume": {
+    "invariant": "inv.settles",
+    "minimal_sha256": "8a7dd5f4a501fb53e2eec52fbcd17074ea2d667370a658c9d89e51ab4d3c1350",
+    "minimal_steps": 11,
+    "seed": 1,
+    "sha256": "baf231e8e285b8020ff78b3b50a55058396244f527f54bfd9b925cdaadd64319",
+    "steps": 13
+  },
+  "restart-without-replay": {
+    "invariant": "memory-is-replay",
+    "minimal_sha256": "6cbba3e792c36e604843f36014123014f6713045567b7f4738a50fc3279c9433",
+    "minimal_steps": 15,
+    "seed": 0,
+    "sha256": "a3e77be893b08bec72bfd74929cdd17ed337cc2c1d30dd2c16f19323cee3948b",
+    "steps": 70
+  },
+  "run-before-intent": {
+    "invariant": "history-is-true",
+    "minimal_sha256": "4010fb598ef3f8fa13518c08f18f99c0163096c3ba88e6e8fe862942d5fa485e",
+    "minimal_steps": 3,
+    "seed": 2,
+    "sha256": "e2c964a429d72510ba77651738eb7b5c097b44ca07134ca7fca127955aa6487a",
+    "steps": 57
+  },
+  "sequence-restarts": {
+    "invariant": "history-is-a-log",
+    "minimal_sha256": "8dae70944817bd8e47d854aad088c782a72604f99a075efd31b868c67e055318",
+    "minimal_steps": 20,
+    "seed": 0,
+    "sha256": "e2713f0418525a32b95619870d9fe0f3f1deeb88f5c686ae269d68715924f5c6",
+    "steps": 52
+  }
+}
