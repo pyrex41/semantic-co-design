@@ -52,3 +52,34 @@ class FaultsTakeTime(World):
 
     def take(self, items, content, *, happens=True):
         return super().take(items, content)
+
+
+class ExactTimers(World):
+    """Timers run for exactly the delay asked for: no clock rate, no drawn skew."""
+
+    def timer_delay(self, node, delay, draw):
+        return delay
+
+
+class OnewayCutsBoth(World):
+    """A one-way cut isolates the node in both directions, like a partition."""
+
+    def apply(self, action, draw):
+        rec = super().apply(action, draw)
+        if action[0] == "oneway":
+            self.blocked |= {(b, a) for a, b in self.blocked}
+        return rec
+
+
+class IgnoresTimerBudget(World):
+    """Timer events are delivered however many the profile allows."""
+
+    def spent_timer(self, event):
+        return False
+
+
+class NeverSlow(World):
+    """No message is late and no disk stalls, whatever share the profile's `slow` key asks for."""
+
+    def wait(self, kind, draw):
+        return draw.delay(kind)

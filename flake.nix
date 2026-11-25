@@ -72,6 +72,18 @@
           python3 -m tool check solo5-host
           touch "$out"
         '';
+        # The Raft target, as two checks so that each stays under ten minutes. TLC on the
+        # published raft.tla is not one of them: see targets/raft/README.md, section 10.
+        raft = nixpkgs.legacyPackages.${system}.runCommand "raft" (environment system) ''
+          cd ${self}
+          python3 -m tool check raft
+          touch "$out"
+        '';
+        raft-mutants = nixpkgs.legacyPackages.${system}.runCommand "raft-mutants" (environment system) ''
+          cd ${self}
+          python3 -m targets.raft.check mutants
+          touch "$out"
+        '';
         native-replay = nixpkgs.legacyPackages.${system}.runCommand "native-replay" (environment system) ''
           python3 ${self}/logic/check.py
           python3 ${self}/native/check_accepted_job.py

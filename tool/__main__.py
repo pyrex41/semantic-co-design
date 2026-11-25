@@ -1,7 +1,10 @@
 """python3 -m tool check <kernel | sim | example | target>   run the retained checks
 python3 -m tool check <solo5 | solo5-host>   the effect shim of tool/solo5 against the simulator
-python3 -m tool record <example>             regenerate an example's retained evidence
-python3 -m tool compile <example> <dir>      write IR, C, shared library and executable"""
+python3 -m tool record <example | target>    regenerate its retained evidence
+python3 -m tool compile <example | target> <dir>   write IR, C, shared library and executable
+
+An example is tool/examples/<name>/; a target is targets/<name>/, looked up when there is
+no example of that name."""
 import importlib
 import sys
 from pathlib import Path
@@ -29,7 +32,10 @@ def main(argv):
     if len(argv) == 3 and argv[0] == "compile":
         from .compile import build
         from .schema import Schema
-        native = build(Schema(Path(__file__).parent / "examples" / argv[1] / "node.json"), argv[2])
+        manifest = Path(__file__).parent / "examples" / argv[1] / "node.json"
+        if not manifest.exists():
+            manifest = Path(__file__).parent.parent / "targets" / argv[1] / "node.json"
+        native = build(Schema(manifest), argv[2])
         print(native.library, native.executable, native.stats)
         return 0
     print(__doc__)
