@@ -15,7 +15,9 @@ nix develop -c python3 -m tool check gossip         # three nodes: send, timers,
 nix develop -c python3 -m tool compile accepted_job /tmp/out   # IR, C, library, executable
 ```
 
-`nix flake check` runs the four checks as `checks.<system>.sim-tool`.
+Applications kept outside the kernel are run the same way: `tool check workflow` and `tool check raft` ([targets/](../targets/)), and `tool check solo5-host` and `tool check solo5` for the effect shim ([solo5/](solo5/README.md)).
+
+`nix flake check` runs the four checks above as `checks.<system>.sim-tool`, and `workflow`, `raft`, `raft-mutants` and `solo5-host` as gates of their own. `tool check solo5` is not a flake check: it needs Linux, or a Linux container.
 
 ## 1. Specification convention
 
@@ -244,6 +246,9 @@ A new application is a directory `tool/examples/<name>/` with `node.json`, `spec
 | `python3 -m tool check sim` | On a probe node with four effects in one step: 200 seeds deterministic and replayable; each step changed the disk queue and the outputs in flight by exactly its applied effects, with nodes dying at every cut; drop and dup take no time; replay rejects 10 edits of a trace, a cut script and three abuses of an error trace; Maude and the simulator reach the same observations with a crash, a drop and a duplicate and up to four writes pending; five broken simulators and three edited Maude models are each told apart. The optional profile keys, on the gossip node ([sim_options_check.py](sim_options_check.py)): timer skew and clock rate give the expected firing times and every drawn skew is the recorded draw; one-way cuts end as expected in 6 scenarios; with 0, 1 and unbounded timer events Maude and the simulator reach the same nested observation sets; with a slow share of 30% about that share of messages over 50 seeds takes the slow delay, each one the recorded draw and each delivery at the time its draw gave, and on the probe node a stalled disk syncs both writes of a step late and in order; four simulators and one Maude model that ignore a key are told apart. |
 | `python3 -m tool check accepted_job` | See [examples/accepted_job](examples/accepted_job/README.md). |
 | `python3 -m tool check gossip` | Three instances of one compiled step with sends, timers, crashes, drops, duplicates and partitions: deterministic, every trace replays, refining shen-jit on simulated and searched pairs; Maude agrees on two-node bounds with a drop, with a crash and with a duplicate; two mutants are caught. |
+| `python3 -m tool check workflow` | See [targets/workflow](../targets/workflow/README.md). |
+| `python3 -m tool check raft`, `python3 -m targets.raft.check mutants` | See [targets/raft](../targets/raft/README.md). |
+| `python3 -m tool check solo5-host`, `python3 -m tool check solo5` | See [solo5/](solo5/README.md). |
 
 A one-off run, not retained: 895 further random programs (seeds 120 to 1019, 53,700 rows) also agreed with shen-jit.
 

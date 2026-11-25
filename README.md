@@ -1,75 +1,94 @@
 # Semantic co-design
 
-This project turns executable specifications into running software. Write the rules once, run them in an interpreter to see what they do, then compile those same rules into the program you ship. The technique is **partial evaluation**. The compiler does the work it can when it knows the rules and leaves the rest for runtime.
+A developer writes the behavior of a node as ordinary Shen: one pure function from a state and an event to a new state and a list of effects. The tool in [tool/](tool/README.md) then does four things with that one text.
 
-Take a bytecode interpreter. Give the compiler the interpreter and a fixed program that sums an array. The compiler walks the bytecode at build time. The executable it produces is a loop that reads numbers and adds them. Give it `5 8 13` and it prints `26`. Change the bytecode to compute a maximum and rebuild, and the same input yields `13`. You can read the [VM specification](examples/vm/README.md) alongside the [generated C](examples/vm/residual/program.c).
+1. It specializes the Shen to a native step function.
+2. It runs that native code under a deterministic simulator that owns the clock, the network, the disks, crashes and the schedule.
+3. It evaluates invariants, also written in Shen, over the simulated traces, and compares every step the native code took with the same Shen source run by shen-jit.
+4. It translates the same Shen to Maude and searches the same environment exhaustively within small bounds.
 
-## What can you build this way?
+Everything is run inside the locked shell, from the repository root: `nix develop -c <command>`.
 
-The repo includes three locally runnable applications. Their rules are written in App Shen. A shared compiler turns those rules into native extensions, and Python hosts connect them to databases, sockets and other services. The same inputs can be replayed against the interpreter and the built package. [Application guide](example/README.md) · [Language and compiler contract](example/LANGUAGE.md)
+## What the repository establishes, and the command behind each claim
 
-| Application | What the specification decides | How it is checked |
+Every row is a command that was run on this branch and passed. Times are wall-clock on one Apple arm64 Mac, on commit `5b0b349` (the last commit that changed code), with two or three of the commands running side by side. A pass means what the linked README says and no more: all of the evidence is differential testing, seeded simulation and bounded search. Nothing here is a proof.
+
+| Command | What a pass establishes | Time |
 |---|---|---|
-| [Document Desk](example/webapp/README.md) | Who can review a document, how many votes close it, and which notification to queue. | A browser drives approvals against PostgreSQL. Killing the server on either side of commit checks whether a retry creates a second notification intent. |
-| [Spot trading engine](example/trading-engine/README.md) | When to admit or cancel an order, how much balance to reserve, and how a fill changes the ledger. | A simulated exchange delays and repeats results. The checker compares balances, orders and journal postings after each explored transition. |
-| [Router and load balancer](example/router-nlb/README.md) | Where to forward a packet, which backend gets a new connection, and when a standby can take over its NAT binding. | Virtual Ethernet ports carry actual packet bytes. An independent GoBGP peer exercises routing, and restart tests check who owns each live tuple. |
+| `python3 -m tool check kernel` | The compiler on its own rows. Native code equals shen-jit on 9,600 state and event rows, 1,780 operator rows to the edge of the integer range, 3,200 rows of a residual loop and 7,140 rows of 119 seeded random programs, traps included. The Maude translation equals shen-jit on 762 calls. Seven sources outside the supported fragment are refused. Retained mutants: swapped clauses, an undeclared symbol, two broken compilers, one broken translation. [tool/README.md](tool/README.md#6-what-the-retained-checks-establish) | 88 s for these four together |
+| `python3 -m tool check sim` | The simulator's own rules on a probe node: runs are deterministic and replay; a step changes the world by exactly its applied effects; replay rejects edited traces; Maude and the simulator reach the same observations at two bounds. Retained mutants: eleven broken simulators and four edited Maude models, each told apart from the real one. | |
+| `python3 -m tool check accepted_job` | One node that accepts a job only after its disk write is acknowledged. Five Shen invariants hold on 500 seeded runs with crashes, drops and duplicates; four required histories occur; three bounded searches agree between Maude and the simulator and are all safe. Eight one-line mutants are each rejected. [README](tool/examples/accepted_job/README.md) | |
+| `python3 -m tool check gossip` | Three instances of one compiled step with sends, timers and partitions. Two mutants. | |
+| `python3 -m tool check workflow` | A durable workflow engine written as an interpreter in ordinary Shen and specialized to one workflow definition at a time. Nine state invariants and seven run invariants hold on 800 seeded runs with faults; the state invariants also hold in six bounded searches, in Maude and in the simulator; the words of the definition language do not survive into the residual program. Twenty-one mutants are each rejected. [README](targets/workflow/README.md) | 314 s |
+| `python3 -m tool check raft` | One Raft server as a Shen step function, compiled whole, in clusters of 3 and 5. Fourteen Shen invariants (the five properties of Figure 3 of the Raft paper among them) and linearizability hold on 330 seeded runs under five fault profiles; five bounded searches agree between Maude and the simulator. [README](targets/raft/README.md) | 329 s |
+| `python3 -m targets.raft.check mutants` | The teeth of the Raft check: 22 mutants are each rejected on a retained seed, every invariant rejects at least one, and Figure 8 and the lost vote each break a published property on a seed of a profile written to produce them. | 252 s |
+| `python3 -m tool check solo5-host` | An effect shim in C, written against the Solo5 API and run here as a host process: 19 scripted runs with kills are each shown to be a run of the simulator, and 21 broken drivers or specifications are each rejected. [README](tool/solo5/README.md) | part of the next row |
+| `python3 -m tool check solo5` | The same, and the same scenarios on real Solo5: Solo5 v0.9.3 and 27 unikernels built by a Nix derivation and run under `solo5-spt` in a Linux container (Linux 7.2 aarch64 under OrbStack, started through `docker`). The unikernel, the macOS host process and the Linux host process reconstruct to byte-identical simulator traces for the 15 scenarios without a clock. | 238 s |
+| `python3 -m experiments.branching_vm.check` | The partial evaluator in `tool/pe.py` still specializes an ordinary Shen stack-machine interpreter with jumps to four residual programs with the same block counts and answers. [README](experiments/branching_vm/README.md) | 3 s |
+| `nix shell --inputs-from . 'nixpkgs#tlaplus' -c python3 -m targets.raft.tla.check` | TLC on the published `raft.tla` at one small bound (4,054,030 distinct states): none of the five Figure 3 properties is violated. Four of them can fail at that bound and each rejects an edit of the file there; Leader Completeness cannot fail there and rejects an edit at a larger bound. The Figure 8 edit is not rejected within the bound. Not part of `nix flake check`. | 372 s |
+| `nix flake check` | Eight gates: `sim-tool` (the first four rows), `workflow`, `raft`, `raft-mutants`, `solo5-host`, and three that predate the tool: `staged-examples`, `native-replay`, `generated-applications`. | see below |
 
-Agreement between two executions can hide a shared bug. An independent accounting rule exposed one here. The engine could report a $100 balance while its journal recorded $101 after an adjustment arrived before the opening statement. The engine now rejects that sequence. [Executable ledger laws](example/trading-engine/invariants.shen) · [Regression and generated histories](example/trading-engine/check_reachable.py)
+`nix flake check` needs no download beyond the locked inputs: the only derivations it builds are the eight checks. Run as one command it starts all eight at once and takes longer than any single row above.
+
+## What it does not establish
+
+* **No proof.** Nothing shows that specialization preserves meaning. Native code is compared with shen-jit on the rows, seeds and `(state, event)` pairs listed in each README. A Shen form that no retained row uses is untested.
+* **Two hand-written models of one environment.** The simulator and the Maude environment agree on observation sets at the bounds each check names. Timed behavior, partitions and larger bounds are not compared.
+* **Seeds and bounds are the coverage.** Raft's Figure 8 and lost-vote histories are not found by the general fault profiles in hundreds of seeds; they are found under profiles written to produce them. Liveness is a measurement on seeds.
+* **Solo5 is 19 scripted runs under one tender.** Each of those runs is shown to be a simulator run; that every run of the shim is one is an argument. `solo5-hvt` was not run (the container has no `/dev/kvm`), and virtio, muen and xen were not built. A block write that has returned survives the death of the unikernel and of the tender. It does not survive loss of power on the host: the Solo5 block API has no flush. Only the nodes in `tool/solo5/scenarios.py` (AcceptedJob, the simulator's probe, a timer node, a store node) run on Solo5. The workflow engine and Raft do not: the shim has no `send`.
+* **One node per world, small declared capacities.** A Raft log holds 8 entries and there is no compaction. The workflow engine runs one activity at a time.
+* **The environment rules are assumptions.** A specification may rely on whole rows, in-order syncs, a crash keeping a prefix of pending writes, and no completion crossing a crash ([tool/README.md](tool/README.md#environment-rules)). AcceptedJob and Raft depend on the last one and have no defence of their own.
+* **Each target's own list.** [Raft](targets/raft/README.md#10-what-is-established-and-what-is-not), [workflow](targets/workflow/README.md#what-is-not-established), [Solo5](tool/solo5/README.md#what-carries-over-from-simulation-and-what-does-not), [the compiler and simulator](tool/README.md#compiler-limits).
+
+## Three ways to cheat, and where each part of the repository stands
+
+A result here only counts if it avoids three shortcuts.
+
+1. **Tabulation.** Running every input through the interpreter and emitting the table of answers is not specialization.
+2. **Hand staging.** A specification that returns code trees is a compiler written by hand, once per example.
+3. **Semantics in the shim.** Guarantees must come from the Shen specification. Hand-written C or Python may only perform dumb effects.
+
+| Part | Standing |
+|---|---|
+| [tool/](tool/README.md), [targets/](targets/), [experiments/branching_vm](experiments/branching_vm/README.md), [experiments/ordinary_vm](experiments/ordinary_vm/README.md) | Ordinary Shen, specialized by a partial evaluator that knows nothing about the program. The specifications compute values and never mention residual code. The workflow check and the Solo5 check each carry teeth against cheats 1 to 3 for their own target. |
+| [logic/](logic/build.py): AcceptedJob in Shen and Maude | **Tabulation.** `logic/build.py` asks the interpreter for all 28 pairs of 7 states and 4 events and emits the answers as a chain of string comparisons. It is not specialization, and earlier versions of this file and of [GOAL.md](GOAL.md) were wrong to call it that. `python3 logic/check.py` does show that the Shen and Maude definitions agree on those 28 pairs under both cancellation policies and that the emitted table follows an edit of either source. |
+| [native/](native/spec.py): the JSON job specifications | A rule table written in JSON and emitted as branches. The SQLite read, the transaction and the commit are in hand-written [native/store.c](native/store.c), so the durability of an accepted job comes from the shim, not from the specification. [tool/examples/accepted_job](tool/examples/accepted_job/README.md) is the version with the commit boundary inside the Shen. |
+| [examples/](examples/): VM, decoder, railway, queries | **Hand staging.** Each `spec.shen` and `spec.maude` builds the residual program itself, as a tree of `seq`, `set`, `while` and `emit`. They exercise the shared C backend. They are not evidence that an interpreter was specialized. |
+| [example/](example/README.md): three applications in App Shen | A separate line of work that reached this branch with the commits of `main` up to `54e4d74`. App Shen is its own dialect with a Python reference evaluator, and Python hosts connect the generated code to databases and sockets. It does not use `tool/` and was not examined against the three cheats here. Its gate is `checks.<system>.generated-applications`. |
 
 ## Try it
-
-With Nix installed and flakes enabled, build the sum program and inspect what the compiler kept. The locked shell supplies Python, Clang, SQLite, Shen JIT and Maude.
 
 ```sh
 git clone https://github.com/pyrex41/semantic-co-design.git
 cd semantic-co-design
 nix develop
-demo=$(mktemp -d)
-python3 -m specializer build vm --source shen --static examples/vm/sum.json \
-  -o "$demo/sum" --emit-ir "$demo/sum.json" --emit-c "$demo/sum.c"
-printf '5 8 13\n' | "$demo/sum"
-# 26
+python3 -m tool check accepted_job                 # the first application, about a minute
+python3 -m tool compile accepted_job /tmp/out      # IR, C, shared library, executable
+python3 -m tool compile raft /tmp/raft
+python3 -m targets.raft.check story commit-by-counting churn paper   # Figure 8 as a seed found it
 ```
 
-## Four explicitly staged specifications
+To write a new application, read [tool/README.md](tool/README.md): the specification convention, the manifest, what the compiler accepts and what the simulator provides.
 
-Switch `--source` to `maude` to reduce the Maude equations for the same static fixture. Each native process reads one integer vector per line and emits one result vector per line. The example READMEs describe the domain-specific encodings.
+## Earlier work kept in the tree
 
-| Example and author-supplied semantics | Fixed and eliminated during specialization | Dynamic input | Shared compiler work exercised | Replay |
-|---|---|---|---|---|
-| [VM](examples/vm/README.md) — stack-machine operations | Program and opcode dispatch | Array length and 32-bit values | Initial loop, indexed reads and modular arithmetic | `python3 -m examples.vm.check` |
-| [Decoder](examples/decoder/README.md) — frame grammar and incremental transitions | Byte order, accepted kinds, length and checksum rules | Bytes and chunk boundaries | Indexed scratch writes and variable-length output | `python3 -m examples.decoder.check` |
-| [Railway](examples/railway/README.md) — reservations, entry and clearance | Two-route layout | Serialized route events | Existing conditionals and scalar slots | `python3 -m examples.railway.check` |
-| [Queries](examples/query/README.md) — relational operators | Schema offsets and query tree | Rows, table sizes and cutoff | Nested loops and exact signed 64-bit concrete arithmetic | `python3 -m examples.query.check` |
+**Hand-staged examples.** `python3 -m specializer build vm --source shen --static examples/vm/sum.json -o /tmp/sum` builds a native program that sums its input. The four examples below share one IR and one C backend ([interface](specializer/FORMAT.md)). In each, the author's Shen or Maude constructs the residual program directly, which is cheat 2 above.
 
-The [shared interface](specializer/FORMAT.md) uses scalar expressions, structured control flow, indexed storage and output. To add an example, supply the manifest and the two source files in its directory. The fifth-example check builds a temporary, unregistered specification through both language runtimes.
+| Example | Fixed when built | Dynamic input | Replay |
+|---|---|---|---|
+| [VM](examples/vm/README.md) | Program and opcode dispatch | Array length and 32-bit values | `python3 -m examples.vm.check` |
+| [Decoder](examples/decoder/README.md) | Byte order, accepted kinds, length and checksum rules | Bytes and chunk boundaries | `python3 -m examples.decoder.check` |
+| [Railway](examples/railway/README.md) | Two-route layout | Serialized route events | `python3 -m examples.railway.check` |
+| [Queries](examples/query/README.md) | Schema offsets and query tree | Rows, table sizes and cutoff | `python3 -m examples.query.check` |
 
-The [ordinary Shen interpreter experiment](experiments/ordinary_vm/README.md) derives the sum loop from recursive list processing without explicit staging primitives.
+The [compiled benchmark](benchmarks/README.md) times these four generated programs against Shen JIT, Maude compiled through C++ and handwritten C.
 
-Each example retains its representative IR and C in `residual/`. The artifact check regenerates both files from each language and checks the surviving loops. The decoder has loops over chunks, bytes, and payload output. The join has a loop per input relation. The shared code has no domain-specific dispatch. The [compiled benchmark](benchmarks/README.md) compares the generated programs with standalone Shen JIT binaries, Maude compiled through C++, and handwritten C on identical input rows.
+**A durable job from a table.** `python3 logic/build.py logic/accepted-job.shen --compile /tmp/job` and the same with `logic/accepted-job.maude` build a binary that loads one job from SQLite, applies one of 28 tabulated transitions and commits. `--policy keep` selects the other cancellation policy. See the table above for what this is and is not.
 
-## Run a durable job from two different specs
-
-Build the same job from each executable definition and run them against a fresh database:
-
-```sh
-demo=$(mktemp -d)
-python3 logic/build.py logic/accepted-job.shen --compile "$demo/job-shen"
-python3 logic/build.py logic/accepted-job.maude --compile "$demo/job-maude"
-"$demo/job-shen" "$demo/jobs.sqlite" 17 submit-a
-"$demo/job-maude" "$demo/jobs.sqlite" 17 submit-b
-```
-
-The first command to the job prints `pending-a receipt-a`. The second finds job 17 after restart and prints `pending-a conflict`. The binaries use the host platform and dynamically link SQLite. Python and the language runtimes are build-time dependencies.
-
-The transition rules are written in [Shen](logic/accepted-job.shen) and [Maude](logic/accepted-job.maude).
-
-Edit the transition in either language and rerun its build command. The default cancellation policy withdraws pending work. Pass `--policy keep` before `--compile` to keep the obligation after a cancellation. This example specializes all seven states and four events, with two digest symbols and a runtime uint32 job key.
-
-Run `nix flake check` to compile both language specs and check all 112 native transitions across the two policies. The check also changes a rule in each source and verifies the resulting native behavior. A second replay checks the [JSON frontend's typed, durable job](native/accepted-job.json) with full runtime SHA-256 digests.
+**Three applications in App Shen.** [Document Desk](example/webapp/README.md), a [spot trading engine](example/trading-engine/README.md) and a [router and load balancer](example/router-nlb/README.md). [Application guide](example/README.md) · [Language contract](example/LANGUAGE.md)
 
 ## Project documents
 
-- [Goal and evidence](GOAL.md) records what the prototype establishes and which claims remain open.
-- [Research plan](RESEARCH.md) explains the specialization, correspondence and learning questions.
-- [Experiments and reproduction commands](EXPERIMENTS.md) covers retry witnesses, independent Fenrir and Capcov controls, performance measurements and the learning pilot.
+- [Goal and evidence](GOAL.md): the goal, what is established, and what remains open.
+- [tool/README.md](tool/README.md): the specification convention, the compiler, the simulator, the checkers and their limits.
+- [Research plan](RESEARCH.md) and [experiments](EXPERIMENTS.md): the earlier cycle on retry witnesses, Fenrir and Capcov controls and the learning pilot.

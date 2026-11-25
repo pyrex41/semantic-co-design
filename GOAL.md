@@ -1,6 +1,53 @@
 # Compile executable behavior to native machine code
 
-The developer authors an executable specification of behavior. Interpret it to inspect its meaning, then specialize the evaluator for that specification and its fixed policy choices to produce a standalone native executable. Runtime inputs remain dynamic. A developer should be able to change a rule, recompile, and observe the change without writing an application implementation.
+The developer authors an executable specification of behavior in ordinary Shen. Interpret it to inspect its meaning. Specialize it to a native step function. Run that function under a deterministic simulator that owns every source of nondeterminism, check invariants written in Shen over the traces, and explore the same rules within bounds in Maude. A developer should be able to change a rule, recompile, and see the change in the native code, in the simulation and in the search, without writing an application implementation.
+
+Three shortcuts do not count as reaching this goal:
+
+1. **Tabulation.** Enumerating inputs through the interpreter and emitting a table is not specialization.
+2. **Hand staging.** A specification that returns code trees is a hand-written compiler.
+3. **Semantics in the shim.** Guarantees must come from the Shen specification. Hand-written C or Python may only perform dumb effects.
+
+## Where the goal stands
+
+Each line is established by the command beside it, run with `nix develop -c`, and only to the extent the linked README states. [README.md](README.md) has the same commands with what each pass means and how long it took.
+
+| Part of the goal | Standing | Command |
+|---|---|---|
+| Specialize ordinary Shen to native code | Done for a first-order fragment: integers, declared symbols and booleans in states of fixed shape. Compared with shen-jit row by row, traps and overflow included. [Limits](tool/README.md#compiler-limits) | `python3 -m tool check kernel` |
+| A simulator that owns all nondeterminism | Done for one step function per world: clock, network, keyed disk, crashes between any two effects of a step, schedule. Seeded runs replay byte for byte. [Limits](tool/README.md#simulator-limits) | `python3 -m tool check sim` |
+| Invariants in Shen over traces | Done. Every application below states its guarantees as Shen functions that do not call the node, and keeps at least one mutant that each invariant rejects. | the application checks below |
+| The same rules explored in Maude | Done within small bounds. The Shen text is translated clause by clause; Maude and the simulator must reach the same observations. The translator is tested, not proved. | every check below |
+| A first application | AcceptedJob with the commit boundary inside the specification. [README](tool/examples/accepted_job/README.md) | `python3 -m tool check accepted_job` |
+| More than one node | Gossip on three nodes; Raft on three and five. | `python3 -m tool check gossip`, `python3 -m tool check raft` |
+| An interpreter specialized to its program | A durable workflow engine in ordinary Shen, specialized per workflow definition. The check shows mechanically that the definition language does not survive into the residual code. [README](targets/workflow/README.md) | `python3 -m tool check workflow` |
+| A protocol with published properties | Raft: the five properties of Figure 3, nine further rules and linearizability on seeded runs, with 22 mutants. [README](targets/raft/README.md) | `python3 -m tool check raft`, `python3 -m targets.raft.check mutants` |
+| The native code outside the simulator | An effect shim on Solo5: 19 scripted runs under `solo5-spt`, each shown to be a simulator run. [README](tool/solo5/README.md) | `python3 -m tool check solo5` (needs a Linux container on macOS), `python3 -m tool check solo5-host` |
+| Change a rule, see the change | Shown by the mutants: 8 for AcceptedJob, 2 for gossip, 21 for the workflow engine, 22 for Raft, 21 images for Solo5. Each is one edit, recompiled, and rejected by a named check on a retained seed or scenario. | the checks above |
+
+## What is not established
+
+* That specialization preserves meaning. The evidence is differential: native against shen-jit on the rows and pairs each check reaches.
+* That the simulator and the Maude environment are the same model beyond the observation sets at the bounds compared. One author wrote both.
+* Safety beyond the seeds and bounds run. For Raft, the two best-known failures (Figure 8, the lost vote) are found only under fault profiles written to produce them.
+* Liveness, except as a measurement on seeds and as the absence of cycles in the workflow engine's bounded searches.
+* That every run of the Solo5 shim is a simulator run. It is shown for 19 scripted runs under `solo5-spt` and argued for the rest. `solo5-hvt` was not run. Durability on Solo5 means surviving the death of the unikernel, not loss of power on the host.
+* Raft or the workflow engine on Solo5. The shim has no `send`, and neither target was built as a unikernel.
+* What specialization buys in speed. The one measurement is the workflow engine's step at about 1.8 times shen-jit ([receipt](targets/workflow/bench.json)); no unspecialized native engine exists to compare with.
+* Anything about real time, real networks, more than one disk per node, disk corruption, or a node with a source of randomness.
+
+## Earlier claims that the newer work corrects
+
+* **AcceptedJob in [logic/](logic/build.py) is tabulation, not specialization.** `logic/build.py` evaluates all 28 pairs of 7 states and 4 events in shen-jit or Maude and emits the answers as branches. This file used to call it "the source-language specializer". `python3 logic/check.py` establishes that the Shen and Maude definitions agree on those pairs and that the table follows an edit; it establishes nothing about specialization.
+* **The JSON job specifications in [native/](native/spec.py) keep the commit outside the specification.** The rules are a table; the SQLite transaction is hand-written C in [native/store.c](native/store.c). The guarantee that an accepted job is durable therefore comes from the shim. [tool/examples/accepted_job](tool/examples/accepted_job/README.md) replaces it: the write, the wait for its acknowledgement and the reload after a crash are in the Shen, and a specification edited to reply before the acknowledgement is rejected.
+* **The four examples in [examples/](examples/) are hand staged.** Their Shen and Maude build the residual program themselves. They test the shared backend.
+* **"Compile a second independently chosen application", the follow-on this file ends with, is done.** After AcceptedJob and gossip, the workflow engine and Raft were each written by a separate lane against the finished compiler, and neither changed `tool/pe.py` or `tool/compile.py`. What they needed from the rest of the kernel is listed in their READMEs: a workload that reacts to outputs and a cheaper trap (workflow), optional simulator profile keys and a timer budget in both environments (Raft).
+
+The sections below are the record of the earlier cycle. They are kept as written, except where a note says otherwise.
+
+## The first vertical slice, as it was described
+
+*Note: "specializer" and "specializes" in this section describe tabulation and a rule table emitted as branches; see the corrections above.*
 
 Author behavior directly in [Shen](logic/accepted-job.shen) or [Maude](logic/accepted-job.maude). The [source-language specializer](logic/build.py) executes either definition over a fixed interface and produces a native binary. The [differential check](logic/check.py) compares both source languages, tests each native transition and rebuilds after independent edits to each source. Current source-language coverage is the finite two-digest job profile.
 

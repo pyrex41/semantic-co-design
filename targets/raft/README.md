@@ -37,7 +37,7 @@ What the specification relies on from its environment is listed at the top of `s
 
 The whole node is compiled. Nothing is interpreted at run time and nothing is hand-written in C.
 
-`spec.shen` (272 lines without comments, 40 definitions) becomes 104,081 IR nodes, 4,568 slots, no residual loop blocks and 33,451 lines of C. A server's state is 73 integers. The library and the executable give the same initial state for every server of a 3-server and a 5-server cluster.
+`spec.shen` (272 lines without comments, 40 definitions) becomes 104,081 IR nodes, 4,568 slots, no residual loop blocks and 33,453 lines of C. A server's state is 73 integers. The library and the executable give the same initial state for every server of a 3-server and a 5-server cluster.
 
 The compiler (`tool/pe.py`, `tool/compile.py`) was not changed for this target. What it took was writing the node inside the compiler's documented limits, all of which leave it ordinary Shen:
 
