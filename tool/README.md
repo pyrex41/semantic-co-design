@@ -6,8 +6,9 @@ A developer writes the behavior of a node as ordinary Shen. This package
 2. runs the same native code under a deterministic simulator that owns the clock, the network, the disks, crashes and the schedule ([sim/](sim/)),
 3. checks every simulated step against the Shen source in shen-jit and evaluates invariants written in Shen over the traces ([check.py](check.py)),
 4. translates the same Shen source to Maude and searches the same environment exhaustively within a bound ([maude.py](maude.py)),
-5. runs the same code, built as an import-free WebAssembly module ([wasm.py](wasm.py)), as real OS processes with real sockets, files and clock, and checks what the processes logged against the same Shen source and the same invariants ([host/](host/)).
-6. packages the node with its host as a NixOS service, with a test that runs it on virtual machines, where the process kill, the power loss, the partition and the packet loss are real ones ([../nix/vm.nix](../nix/vm.nix)). That test is written and evaluated and has not been run: see section 5.
+5. lets Hegel generate the simulator's schedules, faults and workload and shrink a failing one ([sim/hegel.py](sim/hegel.py)),
+6. runs the same code, built as an import-free WebAssembly module ([wasm.py](wasm.py)), as real OS processes with real sockets, files and clock, and checks what the processes logged against the same Shen source and the same invariants ([host/](host/)),
+7. packages the node with its host as a NixOS service, with a test that runs it on virtual machines, where the process kill, the power loss, the partition and the packet loss are real ones ([../nix/vm.nix](../nix/vm.nix)). That test is written and evaluated and has not been run: see section 5.
 
 ```sh
 nix develop -c python3 -m tool check kernel         # the compiler's own checks
@@ -15,6 +16,8 @@ nix develop -c python3 -m tool check accepted_job   # the first application
 nix develop -c python3 -m tool real accepted_job    # the same application as killed and restarted processes
 nix build .#checks.x86_64-linux.real-vm -L          # the same application on NixOS machines (Linux with KVM)
 ```
+
+[../WASM.md](../WASM.md) lists these as rungs of one ladder and says, for each, what was run, with what result, and what was not.
 
 ## 1. Specification convention
 
