@@ -16,13 +16,21 @@ def main(argv):
                 from .sim_check import main as run
                 run()
             else:
-                module = importlib.import_module(f".examples.{name}.check", __package__)
+                try:
+                    module = importlib.import_module(f".examples.{name}.check", __package__)
+                except ModuleNotFoundError as missing:
+                    if missing.name != f"{__package__}.examples.{name}":
+                        raise
+                    module = importlib.import_module(f"targets.{name}.check")   # targets/<name>/
                 module.main(record=argv[0] == "record")
         return 0
     if len(argv) == 3 and argv[0] == "compile":
         from .compile import build
         from .schema import Schema
-        native = build(Schema(Path(__file__).parent / "examples" / argv[1] / "node.json"), argv[2])
+        manifest = Path(__file__).parent / "examples" / argv[1] / "node.json"
+        if not manifest.exists():
+            manifest = Path(__file__).parent.parent / "targets" / argv[1] / "node.json"
+        native = build(Schema(manifest), argv[2])
         print(native.library, native.executable, native.stats)
         return 0
     print(__doc__)
