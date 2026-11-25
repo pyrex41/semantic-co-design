@@ -10,7 +10,7 @@ ARITHMETIC = {
 }
 
 
-LIMITS = {"slots": 1024, "depth": 128}
+LIMITS = (1024, 128)    # slots and nesting depth, unless a caller passes its own
 
 
 def integer(n):
@@ -19,14 +19,14 @@ def integer(n):
     return n
 
 
-def slot(n):
-    if type(n) is not int or not 0 <= n < LIMITS["slots"]:
+def slot(n, limits=LIMITS):
+    if type(n) is not int or not 0 <= n < limits[0]:
         raise ValueError("invalid scalar or bank number")
     return n
 
 
-def node(tree, arities, depth):
-    if depth > LIMITS["depth"] or not isinstance(tree,list) or not tree or not isinstance(tree[0],str):
+def node(tree, arities, depth, limits=LIMITS):
+    if depth > limits[1] or not isinstance(tree,list) or not tree or not isinstance(tree[0],str):
         raise ValueError("invalid or deeply nested residual node")
     name = tree[0]
     if name not in arities or arities[name] not in (None,len(tree)-1):
@@ -39,15 +39,15 @@ EXPRESSIONS = {**dict.fromkeys(ARITHMETIC,2), "div":2, "mod":2, "var":1, "len":0
 STATEMENTS = {"seq":None, "set":2, "put":3, "emit":1, "if":3, "while":2, "trap":0}
 
 
-def expression(tree, depth):
+def expression(tree, depth, limits=LIMITS):
     if type(tree) is int:
         return integer(tree)
-    op = node(tree, EXPRESSIONS, depth)
+    op = node(tree, EXPRESSIONS, depth, limits)
     if op == "var":
-        return [op, slot(tree[1])]
+        return [op, slot(tree[1], limits)]
     if op == "get":
-        return [op,slot(tree[1]),expression(tree[2],depth+1)]
-    args = [expression(value,depth+1) for value in tree[1:]]
+        return [op,slot(tree[1],limits),expression(tree[2],depth+1,limits)]
+    args = [expression(value,depth+1,limits) for value in tree[1:]]
     if op not in ("len","at") and all(type(v) is int for v in args):
         if op == "u32":
             return args[0] % 2**32
@@ -61,14 +61,15 @@ def expression(tree, depth):
     return [op,*args]
 
 
-def normalize(tree, depth=0):
-    op = node(tree,STATEMENTS,depth)
+def normalize(tree, depth=0, limits=LIMITS):
+    """Validate and fold. `limits` is (slots, nesting depth) and belongs to this call alone."""
+    op = node(tree,STATEMENTS,depth,limits)
     def expr(child):
-        return expression(child,depth+1)
+        return expression(child,depth+1,limits)
     if op == "seq":
         steps = []
         for child in tree[1:]:
-            step = normalize(child,depth+1)
+            step = normalize(child,depth+1,limits)
             steps.extend(step[1:] if step[0] == "seq" else [step])
         return ["seq",*steps]
     if op == "trap":
@@ -76,9 +77,9 @@ def normalize(tree, depth=0):
     if op == "emit":
         return [op,expr(tree[1])]
     if op in ("set","put"):
-        return [op,slot(tree[1]),*(expr(v) for v in tree[2:])]
+        return [op,slot(tree[1],limits),*(expr(v) for v in tree[2:])]
     condition = expr(tree[1])
-    branches = [normalize(child,depth+1) for child in tree[2:]]
+    branches = [normalize(child,depth+1,limits) for child in tree[2:]]
     if type(condition) is int:
         if op == "if":
             return branches[0 if condition else 1]
@@ -92,12 +93,7 @@ def lower_c_body(program, *, trap="exit(2);", slots=1024, depth=128):
 
     The statements index `slots[0 .. slots-1]`: the caller's driver must declare that many.
     """
-    saved = dict(LIMITS)
-    LIMITS.update(slots=slots, depth=depth)
-    try:
-        program = normalize(program)
-    finally:
-        LIMITS.update(saved)
+    program = normalize(program, 0, (slots, depth))
     banks = set()
     def c_expr(tree):
         if type(tree) is int:

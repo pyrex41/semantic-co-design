@@ -13,7 +13,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from specializer.backend import generate, normalize, LIMITS
+from specializer.backend import generate, normalize
 from .pe import (Cons, Node, Specializer, Unsupported, assemble, items_of, kind_of, parse,
                  sequence)
 from .schema import Schema
@@ -168,12 +168,7 @@ def build(schema, directory, source=None, *, name="node", **limits):
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
     tree, slots, blocks = specialize(schema, source, **limits)
-    saved = dict(LIMITS)
-    LIMITS.update(slots=max(slots, 1), depth=DEPTH)
-    try:
-        tree = normalize(tree)
-    finally:
-        LIMITS.update(saved)
+    tree = normalize(tree, 0, (max(slots, 1), DEPTH))
     code = c_source(tree, slots)
     (directory / f"{name}.ir.json").write_text(json.dumps(tree) + "\n")
     (directory / f"{name}.c").write_text(code)

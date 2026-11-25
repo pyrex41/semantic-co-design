@@ -27,7 +27,7 @@ Rungs 1 to 4 run the same module and ask the same two questions of it: does it r
 
 **Not reconciled with `sim-tool`.** That branch has moved since `cf5cf74`: at the time of writing it is `021f5fa`, eight commits and 41 files on, among them a second trace format, changes to `tool/sim/__init__.py`, `tool/pe.py` and `tool/maude.py`, and an AcceptedJob specification without its acknowledgement token. Six files are changed on both sides: `flake.nix`, `tool/README.md`, `tool/__main__.py`, `tool/abi.c.in`, `tool/compile.py` and `tool/examples/accepted_job/check.py`. The Hegel lane reads the simulator's internals and writes `sim-trace/1`; the real host packs and judges the AcceptedJob that `cf5cf74` has. That merge was not attempted here. Every number in this file is about the tree on `cf5cf74`, and none of it carries over to the merged tree until the checks are run there.
 
-**No Linux.** This machine has no Linux builder: `/etc/nix/machines` does not exist and `nix build .#packages.aarch64-linux.node-runtime` stops at
+**No Linux builder (historical).** This paragraph is the record from before the machine tests were run. Since then `real-vm` and `real-vm-mutant` have been built and passed on `aarch64-linux` in a container (see Rung 4); no other check has been built on Linux, and nothing on `x86_64-linux`. At the time, this machine had no Linux builder: `/etc/nix/machines` does not exist and `nix build .#packages.aarch64-linux.node-runtime` stops at
 
 ```
 error: Cannot build '/nix/store/y5a234ns7q8z5mc91rvkc7gpiaqzkz63-python3-3.14.7-env.drv'.
@@ -36,7 +36,7 @@ error: Cannot build '/nix/store/y5a234ns7q8z5mc91rvkc7gpiaqzkz63-python3-3.14.7-
        Current system: 'aarch64-darwin'
 ```
 
-So every check is observed on aarch64-darwin only. For `aarch64-linux` and `x86_64-linux` all checks evaluate (`nix flake check --no-build --all-systems`, exit 0, 25 checks over the three systems) and none has been built.
+So every check was then observed on aarch64-darwin only. For `aarch64-linux` and `x86_64-linux` all checks evaluate (`nix flake check --no-build --all-systems`, exit 0, 25 checks over the three systems) and none had been built.
 
 ## The flake
 

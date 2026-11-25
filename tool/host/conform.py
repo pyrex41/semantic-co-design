@@ -186,6 +186,11 @@ def explain(schema, node, logs):
             made = effects[node].get(at)
             require(segment <= at[0] < seq and role_of(made) == LOCAL[role],
                     f"{where}: {event} is not caused by a {LOCAL[role]} of this segment")
+            if role in ("disk-ack", "disk-read-result"):
+                # The disk serves in order and syncs a write before it starts what follows:
+                # whatever it has answered, every write of the segment issued before is durable.
+                require(all(place in durable for place in issued if place < at),
+                        f"{where}: {event} was served and a write issued before it is not durable")
             if role == "disk-ack":
                 require(made[1] == event[1] and at in durable,
                         f"{where}: acknowledges a write that is not durable")

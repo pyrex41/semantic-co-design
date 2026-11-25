@@ -345,9 +345,24 @@ def prefix(schema, report):
                 f"durable prefix: rejected for another reason: {failure}")
     else:
         raise CheckFailure("durable prefix: the second of two writes was accepted as durable alone")
+    # A read that was served is a boundary too: the write issued before it is durable by then.
+    row = [7, KEY, DIGESTS[0]]
+    read = lambda found, *vals: records[:2] + [
+        {"seq": 2, "event": ["submit", 0, KEY, DIGESTS[0]], "cause": None,
+         "effects": [["write", 0, *row], ["read", 1, 7]], "post": None},
+        {"seq": 3, "event": ["loaded", 1, 7, found, *vals], "cause": [2, 1], "effects": [], "post": None}]
+    explain(schema, 0, [{"records": read(1, *row[1:]), "rows": [[2, 0, *row]]}])
+    try:
+        explain(schema, 0, [{"records": read(0, 0, 0), "rows": []}])
+    except CheckFailure as failure:
+        require(str(failure).startswith("causality") and "issued before it is not durable" in str(failure),
+                f"durable prefix: the read was rejected for another reason: {failure}")
+    else:
+        raise CheckFailure("durable prefix: a read was served before the write issued ahead of it was durable")
     report(f"durable prefix: of two writes of one segment, neither, the first or both durable are "
            f"crashes that lost {lost['neither']}, {lost['the first']} and {lost['both']} writes; "
-           f"the second alone is rejected (causality)")
+           f"the second alone is rejected (causality), and so is a read that misses a write "
+           f"issued before it and lost (causality)")
 
 
 def mutants(work, schema, report):
