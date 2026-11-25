@@ -58,6 +58,13 @@
           python3 -m tool check kernel sim accepted_job gossip
           touch "$out"
         '';
+        # The effect shim of tool/solo5 as a host process, against the simulator. The
+        # unikernels themselves need Linux and a tap device: see tool/solo5/README.md.
+        solo5-host = nixpkgs.legacyPackages.${system}.runCommand "solo5-host" (environment system) ''
+          cd ${self}
+          python3 -m tool check solo5-host
+          touch "$out"
+        '';
         native-replay = nixpkgs.legacyPackages.${system}.runCommand "native-replay" (environment system) ''
           python3 ${self}/logic/check.py
           python3 ${self}/native/check_accepted_job.py
