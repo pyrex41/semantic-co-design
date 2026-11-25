@@ -33,6 +33,24 @@ class BackendTest(unittest.TestCase):
         finally:
             d.cleanup()
 
+    def test_slot_limit_sizes_the_default_array(self):
+        last = ["seq", ["set", 2047, ["at", 0]], ["emit", ["var", 2047]]]
+        with self.assertRaises(ValueError):
+            generate(last)
+        self.assertIn("int64_t slots[1024]", generate(["emit", ["at", 0]]))
+        self.assertIn("int64_t slots[2048]", generate(last, slots=2048))
+        with self.assertRaises(ValueError):
+            generate(["set", 2048, 1], slots=2048)
+        directory = tempfile.TemporaryDirectory()
+        try:
+            c, exe = Path(directory.name) / "program.c", Path(directory.name) / "program"
+            c.write_text(generate(last, slots=2048))
+            subprocess.run(["clang", "-std=c11", "-O2", str(c), "-o", str(exe)], check=True)
+            result = subprocess.run([exe], input="7\n", text=True, capture_output=True, check=True)
+            self.assertEqual(result.stdout, "7\n")
+        finally:
+            directory.cleanup()
+
 
 if __name__ == "__main__":
     unittest.main()

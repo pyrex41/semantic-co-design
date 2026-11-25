@@ -104,18 +104,25 @@ class Host:
         self.state = after
 
     def append(self, record):
-        self.write(self.log_fd, wal.frame({"seq": self.seq, **record}), "log-torn")
+        self.write(self.log_fd, wal.frame({"seq": self.seq, **record}), "log")
         self.seq += 1
         return self.seq - 1
 
-    def write(self, fd, line, point):
-        """A whole record, synced, or no process. A write that is short or fails (a full
-        disk, a quota, a size limit) leaves a torn tail, and nothing may follow one."""
+    def write(self, fd, line, name):
+        """A whole record, synced, or no process, on whichever thread it is. A write that is
+        short or fails (a full disk, a quota, a size limit) leaves a torn tail, and nothing
+        may follow one; a sync that fails leaves a record nobody may be told is durable.
+        HOST_CRASH points: <name>-torn writes half the record, <name>-unsynced fails the sync."""
         try:
-            whole = os.write(fd, line[:len(line) // 2] if self.crash(point) else line) == len(line)
+            whole = os.write(fd, line[:len(line) // 2] if self.crash(f"{name}-torn") else line) == len(line)
         except OSError:
             whole = False
-        wal.sync(fd)
+        try:
+            if self.crash(f"{name}-unsynced"):
+                raise OSError("HOST_CRASH: the sync fails")
+            wal.sync(fd)
+        except OSError:
+            whole = False
         if not whole:
             die()
 
@@ -151,13 +158,20 @@ class Host:
 
     def disk(self, wake):
         """The disk, in its own thread and in the order asked: a write is appended and
-        synced before its acknowledgement exists; a read scans the durable file."""
+        synced before its acknowledgement exists; a read scans the durable file. The node
+        cannot go on without its disk: whatever stops this thread stops the process."""
+        try:
+            self.serve(wake)
+        finally:
+            die()
+
+    def serve(self, wake):
         schema = self.schema
         while True:
             role, cause, fields = self.jobs.get()
             if role == "disk-write":
                 token, key, *vals = fields
-                self.write(self.disk_fd, wal.frame([*cause, key, *vals]), "disk-torn")
+                self.write(self.disk_fd, wal.frame([*cause, key, *vals]), "disk")
                 if self.crash("synced"):
                     die()
                 event = (schema.roles["disk-ack"].tag, token) if "disk-ack" in schema.roles else None

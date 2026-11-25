@@ -132,9 +132,16 @@ def explain(schema, node, logs):
         require(role_of(effects[node].get(at)) == "disk-write" and effects[node][at][2:] == row,
                 f"causality: node {node}: durable row {row} is not a write the log holds at {at}")
 
-    items, used, armed, unsynced, segment, clock = [], set(), {}, {}, None, 0
+    items, used, armed, unsynced, issued, segment, clock = [], set(), {}, {}, [], None, 0
 
     def kill():
+        # The disk serves in order and syncs each write before it starts the next, so what a
+        # segment made durable is a prefix of what it issued.
+        kept = [at in durable for at in issued]
+        require(kept == sorted(kept, reverse=True),
+                f"causality: node {node}: a write of the segment at record {segment} is not "
+                f"durable and a later write of that segment is")
+        issued.clear()
         kept = [unsynced[at] for at in sorted(unsynced) if at in durable]
         items.append({"kind": "crash", "node": node, "crashed": True, "state": None, "rows": kept,
                       "persisted": len(kept), "lost_writes": len(unsynced) - len(kept)})
@@ -198,6 +205,7 @@ def explain(schema, node, logs):
         for k, (tag, *fields) in enumerate(record["effects"]):
             if role_of([tag]) == "disk-write":
                 unsynced[seq, k] = fields[1:]
+                issued.append((seq, k))
             elif role_of([tag]) == "timer-set":
                 armed[fields[0]] = (seq, k)
             elif role_of([tag]) == "timer-cancel":

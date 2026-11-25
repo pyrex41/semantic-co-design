@@ -12,7 +12,7 @@ from tempfile import TemporaryDirectory
 
 from ...check import CheckFailure, require
 from ...host import Client, Cluster, bundle, wal
-from ...host.conform import conform
+from ...host.conform import conform, explain
 from ...schema import Schema
 from ...host import LINE
 from .check import MUTANTS, mutate
@@ -298,6 +298,58 @@ def short(work, schema, packed, report):
            f"host stops at record {at}, half written; its reply never reaches the client")
 
 
+def unsynced(work, schema, packed, report):
+    """A sync that fails in the disk thread is the end of the process: the write is never
+    acknowledged, so its reply never leaves, and a supervisor sees a process to restart."""
+    cluster = Cluster(packed, work / "unsynced")
+    cluster.start(0, "disk-unsynced:1")
+    client = Client(cluster.clients[0])
+    try:
+        client.send(("submit", 0, KEY, DIGESTS[0]))
+        reply = client.wait(lambda o: o[:2] == ("reply", 0), 2)
+        try:
+            cluster.procs[0].wait(timeout=30)
+        except Exception:
+            raise CheckFailure("failed sync: the host outlived its disk thread") from None
+    finally:
+        cluster.stop()
+        client.close()
+    records = wal.read(cluster.data[0] / "events.log")[0]
+    require(not reply and not client.got, f"failed sync: {client.got} left the process")
+    require(any(e[0] == "write" for r in records for e in r.get("effects", []))
+            and not any(r.get("event", [0])[0] == "written" for r in records),
+            "failed sync: the write was not issued, or it was acknowledged")
+    found = conform(schema, cluster.data, module=packed["wasm"], received={0: client.got})
+    require(not found["violations"], f"failed sync: {found['violations']}")
+    report("failed sync: with the first sync of disk.log failing the host exits; the write is "
+           "never acknowledged and no reply reaches the client")
+
+
+def prefix(schema, report):
+    """The disk syncs each write before it starts the next: of two writes of one segment the
+    second cannot be durable alone. The first alone is a crash between them."""
+    a, b = [1, KEY, DIGESTS[0]], [2, KEY + 1, DIGESTS[0]]
+    records = [{"seq": 0, "boot": {"init": []}},
+               {"seq": 1, "event": ["restart"], "cause": None, "effects": [], "post": None},
+               {"seq": 2, "event": ["submit", 0, KEY, DIGESTS[0]], "cause": None,
+                "effects": [["write", 0, *a], ["write", 1, *b]], "post": None}]
+    lost = {}
+    for label, rows in (("neither", []), ("the first", [[2, 0, *a]]), ("both", [[2, 0, *a], [2, 1, *b]])):
+        crash = explain(schema, 0, [{"records": records, "rows": rows}])[-1]
+        require(crash["persisted"] == len(rows), f"durable prefix: {label} durable was miscounted")
+        lost[label] = crash["lost_writes"]
+    try:
+        explain(schema, 0, [{"records": records, "rows": [[2, 1, *b]]}])
+    except CheckFailure as failure:
+        require(str(failure).startswith("causality") and "later write" in str(failure),
+                f"durable prefix: rejected for another reason: {failure}")
+    else:
+        raise CheckFailure("durable prefix: the second of two writes was accepted as durable alone")
+    report(f"durable prefix: of two writes of one segment, neither, the first or both durable are "
+           f"crashes that lost {lost['neither']}, {lost['the first']} and {lost['both']} writes; "
+           f"the second alone is rejected (causality)")
+
+
 def mutants(work, schema, report):
     """Each mutant, running for real, is rejected twice: its log does not refine spec.shen,
     and judged against its own source the run violates the invariant named for it."""
@@ -334,5 +386,7 @@ def main(report=print):
         teeth(work, schema, packed, kept, report)
         hostile(work, schema, packed, report)
         short(work, schema, packed, report)
+        unsynced(work, schema, packed, report)
+        prefix(schema, report)
         mutants(work, schema, report)
     report("accepted_job on the real host: ok")

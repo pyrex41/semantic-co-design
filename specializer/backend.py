@@ -88,7 +88,10 @@ def normalize(tree, depth=0):
 
 
 def lower_c_body(program, *, trap="exit(2);", slots=1024, depth=128):
-    """Return C statements and the scratch bank IDs required by the program."""
+    """Return C statements and the scratch bank IDs required by the program.
+
+    The statements index `slots[0 .. slots-1]`: the caller's driver must declare that many.
+    """
     saved = dict(LIMITS)
     LIMITS.update(slots=slots, depth=depth)
     try:
