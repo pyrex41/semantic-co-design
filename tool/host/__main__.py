@@ -1,7 +1,10 @@
 """python3 -m tool.host <host.json>     run one node as an OS process
+python3 -m tool.host <packed directory> <node> <data directory> <client host:port> <peer host:port> ...
 
 The host knows the manifest's roles and nothing else about the application.
-See tool/README.md, section 6, for the configuration, the wire and the log.
+See tool/README.md, section 3, for the configuration, the wire and the log.
+The second form runs a node from what tool/host/pack.py wrote; the peers are
+every node's peer address in node order, this node's being where it listens.
 """
 from collections import deque
 import hashlib
@@ -235,5 +238,19 @@ class Host:
                     link.close()
 
 
+def configuration(argv):
+    """host.json as it is, or the same thing from a packed directory and addresses."""
+    packed = Path(argv[0])
+    if not packed.is_dir():
+        return json.loads(packed.read_text())
+    address = lambda text: (text.rpartition(":")[0], int(text.rpartition(":")[2]))
+    node, inits = int(argv[1]), json.loads((packed / "inits.json").read_text())
+    peers = [address(peer) for peer in argv[4:]]
+    if len(peers) != len(inits) or not 0 <= node < len(inits):
+        sys.exit(f"{packed} was packed for {len(inits)} nodes; node {node} of {len(peers)} asked")
+    return {"manifest": str(packed / "node.json"), "wasm": str(packed / "node.wasm"), "node": node,
+            "init": inits[node], "data": argv[2], "client": address(argv[3]), "peers": peers}
+
+
 if __name__ == "__main__":
-    Host(json.loads(Path(sys.argv[1]).read_text())).run()
+    Host(configuration(sys.argv[1:])).run()

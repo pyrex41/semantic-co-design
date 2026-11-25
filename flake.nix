@@ -18,7 +18,21 @@
           WASM_CLANG = "${pkgs.llvmPackages.clang-unwrapped}/bin/clang";
           PYTHONDONTWRITEBYTECODE = "1";
         };
+      # nix/node.nix: the node runtime, the conformance command and one package per example.
+      packed = system: import ./nix/node.nix {
+        pkgs = nixpkgs.legacyPackages.${system};
+        src = self;
+        environment = environment system;
+      };
     in {
+      packages = eachSystem (system: let p = packed system; in {
+        node-runtime = p.runtime;
+        node-conform = p.conform;
+        accepted_job = p.node { example = "accepted_job"; };
+        accepted_job-reply-before-ack = p.node { example = "accepted_job"; mutant = "reply-before-ack"; };
+        heartbeat = p.node { example = "heartbeat"; nodes = 2; };
+      });
+      nixosModules.default = ./nix/module.nix;
       devShells = eachSystem (system: {
         default = nixpkgs.legacyPackages.${system}.mkShell (environment system);
         research = let env = environment system; in nixpkgs.legacyPackages.${system}.mkShell (env // {
@@ -53,11 +67,22 @@
           python3 -m tool real heartbeat accepted_job
           touch "$out"
         '';
+        # The packages the machine tests deploy, driven by the same commands on loopback.
+        packed-node = nixpkgs.legacyPackages.${system}.runCommand "packed-node"
+          { nativeBuildInputs = [ nixpkgs.legacyPackages.${system}.python3 ]; __darwinAllowLocalNetworking = true; } ''
+          export HOME=$TMPDIR
+          python3 ${./nix/packed.py} ${(packed system).runtime}/bin/node-run \
+            ${(packed system).conform}/bin/node-conform ${self.packages.${system}.accepted_job} \
+            ${self.packages.${system}.accepted_job-reply-before-ack} ${self.packages.${system}.heartbeat}
+          touch "$out"
+        '';
         native-replay = nixpkgs.legacyPackages.${system}.runCommand "native-replay" (environment system) ''
           python3 ${self}/logic/check.py
           python3 ${self}/native/check_accepted_job.py
           touch "$out"
         '';
-      });
+      } // nixpkgs.lib.optionalAttrs (nixpkgs.lib.hasSuffix "-linux" system)
+        # NixOS machine tests (real-vm, real-vm-mutant): they need KVM and a Linux builder.
+        (import ./nix/vm.nix { pkgs = nixpkgs.legacyPackages.${system}; packages = packed system; }));
     };
 }

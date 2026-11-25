@@ -1,4 +1,9 @@
-"""python3 -m tool.host.conform <node.json> <node 0 data> <node 1 data> ...
+"""python3 -m tool.host.conform [options] <node.json> <node 0 data> <node 1 data> ...
+
+    --source FILE        judge against this Shen source, not the manifest's
+    --wasm FILE          every boot record must name this module
+    --received N=FILE    the outputs a client of node N received: a JSON list, or an
+                         object holding the list as "got"
 
 Check a run of real processes from what they left on disk. Per node that is
 events.log (every event delivered, with the step's result) and disk.log (the
@@ -13,6 +18,11 @@ durable rows). Three questions, all answered from those files:
   invariants   the logs and the durable files give one trace in the simulator's
                form, and the manifest's Shen invariants are evaluated on it.
 
+Given what a client received, each of those outputs must be an output effect
+in that node's log. The host makes a record durable before it acts on the
+effects, so an output that reached a client and is in no record means a record
+did not survive what the host called durable.
+
 A process kill ends a segment: the next record is a boot record, the state is
 init again, and whatever the dead process still held in memory (unacknowledged
 writes, timers, reads in flight) may not cause an event afterwards. A torn
@@ -20,6 +30,7 @@ final record (tool/host/wal.py) is an event the node stepped on but whose
 effects never left, in a process whose memory is gone: it is dropped and
 counted. The end of a log is a kill.
 """
+import argparse
 import hashlib
 import json
 from pathlib import Path
@@ -205,7 +216,17 @@ def interleave(items):
     return {"steps": steps}
 
 
-def conform(schema, directories, *, source_file=None, module=None):
+def witnessed(schema, node, log, outputs):
+    """Everything a client of this node received is an output effect its log holds."""
+    logged = {sim.freeze(e) for r in log["records"] for e in r.get("effects", [])
+              if schema.effects[e[0]].role == "output"}
+    for output in outputs:
+        require(sim.freeze(output) in logged,
+                f"causality: a client received {output}, which the log of node {node} does not hold")
+    return len(outputs)
+
+
+def conform(schema, directories, *, source_file=None, module=None, received=None):
     """Raise CheckFailure, or return the facts of the run, invariant violations included."""
     source_file = Path(source_file or schema.directory / schema.manifest["spec"])
     digests = {"wasm": hashlib.sha256(Path(module).read_bytes()).hexdigest()} if module else {}
@@ -213,21 +234,35 @@ def conform(schema, directories, *, source_file=None, module=None):
     logs = [load(schema, node, nodes, d, digests) for node, d in enumerate(directories)]
     inits = check.inits_of(schema, nodes, source_file.read_text())
     trace = interleave([explain(schema, node, logs) for node in range(nodes)])
+    seen = sum(witnessed(schema, node, logs[node], outputs)
+               for node, outputs in (received or {}).items())
     pairs = replay(schema, logs, inits, source_file)
     events = sum("event" in r for log in logs for r in log["records"])
     return {"nodes": nodes, "events": events, "pairs": pairs,
             "segments": sum("boot" in r for log in logs for r in log["records"]),
             "torn": sum(bool(log["torn"]) for log in logs),
             "torn_rows": sum(bool(log["torn_rows"]) for log in logs),
-            "rows": sum(len(log["rows"]) for log in logs),
+            "rows": sum(len(log["rows"]) for log in logs), "received": seen,
             "lost_writes": sum(s.get("lost_writes", 0) for s in trace["steps"]),
             "trace": trace,
             "violations": check.invariants(schema, [trace])[0] if schema.invariants else []}
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--source")
+    parser.add_argument("--wasm")
+    parser.add_argument("--received", action="append", default=[], metavar="N=FILE")
+    parser.add_argument("manifest")
+    parser.add_argument("data", nargs="+")
+    args = parser.parse_args()
+    received = {}
+    for node, _, file in (item.partition("=") for item in args.received):
+        outputs = json.loads(Path(file).read_text())
+        received[int(node)] = outputs["got"] if isinstance(outputs, dict) else outputs
     try:
-        facts = conform(Schema(sys.argv[1]), sys.argv[2:])
+        facts = conform(Schema(args.manifest), args.data, source_file=args.source,
+                        module=args.wasm, received=received)
     except CheckFailure as failure:
         sys.exit(str(failure))
     facts.pop("trace")

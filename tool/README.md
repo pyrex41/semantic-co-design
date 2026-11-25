@@ -7,11 +7,13 @@ A developer writes the behavior of a node as ordinary Shen. This package
 3. checks every simulated step against the Shen source in shen-jit and evaluates invariants written in Shen over the traces ([check.py](check.py)),
 4. translates the same Shen source to Maude and searches the same environment exhaustively within a bound ([maude.py](maude.py)),
 5. runs the same code, built as an import-free WebAssembly module ([wasm.py](wasm.py)), as real OS processes with real sockets, files and clock, and checks what the processes logged against the same Shen source and the same invariants ([host/](host/)).
+6. packages the node with its host as a NixOS service and runs it on virtual machines, where the process kill, the power loss, the partition and the packet loss are real ones ([../nix/vm.nix](../nix/vm.nix)).
 
 ```sh
 nix develop -c python3 -m tool check kernel         # the compiler's own checks
 nix develop -c python3 -m tool check accepted_job   # the first application
 nix develop -c python3 -m tool real accepted_job    # the same application as killed and restarted processes
+nix build .#checks.x86_64-linux.real-vm -L          # the same application on NixOS machines (Linux with KVM)
 ```
 
 ## 1. Specification convention
@@ -159,3 +161,67 @@ A torn tail is dropped and counted in the result (`torn`, `torn_rows`).
 `python3 -m tool real accepted_job` ([examples/accepted_job/real.py](examples/accepted_job/real.py)) runs the node on loopback under a client that submits two keys with two digests and retries on silence. The node is killed with `kill -9` at random moments after a request leaves, and by `HOST_CRASH` at each of the five points; files with a torn tail are copied and checked as the kill left them. After each run the logs must conform, and every reply the client received must be an effect in the log and, if `ok`, a row in `disk.log`. Teeth: a passing run's files with one state, effect, event or cause edited (checksums recomputed), one record removed, one byte changed, a complete but short final record, or one row added to `disk.log` are each rejected; each of the three mutants of `check.py` is run for real and rejected twice, by refinement against `spec.shen` and, judged against its own source, by the invariant named for it.
 
 `python3 -m tool real heartbeat` ([examples/heartbeat/](examples/heartbeat/)) is two nodes that ping each other on timers and read the clock; it exists to exercise `send`, `recv`, the timer roles and `clock-read`, and the interleaving of two logs. Both are the flake check `real-host`.
+
+## 4. Three tiers
+
+The same compiled step runs in three places. Each tier judges it with the same two questions, refinement of the Shen source and the Shen invariants, and each can show something the one before cannot.
+
+| Tier | Run | What is real | What it can show | What it cannot show |
+|---|---|---|---|---|
+| Simulator | `tool check <example>` | The step. Clock, network, disks, crashes and schedule belong to `sim/`. | Every schedule within a bound (Maude and the explorer agree on the reachable observations), seeded schedules that replay byte for byte, a minimal trace for each mutant. | Anything about an operating system. Its disk becomes durable when the simulator says so, and its crash is an assignment. |
+| Loopback processes | `tool real <example>`, flake checks `real-host` and `packed-node` | The process, its sockets, files, `fsync` call and clock, and `kill -9`, also at five chosen points inside the host. | That the host gives the roles their meaning: a record is on disk before its effects leave, a torn record is cut and nothing else is forgiven, and logs of real runs refine the source. | That `fsync` did anything. A killed process loses its memory and the kernel keeps every byte it was handed, so a host that never synced would pass. The network is one kernel's loopback: nothing is lost, delayed or cut. The schedules are the few the kernel happened to choose. |
+| NixOS machines | flake checks `real-vm` and `real-vm-mutant` | One kernel per node, a virtual network between them, a virtual disk under ext4, systemd. | That the packaged service survives what the test driver does to it from outside: `systemctl kill -s KILL`, the machine's exit (the guest's page cache is gone, so only what `fsync` pushed to the disk remains), a cut link, `iptables` drops between two nodes, `tc netem` delay and loss. | Any schedule on demand: it shows the handful it ran, once each, with no replay. The power loss is QEMU exiting, so the host's own cache and a real drive's write cache are not tested. Nothing about more than three machines, or about time longer than a test. |
+
+A failure found in a higher tier is a log, and a log is not a schedule: to keep it, write the history as a simulator trace or a mutant, where it replays.
+
+### Packages and the service
+
+```
+packages.<system>.accepted_job                    share/node/{node.wasm,node.json,inits.json,spec.shen,invariants.shen}
+packages.<system>.accepted_job-reply-before-ack   the same from one mutant of check.py     bin/node-host
+packages.<system>.heartbeat                       packed for two nodes
+packages.<system>.node-runtime                    bin/node-host, bin/node-run <module under tool> ...
+packages.<system>.node-conform                    bin/node-conform: host/conform.py with its shen-jit
+```
+
+`share/node` is what [host/pack.py](host/pack.py) writes: the module, the manifest, the state integers of `(<init> Node Nodes)` for every node, and the sources conformance is judged against. `bin/node-host <node> <data directory> <client host:port> <peer host:port> ...` runs one node of it; it refuses a number of peers the package was not packed for. [../nix/module.nix](../nix/module.nix) (`nixosModules.default`) turns that into a unit:
+
+```nix
+services.shen-node.job = {
+  package = self.packages.${system}.accepted_job;
+  node = 0; clientPort = 7000; peerPort = 7100;      # peers = [ "node0:7100" "node1:7100" ] for several
+  openFirewall = true;
+};
+```
+
+The unit is `shen-node-<name>.service`, with user `shen-node`, state directory `/var/lib/shen-node/<name>` (the event log and the durable file), `Restart=always` after 100 ms and no start limit: the host has no shutdown, so systemd's restart is the specification's `restart` event.
+
+Two commands are the client side. `node-run host.ask <host:port> <seconds> '<request>' [received.json]` sends one request and prints the output that answers it. `node-run examples.accepted_job.load <record.json> <host:port> <answers> <pause> <seconds> [seed]` is the retrying client of `real.py`: a submission is sent under a new request number until that number is answered. Both keep every output they read, and `node-conform --received N=FILE` requires each of them to be an output effect in the log of node `N`. The host makes a record durable before acting on its effects, so an output a client holds that no record holds means a record was lost after `fsync` returned.
+
+### The machine tests
+
+[../nix/vm.py](../nix/vm.py) is the script of `real-vm`: a client machine and two node machines. Each node machine runs its own AcceptedJob node (one node, its own disk; AcceptedJob has no messages between nodes) and one of the two heartbeat nodes, which are one system and the only place `send` and `recv` cross the network.
+
+| Step | Fault | Asserted while running |
+|---|---|---|
+| 1 | `node0.crash()` directly after the client received its first `ok`, then `start()` | The durable file is not empty after boot. |
+| 2 | `systemctl kill -s KILL` six times under a workload | systemd restarted the node at least three times; a submission had to be retried. |
+| 3 | `node0.block()` for four seconds under a workload, `unblock()` | No submission is answered while the link is cut; the workload finishes after. |
+| 4 | `tc qdisc add dev eth1 root netem delay 60ms loss 15%` on node1, a kill under it | The fastest answer takes at least 50 ms, and longer than without the qdisc. |
+| 5 | `iptables -I INPUT -s <peer> -j DROP` on both heartbeat nodes, then removed | Neither count of pings received moves during the partition; both move after. |
+| 6 | netem between the heartbeat nodes, a kill of one | Pings still arrive. |
+| 7 | `node1.crash()` and `start()` with node0 still pinging | Pings resume in both directions. |
+| 8 | `stop` to both | A cancelled timer stays silent. |
+
+Then the units are stopped, every node's `events.log` and `disk.log` and the client's records are copied out of the machines into the test's output, and `node-conform` runs on them on the driver: three runs (AcceptedJob on node0, on node1, and the two heartbeat logs together), each with `--wasm` and `--received`. The test passes only if all three exit 0 with the expected segments. Steps 1 and 7 are where `fsync` is tested: an `ok` that reached the client, or a ping that reached the other node, must be in a log that lost its machine.
+
+`real-vm-mutant` ([../nix/vm-mutant.py](../nix/vm-mutant.py)) is the teeth. One node machine runs the package compiled from `reply-before-ack`; the test passes only if `node-conform` on its log exits non-zero with a refinement failure against `spec.shen`, and, judged against the mutant's own source, reports `inv.ok-is-durable`.
+
+`packed-node` ([../nix/packed.py](../nix/packed.py)) is the part of this that runs anywhere: the same packages, launchers, client commands and `node-conform` invocations on loopback, with `kill -9` and the script in the place of systemd. It checks that the mutant is rejected for those two reasons, that one forged output in `--received` is rejected, and that a two-node package refuses to start as one node. It says nothing about the machines.
+
+```sh
+nix build .#checks.x86_64-linux.real-vm .#checks.x86_64-linux.real-vm-mutant -L   # or aarch64-linux; needs KVM
+nix build .#checks.x86_64-linux.real-vm.driverInteractive && ./result/bin/nixos-test-driver   # step by hand
+```
+
+The logs are in `result/node0/job`, `result/node1/heartbeat`, `result/client` and so on.
