@@ -2,7 +2,7 @@
 
     --source FILE        judge against this Shen source, not the manifest's
     --wasm FILE          every boot record must name this module
-    --received N=FILE    the outputs a client of node N received: a JSON list, or an
+    --received N=FILE    the outputs one client of node N received: a JSON list, or an
                          object holding the list as "got"
 
 Check a run of real processes from what they left on disk. Per node that is
@@ -19,7 +19,9 @@ durable rows). Three questions, all answered from those files:
                form, and the manifest's Shen invariants are evaluated on it.
 
 Given what a client received, each of those outputs must be an output effect
-in that node's log. The host makes a record durable before it acts on the
+in that node's log, and no output may have been received more often than the
+log emitted it (a client holds one connection at a time, and an effect goes to
+a connection once). The host makes a record durable before it acts on the
 effects, so an output that reached a client and is in no record means a record
 did not survive what the host called durable.
 
@@ -28,9 +30,15 @@ init again, and whatever the dead process still held in memory (unacknowledged
 writes, timers, reads in flight) may not cause an event afterwards. A torn
 final record (tool/host/wal.py) is an event the node stepped on but whose
 effects never left, in a process whose memory is gone: it is dropped and
-counted. The end of a log is a kill.
+counted. The end of a log is a kill. A node whose log holds no complete record
+has no run to judge, and that is a failure, not an empty success.
+
+The clock is the machine's monotonic clock, which starts again when the machine
+does: readings may not go back within a segment, and across a boot record
+nothing is required of them.
 """
 import argparse
+from collections import Counter
 import hashlib
 import json
 from pathlib import Path
@@ -52,18 +60,27 @@ def load(schema, node, nodes, directory, digests):
         rows, torn_rows = wal.read(Path(directory) / "disk.log")
     except wal.Corrupt as error:
         raise CheckFailure(f"log: node {node}: {error}") from None
-    require(not records or "boot" in records[0], f"log: node {node} does not begin with a boot")
+    require(records, f"log: node {node} has no log in {directory}")
+    whole = lambda place: isinstance(place, list) and all(type(n) is int for n in place)
+    for n, row in enumerate(rows):
+        require(isinstance(row, list) and len(row) > 2 and whole(row[:2]), f"log: node {node} durable row {n} is malformed")
     for n, record in enumerate(records):
         where = f"log: node {node} record {n}"
         try:
+            require(n or "boot" in record, f"log: node {node} does not begin with a boot")
             require(record["seq"] == n, f"{where} carries sequence number {record['seq']}")
             if "boot" in record:
                 boot = record["boot"]
                 require((boot["node"], boot["nodes"]) == (node, nodes), f"{where}: another node's boot")
                 for name, digest in digests.items():
                     require(boot[name] == digest, f"{where} booted another {name}")
+                require(whole(boot["init"]) and len(boot["init"]) == schema.state_width,
+                        f"{where}: the initial state is malformed")
+                schema.decode_state(boot["init"])
                 continue
             require("trap" not in record, f"{where}: the step had no result for {record['event']}")
+            require(record.get("cause") is None or whole(record["cause"]),
+                    f"{where}: the cause is malformed")
             schema.encode_state(sim.freeze(record["post"]))
             schema.encode_input((), record["event"])
             require(len(record["effects"]) <= schema.max_effects, f"{where}: too many effects")
@@ -129,6 +146,7 @@ def explain(schema, node, logs):
         if "boot" in record:
             if segment is not None:
                 kill()
+            clock = 0                       # the machine may have started again too
             if not restart:
                 items.append({"kind": "restart" if segment is not None else "boot", "node": node,
                               "state": schema.decode_state(record["boot"]["init"])})
@@ -217,12 +235,20 @@ def interleave(items):
 
 
 def witnessed(schema, node, log, outputs):
-    """Everything a client of this node received is an output effect its log holds."""
-    logged = {sim.freeze(e) for r in log["records"] for e in r.get("effects", [])
-              if schema.effects[e[0]].role == "output"}
-    for output in outputs:
-        require(sim.freeze(output) in logged,
+    """Everything one client of this node received is an output effect its log holds,
+    as often as the client received it."""
+    logged = Counter(sim.freeze(e) for r in log["records"] for e in r.get("effects", [])
+                     if schema.effects[e[0]].role == "output")
+    try:
+        got = Counter(sim.freeze(output) for output in outputs)
+    except TypeError:
+        raise CheckFailure(f"causality: what a client of node {node} received is malformed") from None
+    for output, times in got.items():
+        require(output in logged,
                 f"causality: a client received {output}, which the log of node {node} does not hold")
+        require(times <= logged[output],
+                f"causality: a client received {output} {times} times and the log of node "
+                f"{node} holds it {logged[output]} times")
     return len(outputs)
 
 

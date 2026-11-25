@@ -9,6 +9,7 @@ bundle, start and kill -9 node processes on loopback, and talk to a client port.
 import json
 import os
 from pathlib import Path
+import resource
 import signal
 import socket
 import subprocess
@@ -18,6 +19,8 @@ import time
 from ..compile import DEPTH, build, initial_state
 from ..wasm import link
 from . import wal
+
+LINE = 1 << 16                              # the longest line a port reads
 
 ROOT = Path(__file__).parents[2]
 
@@ -59,12 +62,14 @@ class Cluster:
                 "client": self.clients[node],
                 "peers": [("127.0.0.1", port) for port in ports[count:]]}))
 
-    def start(self, node, crash=None):
-        """Start the node's process and wait until its client port answers."""
-        env = {**os.environ, "HOST_CRASH": crash or ""}
+    def start(self, node, crash=None, env=None, fsize=None):
+        """Start the node's process and wait until its client port answers. `fsize` is a
+        limit on the size of any file it writes (RLIMIT_FSIZE): a disk that fills up."""
+        env = {**os.environ, "HOST_CRASH": crash or "", **(env or {})}
+        limit = fsize is not None and (lambda: resource.setrlimit(resource.RLIMIT_FSIZE, (fsize, fsize)))
         self.procs[node] = subprocess.Popen(
             [sys.executable, "-m", "tool.host", str(self.directory / f"host{node}.json")],
-            cwd=ROOT, env=env, stdin=subprocess.DEVNULL)
+            cwd=ROOT, env=env, stdin=subprocess.DEVNULL, preexec_fn=limit or None)
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline and self.procs[node].poll() is None:
             try:

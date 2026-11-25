@@ -22,7 +22,7 @@ import time
 from ..compile import Trap
 from ..schema import Schema, SchemaError
 from ..wasm import Wasm
-from . import wal
+from . import LINE, wal
 
 
 def die():
@@ -40,6 +40,9 @@ class Host:
         # HOST_CRASH=point:n makes the n-th pass through a named point a kill -9 of this process.
         point, _, count = os.environ.get("HOST_CRASH", "").partition(":")
         self.crash_point, self.crash_left = point, int(count or 0)
+        # HOST_CLOCK_ZERO counts the clock from the start of this process, as the monotonic
+        # clock counts from the start of a machine: what a reboot does to the readings.
+        self.clock_zero = time.monotonic_ns() if os.environ.get("HOST_CLOCK_ZERO") else 0
         self.ready = deque()                # (event, cause) waiting for the node
         self.timers = {}                    # id -> (deadline, cause)
         self.clients, self.links = [], {}
@@ -101,14 +104,20 @@ class Host:
         self.state = after
 
     def append(self, record):
-        line = wal.frame({"seq": self.seq, **record})
-        torn = self.crash("log-torn")
-        os.write(self.log_fd, line[:len(line) // 2] if torn else line)
-        wal.sync(self.log_fd)
-        if torn:
-            die()
+        self.write(self.log_fd, wal.frame({"seq": self.seq, **record}), "log-torn")
         self.seq += 1
         return self.seq - 1
+
+    def write(self, fd, line, point):
+        """A whole record, synced, or no process. A write that is short or fails (a full
+        disk, a quota, a size limit) leaves a torn tail, and nothing may follow one."""
+        try:
+            whole = os.write(fd, line[:len(line) // 2] if self.crash(point) else line) == len(line)
+        except OSError:
+            whole = False
+        wal.sync(fd)
+        if not whole:
+            die()
 
     def crash(self, point):
         """True on the n-th pass through the configured crash point."""
@@ -138,7 +147,7 @@ class Host:
             self.timers.pop(fields[0], None)
         elif role == "clock-read":
             self.ready.append(((schema.roles["clock"].tag, fields[0],
-                                time.monotonic_ns() // 1_000_000), cause))
+                                (time.monotonic_ns() - self.clock_zero) // 1_000_000), cause))
 
     def disk(self, wake):
         """The disk, in its own thread and in the order asked: a write is appended and
@@ -148,11 +157,8 @@ class Host:
             role, cause, fields = self.jobs.get()
             if role == "disk-write":
                 token, key, *vals = fields
-                line = wal.frame([*cause, key, *vals])
-                torn = self.crash("disk-torn")
-                os.write(self.disk_fd, line[:len(line) // 2] if torn else line)
-                wal.sync(self.disk_fd)
-                if torn or self.crash("synced"):
+                self.write(self.disk_fd, wal.frame([*cause, key, *vals]), "disk-torn")
+                if self.crash("synced"):
                     die()
                 event = (schema.roles["disk-ack"].tag, token) if "disk-ack" in schema.roles else None
             else:
@@ -200,16 +206,21 @@ class Host:
         buffer[:] = rest
         for line in lines:
             # Only a declared event of this port's role, with well-typed fields, gets in.
+            # Whatever else a line holds, it costs the sender that line and the host nothing.
             try:
+                if len(line) > LINE:
+                    raise ValueError("line too long")
                 message = json.loads(line)
                 event, cause = (message, None) if role == "request" else (message["event"], message["cause"])
                 event = tuple(event)
                 if self.schema.events[event[0]].role != role:
                     raise SchemaError(f"{event[0]} is not a {role}")
                 self.schema.encode_input(self.state, event)
-            except (ValueError, KeyError, TypeError, IndexError):
+            except (ValueError, KeyError, TypeError, IndexError, RecursionError):
                 continue
             self.ready.append((event, cause))
+        if len(rest) > LINE:                # no end of line in sight: stop reading this sender
+            self.drop(conn)
 
     def broadcast(self, line):
         for conn in list(self.clients):

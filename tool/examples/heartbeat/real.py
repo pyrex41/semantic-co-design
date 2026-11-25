@@ -1,8 +1,10 @@
 """Heartbeat as two real processes. Run: nix develop -c python3 -m tool real heartbeat
 
 Two nodes ping each other over TCP on 20 ms timers. One is killed with kill -9
-and restarted; both are then asked to stop. tool/host/conform.py replays both
-logs and puts them in one causal order for the invariant.
+and restarted, twice; then node 0 is killed and started as after a reboot of its
+machine, with a clock that begins again at zero; both are then asked to stop.
+tool/host/conform.py replays both logs and puts them in one causal order for
+the invariant.
 """
 from pathlib import Path
 import random
@@ -40,6 +42,9 @@ def run(packed, directory, seed):
             kills += cluster.kill(victim)
             time.sleep(rng.uniform(0, 0.08))
             cluster.start(victim)
+        time.sleep(rng.uniform(0.1, 0.25))
+        kills += cluster.kill(0)
+        cluster.start(0, env={"HOST_CLOCK_ZERO": "1"})
         time.sleep(0.2)
         before = [ask(node, ("status", node)) for node in (0, 1)]
         stopped = [ask(node, ("stop", 10 + node)) for node in (0, 1)]
@@ -99,7 +104,14 @@ def main(report=print):
         # before its sends are each rejected by causality; an edited count by refinement.
         records = wal.read(data[0] / "events.log")[0]
         seq = lambda tag, nth=0: [r["seq"] for r in records if r.get("event", [0])[0] == tag][nth]
-        ping, tick, late, clock = seq("pinged", -1), seq("tick", 1), seq("tick", 2), seq("clocked", 1)
+        ping, tick, late, clock = seq("pinged", -1), seq("tick", 1), seq("tick", 2), seq("clocked", -1)
+        # The reboot is in these files: across the last boot record the clock goes back, which
+        # conforms; the last reading set back inside its segment does not.
+        boot = [r["seq"] for r in records if "boot" in r][-1]
+        readings = [(r["seq"] > boot, r["event"][2]) for r in records if r.get("event", [0])[0] == "clocked"]
+        after = [reading for rebooted, reading in readings if rebooted]
+        require(len(after) > 1 and max(after) < min(reading for rebooted, reading in readings if not rebooted),
+                f"heartbeat: no clock that started again: {readings}")
         def cause(rs): rs[ping]["cause"][2] += 1
         def stale(rs): rs[late]["cause"] = rs[tick]["cause"]
         def back(rs): rs[clock]["event"][2] = 0
@@ -115,5 +127,7 @@ def main(report=print):
                 require(str(failure).startswith(reason), f"teeth: {label}: {failure}")
             else:
                 raise CheckFailure(f"teeth: logs with {label} edited were accepted")
+        report(f"clock: after node 0's reboot its {len(after)} readings begin at {after[0]} ms, below "
+               f"every reading before it, and the logs conform")
         report(f"log teeth: rejected with {', '.join(f'{c[0]} ({c[3]})' for c in cases)}")
     report("heartbeat on the real host: ok")

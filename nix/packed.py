@@ -97,9 +97,16 @@ def main(report=print):
         forged.write_text(json.dumps(json.loads(record.read_text())["got"] + [["reply", 9999, "ok", 0]]))
         result = conform(JOB, data, f"--received=0={forged}")
         assert result.returncode and result.stderr.startswith("causality: a client received"), result
+        # An output the client holds once more than the node emitted it, and no log at all.
+        forged.write_text(json.dumps(2 * json.loads(record.read_text())["got"]))
+        result = conform(JOB, data, f"--received=0={forged}")
+        assert result.returncode and result.stderr.startswith("causality: a client received"), result
+        result = conform(JOB, work / "nowhere")
+        assert result.returncode and result.stderr.startswith("log: node 0 has no log"), result
         report(f"packed accepted_job: {facts['events']} events in {facts['segments']} segments "
                f"conform; {facts['received']} outputs the client received are all in the log; "
-               f"one forged output is rejected")
+               f"one forged output, the outputs received twice over and a directory with no log "
+               f"are rejected")
 
         data, record = job(MUTANT, work / "mutant", 1)
         against = conform(JOB, data, f"--received=0={record}", wasm=MUTANT)
