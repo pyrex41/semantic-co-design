@@ -351,7 +351,11 @@ def prefix(schema, report):
         {"seq": 2, "event": ["submit", 0, KEY, DIGESTS[0]], "cause": None,
          "effects": [["write", 0, *row], ["read", 1, 7]], "post": None},
         {"seq": 3, "event": ["loaded", 1, 7, found, *vals], "cause": [2, 1], "effects": [], "post": None}]
-    explain(schema, 0, [{"records": read(1, *row[1:]), "rows": [[2, 0, *row]]}])
+    # Served in order the write is acknowledged first, and the read then finds its row.
+    served = read(1, *row[1:])
+    served.insert(3, {"seq": 3, "event": ["written", 0], "cause": [2, 0], "effects": [], "post": None})
+    served[4]["seq"] = 4
+    explain(schema, 0, [{"records": served, "rows": [[2, 0, *row]]}])
     try:
         explain(schema, 0, [{"records": read(0, 0, 0), "rows": []}])
     except CheckFailure as failure:
